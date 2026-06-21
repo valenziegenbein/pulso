@@ -1,0 +1,41 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+.next/
+.turbo/
+out/
+
+# env & secrets
+.env
+.env.local
+.env.*.local
+
+# test / coverage
+coverage/
+
+# logs
+*.log
+npm-debug.log*
+
+# os / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# prisma generated client (regenerated via `pnpm db:generate`)
+packages/database/generated/
+
+# sqlite databases
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# desktop packaging output / db template
+apps/desktop/dist/
+apps/desktop/db-template/

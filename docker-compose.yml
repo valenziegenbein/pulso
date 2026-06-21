@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: pulso-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pulso
+      POSTGRES_PASSWORD: pulso
+      POSTGRES_DB: pulso
+    ports:
+      # El puerto del host es configurable (PULSO_DB_PORT) para evitar choques
+      # con otros Postgres locales. Por defecto 5432.
+      - "${PULSO_DB_PORT:-5432}:5432"
+    volumes:
+      - pulso-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pulso -d pulso"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # --- Opcional: LLM local OpenAI-compatible ---
+  # Descomentá para correr un modelo local sin enviar datos afuera.
+  # Luego en .env: LLM_PROVIDER=OPENAI_COMPATIBLE, LLM_BASE_URL=http://localhost:11434/v1
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: pulso-ollama
+  #   restart: unless-stopped
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - pulso-ollama-data:/root/.ollama
+
+volumes:
+  pulso-db-data:
+  # pulso-ollama-data:

@@ -1,0 +1,87 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { hashPassword, prisma } from '@pulso/database';
+import { PERMISSIONS } from '@pulso/domain';
+import { createTeamSchema, invitePersonSchema } from '@pulso/shared';
+import { hasPermission, requireAuth } from '@/lib/auth/context';
+
+function str(formData: FormData, key: string): string | undefined {
+  const v = formData.get(key);
+  const s = typeof v === 'string' ? v.trim() : '';
+  return s.length > 0 ? s : undefined;
+}
+
+export async function createTeamAction(formData: FormData): Promise<void> {
+  const ctx = await requireAuth();
+  const parentTeamId = str(formData, 'parentTeamId');
+  const permission = parentTeamId ? PERMISSIONS.TEAM_CREATE_SUB : PERMISSIONS.TEAM_CREATE;
+  if (!hasPermission(ctx, permission)) throw new Error('Sin permiso para crear equipos.');
+
+  const parsed = createTeamSchema.parse({
+    name: str(formData, 'name'),
+    focus: str(formData, 'focus'),
+    parentTeamId,
+  });
+
+  await prisma.team.create({
+    data: {
+      organizationId: ctx.organizationId,
+      name: parsed.name,
+      focus: parsed.focus ?? null,
+      parentTeamId: parsed.parentTeamId ?? null,
+    },
+  });
+  revalidatePath('/teams');
+}
+
+export async function invitePersonAction(formData: FormData): Promise<void> {
+  const ctx = await requireAuth();
+  if (!hasPermission(ctx, PERMISSIONS.PERSON_INVITE)) throw new Error('Sin permiso para invitar personas.');
+
+  const parsed = invitePersonSchema.parse({
+    email: str(formData, 'email'),
+    name: str(formData, 'name'),
+    roleKey: str(formData, 'roleKey'),
+    teamId: str(formData, 'teamId'),
+  });
+
+  const role = await prisma.role.findUnique({
+    where: { organizationId_key: { organizationId: ctx.organizationId, key: parsed.roleKey } },
+  });
+  if (!role) throw new Error('Rol no encontrado.');
+
+  // MVP: la persona invitada recibe una contraseña temporal. En producción se
+  // enviaría un email de activación para que defina la suya.
+  const user = await prisma.user.upsert({
+    where: { email: parsed.email },
+    update: {},
+    create: { email: parsed.email, name: parsed.name, passwordHash: hashPassword('pulso1234') },
+  });
+
+  await prisma.orgMembership.upsert({
+    where: { organizationId_userId: { organizationId: ctx.organizationId, userId: user.id } },
+    update: { roleId: role.id },
+    create: { organizationId: ctx.organizationId, userId: user.id, roleId: role.id },
+  });
+
+  if (parsed.teamId) {
+    await prisma.teamMembership.upsert({
+      where: { teamId_userId: { teamId: parsed.teamId, userId: user.id } },
+      update: { roleId: role.id },
+      create: { teamId: parsed.teamId, userId: user.id, roleId: role.id },
+    });
+  }
+
+  await prisma.auditEvent.create({
+    data: {
+      organizationId: ctx.organizationId,
+      actorId: ctx.user.id,
+      action: 'MEMBER_INVITED',
+      entityType: 'User',
+      entityId: user.id,
+    },
+  });
+
+  revalidatePath('/teams');
+}

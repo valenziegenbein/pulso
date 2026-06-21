@@ -1,0 +1,45 @@
+{
+  "name": "@pulso/desktop",
+  "version": "0.1.5",
+  "private": true,
+  "description": "Shell de escritorio de Pulso (Electron): panel principal + widget flotante always-on-top. Empaqueta el server Next standalone.",
+  "author": "Pulso",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "prepare:standalone": "node prepare-standalone.cjs",
+    "dist:dir": "node prepare-standalone.cjs && electron-builder --dir",
+    "dist": "node prepare-standalone.cjs && electron-builder --win nsis",
+    "release": "node prepare-standalone.cjs && electron-builder --win nsis --publish always"
+  },
+  "build": {
+    "appId": "com.pulso.desktop",
+    "productName": "Pulso",
+    "electronVersion": "33.4.11",
+    "directories": { "output": "dist" },
+    "files": ["main.js", "preload.js", "package.json"],
+    "extraResources": [
+      { "from": "../../apps/web/.next/standalone", "to": "server" },
+      { "from": "db-template", "to": "db-template" }
+    ],
+    "publish": [
+      { "provider": "github", "owner": "valenziegenbein", "repo": "pulso", "releaseType": "release" }
+    ],
+    "win": {
+      "target": ["nsis"],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  }
+}

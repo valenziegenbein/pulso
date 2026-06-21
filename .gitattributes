@@ -1,0 +1,15 @@
+# Normaliza fin de línea a LF en todo el repo (evita conflictos espurios CRLF/LF
+# cuando trabajan varios agentes/máquinas).
+* text=auto eol=lf
+
+# Binarios (no diff ni merge textual)
+*.exe binary
+*.dll binary
+*.node binary
+*.db binary
+*.png binary
+*.jpg binary
+*.ico binary
+
+# Lockfile: generado, no mostrar diff gigante ni mergear a mano
+pnpm-lock.yaml -diff linguist-generated=true

@@ -1,0 +1,321 @@
+// Pulso — esquema de datos (SQLite embebido).
+// Multi-tenant lógico: todo cuelga de Organization y se filtra por organizationId.
+// Privacidad por diseño: no hay tablas de actividad, mouse, teclado ni capturas
+// automáticas. Las capturas (Attachment kind=SCREENSHOT) son siempre manuales.
+//
+// Nota: SQLite no soporta enums ni listas escalares. Los "enums" se guardan como
+// String (validados por las uniones de @pulso/shared) y permissions como JSON.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// --------------------------- Modelos ---------------------------
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  teams          Team[]
+  roles          Role[]
+  memberships    OrgMembership[]
+  tasks          Task[]
+  agendaEvents   AgendaEvent[]
+  worklogEntries WorklogEntry[]
+  suggestions    AIWorklogSuggestion[]
+  attachments    Attachment[]
+  llmConfigs     LLMProviderConfig[]
+  auditEvents    AuditEvent[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  avatarUrl    String?
+  timezone     String   @default("UTC")
+  isSuperAdmin Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  orgMemberships   OrgMembership[]
+  teamMemberships  TeamMembership[]
+  assignedTasks    Task[]                @relation("TaskAssignee")
+  createdTasks     Task[]                @relation("TaskCreatedBy")
+  authoredWorklogs WorklogEntry[]        @relation("WorklogAuthor")
+  approvedWorklogs WorklogEntry[]        @relation("WorklogApprover")
+  agendaEvents     AgendaEvent[]
+  comments         TaskComment[]
+  createdBlockers  Blocker[]
+  suggestions      AIWorklogSuggestion[]
+  attachments      Attachment[]
+  auditEvents      AuditEvent[]
+}
+
+model Role {
+  id             String  @id @default(cuid())
+  organizationId String
+  // RoleKey (ver @pulso/shared): SUPER_ADMIN | ORG_ADMIN | TEAM_ADMIN | COORDINATOR | MEMBER | VIEWER
+  key            String
+  name           String
+  // Lista de permisos serializada como JSON (SQLite no soporta String[]).
+  permissions    String  @default("[]")
+  isSystem       Boolean @default(false)
+  createdAt      DateTime @default(now())
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  orgMemberships  OrgMembership[]
+  teamMemberships TeamMembership[]
+
+  @@unique([organizationId, key])
+  @@index([organizationId])
+}
+
+model OrgMembership {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  roleId         String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role         Role         @relation(fields: [roleId], references: [id])
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+}
+
+model Team {
+  id             String   @id @default(cuid())
+  organizationId String
+  parentTeamId   String?
+  name           String
+  focus          String?
+  createdAt      DateTime @default(now())
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent       Team?            @relation("TeamHierarchy", fields: [parentTeamId], references: [id], onDelete: SetNull)
+  children     Team[]           @relation("TeamHierarchy")
+  memberships  TeamMembership[]
+  tasks        Task[]
+
+  @@index([organizationId])
+  @@index([parentTeamId])
+}
+
+model TeamMembership {
+  id        String   @id @default(cuid())
+  teamId    String
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id])
+
+  @@unique([teamId, userId])
+  @@index([userId])
+}
+
+model Task {
+  id               String    @id @default(cuid())
+  organizationId   String
+  teamId           String
+  parentTaskId     String?
+  title            String
+  description      String?
+  assigneeId       String?
+  createdById      String
+  // TaskPriority: LOW | MEDIUM | HIGH | URGENT
+  priority         String    @default("MEDIUM")
+  // TaskStatus: BACKLOG | TODO | IN_PROGRESS | BLOCKED | IN_REVIEW | DONE | CANCELLED
+  status           String    @default("BACKLOG")
+  dueDate          DateTime?
+  definitionOfDone String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team           Team                  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  parent         Task?                 @relation("TaskSubtasks", fields: [parentTaskId], references: [id], onDelete: SetNull)
+  subtasks       Task[]                @relation("TaskSubtasks")
+  assignee       User?                 @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy      User                  @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  blockers       Blocker[]
+  comments       TaskComment[]
+  attachments    Attachment[]
+  agendaEvents   AgendaEvent[]
+  worklogEntries WorklogEntry[]
+  suggestions    AIWorklogSuggestion[]
+
+  @@index([organizationId, status])
+  @@index([assigneeId, status])
+  @@index([teamId])
+  @@index([dueDate])
+}
+
+model Blocker {
+  id          String    @id @default(cuid())
+  taskId      String
+  description String
+  createdById String
+  createdAt   DateTime  @default(now())
+  resolvedAt  DateTime?
+
+  task      Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdBy User @relation(fields: [createdById], references: [id])
+
+  @@index([taskId])
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id])
+
+  @@index([taskId])
+}
+
+model AgendaEvent {
+  id             String    @id @default(cuid())
+  organizationId String
+  userId         String
+  // AgendaEventType: MEETING | FOCUS_BLOCK | DEADLINE | MANUAL | TASK_DUE
+  type           String
+  title          String
+  startsAt       DateTime
+  endsAt         DateTime?
+  taskId         String?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task         Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([userId, startsAt])
+  @@index([organizationId])
+}
+
+model WorklogEntry {
+  id             String    @id @default(cuid())
+  organizationId String
+  authorId       String
+  taskId         String?
+  // WorklogType: PROGRESS | RESEARCH | BLOCKER | DECISION | NOTE | DELIVERY | HELP_REQUEST | RISK | PRIORITY_CHANGE
+  type           String
+  // WorklogStatus: DRAFT | PUBLISHED | DISCARDED
+  status         String    @default("DRAFT")
+  // WorklogSource: MANUAL | AI_SUGGESTED
+  source         String    @default("MANUAL")
+  title          String
+  content        String
+  approvedById   String?
+  publishedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  author       User                 @relation("WorklogAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  approver     User?                @relation("WorklogApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  task         Task?                @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  suggestion   AIWorklogSuggestion?
+  attachments  Attachment[]
+
+  @@index([authorId, status])
+  @@index([organizationId, status])
+}
+
+model AIWorklogSuggestion {
+  id               String   @id @default(cuid())
+  organizationId   String
+  requestedById    String
+  taskId           String?
+  inputNote        String
+  suggestedType    String
+  suggestedTitle   String
+  suggestedContent String
+  providerType     String
+  model            String
+  worklogEntryId   String?  @unique
+  createdAt        DateTime @default(now())
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedBy  User          @relation(fields: [requestedById], references: [id], onDelete: Cascade)
+  task         Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  worklogEntry WorklogEntry? @relation(fields: [worklogEntryId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+}
+
+model Attachment {
+  id             String   @id @default(cuid())
+  organizationId String
+  // AttachmentKind: LINK | FILE | SCREENSHOT
+  kind           String
+  url            String
+  note           String?
+  // Las capturas (SCREENSHOT) son SIEMPRE manuales y voluntarias.
+  isManual       Boolean  @default(true)
+  uploadedById   String
+  taskId         String?
+  worklogEntryId String?
+  createdAt      DateTime @default(now())
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  uploadedBy   User          @relation(fields: [uploadedById], references: [id])
+  task         Task?         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  worklogEntry WorklogEntry? @relation(fields: [worklogEntryId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([worklogEntryId])
+}
+
+model LLMProviderConfig {
+  id              String   @id @default(cuid())
+  organizationId  String
+  // LLMProviderType: OPENAI_COMPATIBLE | ANTHROPIC | MOCK
+  providerType    String
+  baseUrl         String?
+  model           String
+  // API key cifrada (AES-256-GCM). NUNCA se expone al frontend.
+  apiKeyEncrypted String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, isActive])
+}
+
+model AuditEvent {
+  id             String   @id @default(cuid())
+  organizationId String
+  actorId        String
+  // AuditAction (ver @pulso/domain/casos de uso): TASK_CREATED, TASK_ASSIGNED, ...
+  action         String
+  entityType     String
+  entityId       String
+  // Metadata serializada como JSON (SQLite no tiene tipo Json garantizado).
+  metadata       String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor        User         @relation(fields: [actorId], references: [id])
+
+  @@index([organizationId, createdAt])
+}
