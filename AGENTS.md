@@ -59,6 +59,26 @@ Si tocaste el schema de Prisma: `pnpm db:generate` antes del portón.
 4. **Antes de mergear a `main`: corré el portón verde.** Si no pasa, no se mergea.
 5. **Cambios additivos** en lo compartido siempre que se pueda (agregar, no renombrar/borrar).
 
+### Setup local de ESTE proyecto (mismo equipo, sin remoto) — git worktrees
+
+Carpetas separadas que comparten la misma historia git, para no pisarse archivos:
+
+| Carpeta | Rama | Para |
+|---|---|---|
+| `F:\Pulso` | `main` (integración) + `claude/desktop` | Integración + área de Claude (`apps/desktop`) |
+| `F:\Pulso-codex` | `codex/web` | Área de Codex (`apps/web`) |
+
+Cada carpeta tiene su propio `node_modules`, `.env*` y `dev.db` (gitignoreados).
+
+Flujo de cada agente:
+1. Trabajá en **tu** carpeta/rama (Codex: `F:\Pulso-codex`; Claude: `F:\Pulso`).
+2. Antes de integrar: **portón verde** (`pnpm typecheck && pnpm test && pnpm --filter web build`).
+3. Commiteá en tu rama. Llevar a `main` (desde `F:\Pulso`):
+   `git checkout main && git merge <rama> && <portón verde> && git checkout <rama>`.
+4. Traé lo último seguido: `git merge main` en tu rama (evita divergencias grandes).
+
+> Codex: trabajás en **`F:\Pulso-codex`** (rama `codex/web`), sobre `apps/web`. No edites `F:\Pulso`.
+
 ### Propiedad de áreas (editar este mapa cuando cambie)
 
 | Área | Dueño actual | Notas |
