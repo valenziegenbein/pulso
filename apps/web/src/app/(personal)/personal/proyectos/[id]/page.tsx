@@ -191,6 +191,7 @@ export default function ProjectDetailPage() {
                     </div>
                     <h3 className="font-display mt-1 text-xl">{e.title}</h3>
                     <p className="mt-1 text-sm leading-relaxed text-muted">{e.content}</p>
+                    {e.image && <img src={e.image} alt="captura" className="mt-2 max-h-44 w-auto rounded-lg border border-border" />}
                   </li>
                 ))}
               </ol>

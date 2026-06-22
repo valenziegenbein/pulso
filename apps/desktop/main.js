@@ -3,7 +3,7 @@
 // - Widget flotante: /captura (captura personal, local-first, always-on-top).
 // - Empaquetado: levanta el server Next standalone embebido (SQLite) y apunta a él.
 // - En dev: apunta a PULSO_URL.
-const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, screen, shell, dialog } = require('electron');
+const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, screen, shell, dialog, desktopCapturer } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { spawn } = require('node:child_process');
 const crypto = require('node:crypto');
@@ -419,6 +419,28 @@ ipcMain.on('widget:intro', introWidget);
 ipcMain.on('pulso:personal-ready', openWidgetCollapsed);
 ipcMain.on('pulso:auth', (_e, s) => {
   if (s === 'authed') openWidgetCollapsed();
+});
+
+// Captura rápida de pantalla. Oculta el widget un instante para no salir en la foto.
+ipcMain.handle('pulso:screenshot', async () => {
+  const widgetWasVisible = widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible();
+  try {
+    if (widgetWasVisible) widgetWindow.hide();
+    await new Promise((r) => setTimeout(r, 150));
+    const display = screen.getPrimaryDisplay();
+    const scale = Math.min(1, 1366 / display.size.width);
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: Math.round(display.size.width * scale), height: Math.round(display.size.height * scale) },
+    });
+    const src = sources[0];
+    if (!src || src.thumbnail.isEmpty()) return null;
+    return `data:image/jpeg;base64,${src.thumbnail.toJPEG(70).toString('base64')}`;
+  } catch {
+    return null;
+  } finally {
+    if (widgetWasVisible && widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.show();
+  }
 });
 
 app.on('window-all-closed', () => {});

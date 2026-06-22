@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('pulso', {
   expand: () => ipcRenderer.send('widget:expand'),
   // Onboarding: materializa el widget real y lo snapea al borde (efecto sorpresa).
   introWidget: () => ipcRenderer.send('widget:intro'),
+  // Captura rápida de pantalla → devuelve un data URL (JPEG) o null.
+  screenshot: () => ipcRenderer.invoke('pulso:screenshot'),
   // La web avisa cuando el espacio de trabajo está listo para que el shell abra
   // el widget (señal confiable: las navegaciones de Next son client-side "soft").
   personalReady: () => ipcRenderer.send('pulso:personal-ready'),

@@ -25,6 +25,8 @@ export interface Entry {
   type: EntryType;
   title: string;
   content: string;
+  /** Captura/imagen adjunta, como data URL (downscaleada). Opcional. */
+  image?: string;
   createdAt: number;
 }
 
@@ -68,7 +70,7 @@ interface PersonalContextValue extends PersonalState {
   setName: (name: string) => void;
   addProject: (input: { name: string; context?: string }) => Project;
   updateProjectContext: (id: string, context: string) => void;
-  addEntry: (input: { projectId?: string | null; type: EntryType; title: string; content: string }) => Entry;
+  addEntry: (input: { projectId?: string | null; type: EntryType; title: string; content: string; image?: string }) => Entry;
   addTask: (input: { projectId: string; title: string; note?: string; priority?: TaskPriority }) => Task;
   toggleTask: (id: string) => void;
   setFocusProject: (id: string) => void;
@@ -146,13 +148,14 @@ export function PersonalProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addEntry = useCallback(
-    (input: { projectId?: string | null; type: EntryType; title: string; content: string }) => {
+    (input: { projectId?: string | null; type: EntryType; title: string; content: string; image?: string }) => {
       const entry: Entry = {
         id: newId(),
         projectId: input.projectId ?? null,
         type: input.type,
         title: input.title,
         content: input.content,
+        image: input.image,
         createdAt: Date.now(),
       };
       setState((s) => ({ ...s, entries: [entry, ...s.entries] }));

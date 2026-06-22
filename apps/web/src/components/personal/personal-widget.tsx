@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
-import { usePersonal, type EntryType } from '@/lib/personal/store';
+import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type ReactNode } from 'react';
+import { TASK_PRIORITY_ORDER, usePersonal, type EntryType } from '@/lib/personal/store';
 import { ProjectChooser } from './project-chooser';
 
 type Bridge = {
@@ -9,6 +9,7 @@ type Bridge = {
   hideWidget?: () => void;
   collapse?: () => void;
   expand?: () => void;
+  screenshot?: () => Promise<string | null>;
 };
 function bridge(): Bridge | undefined {
   return typeof window !== 'undefined' ? (window as unknown as { pulso?: Bridge }).pulso : undefined;
@@ -20,6 +21,33 @@ interface Draft {
   type: EntryType;
   title: string;
   content: string;
+}
+
+/** Reduce una imagen (blob o data URL) a un data URL JPEG manejable para localStorage. */
+async function downscale(src: string | Blob, maxW = 1100): Promise<string> {
+  const url = typeof src === 'string' ? src : URL.createObjectURL(src);
+  try {
+    const img = await new Promise<HTMLImageElement>((res, rej) => {
+      const im = new Image();
+      im.onload = () => res(im);
+      im.onerror = rej;
+      im.src = url;
+    });
+    const scale = Math.min(1, maxW / img.width);
+    const w = Math.round(img.width * scale);
+    const h = Math.round(img.height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return typeof src === 'string' ? src : url;
+    ctx.drawImage(img, 0, 0, w, h);
+    return canvas.toDataURL('image/jpeg', 0.7);
+  } catch {
+    return typeof src === 'string' ? src : url;
+  } finally {
+    if (typeof src !== 'string') URL.revokeObjectURL(url);
+  }
 }
 
 function useElapsed(): string {
@@ -42,20 +70,19 @@ function useWindowWidth(): number {
   return w;
 }
 
-/** Widget personal flotante (atelier). Captura local-first; comparte datos con
- *  la app por localStorage. Vive en la ventana siempre-encima del shell.
- *  - `embedded`: se muestra dentro del onboarding (sin controles de ventana).
- *  - En escritorio puede minimizarse a una "pill" pegada al borde. */
+/** Widget personal flotante (atelier). Captura local-first con imagen (pegar o
+ *  screenshot) y tareas pendientes del proyecto en foco. */
 export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}) {
   const elapsed = useElapsed();
   const width = useWindowWidth();
-  const { focusProject, addEntry } = usePersonal();
+  const { focusProject, addEntry, tasks, toggleTask } = usePersonal();
   const [isDesktop, setIsDesktop] = useState(false);
   useEffect(() => setIsDesktop(Boolean(bridge()?.isDesktop)), []);
 
+  const fileRef = useRef<HTMLInputElement>(null);
   const [note, setNote] = useState('');
-  const [attach, setAttach] = useState('');
-  const [showAttach, setShowAttach] = useState(false);
+  const [image, setImage] = useState<string | null>(null);
+  const [shooting, setShooting] = useState(false);
   const [intent, setIntent] = useState<EntryType | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -64,6 +91,41 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
   const [error, setError] = useState<string | null>(null);
 
   const collapsed = isDesktop && !embedded && width < 240;
+
+  const pending = focusProject
+    ? tasks
+        .filter((t) => t.projectId === focusProject.id && !t.done)
+        .sort((a, b) => TASK_PRIORITY_ORDER[a.priority] - TASK_PRIORITY_ORDER[b.priority])
+    : [];
+
+  async function handlePaste(e: ClipboardEvent<HTMLTextAreaElement>) {
+    const item = Array.from(e.clipboardData.items).find((it) => it.type.startsWith('image/'));
+    const blob = item?.getAsFile();
+    if (!blob) return;
+    e.preventDefault();
+    setImage(await downscale(blob));
+  }
+
+  async function captureScreen() {
+    const b = bridge();
+    if (b?.isDesktop && b.screenshot) {
+      setShooting(true);
+      try {
+        const shot = await b.screenshot();
+        if (shot) setImage(await downscale(shot));
+      } finally {
+        setShooting(false);
+      }
+    } else {
+      fileRef.current?.click();
+    }
+  }
+
+  async function onFile(e: ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (f) setImage(await downscale(f));
+    e.target.value = '';
+  }
 
   async function generate() {
     if (note.trim().length === 0 || !focusProject) return;
@@ -74,11 +136,7 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
       const res = await fetch('/api/worklog/suggest', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          note,
-          task: { title: focusProject.name },
-          attachmentsHint: attach ? [attach] : undefined,
-        }),
+        body: JSON.stringify({ note, task: { title: focusProject.name } }),
       });
       if (!res.ok) {
         setError(res.status === 429 ? 'Demasiados pedidos. Probá en un momento.' : 'No se pudo generar.');
@@ -97,8 +155,7 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
   function reset() {
     setDraft(null);
     setNote('');
-    setAttach('');
-    setShowAttach(false);
+    setImage(null);
     setIntent(null);
     setSaved(false);
   }
@@ -106,7 +163,7 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
   function save() {
     if (!draft || !focusProject) return;
     setSaving(true);
-    addEntry({ projectId: focusProject.id, type: draft.type, title: draft.title, content: draft.content });
+    addEntry({ projectId: focusProject.id, type: draft.type, title: draft.title, content: draft.content, image: image ?? undefined });
     setSaved(true);
     setSaving(false);
     setTimeout(reset, 1400);
@@ -118,10 +175,7 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
       <div className="drag-region flex w-[160px] items-center gap-2 rounded-full border border-border bg-surface/95 px-3 py-2 shadow-2xl backdrop-blur-xl">
         <span className="pulso-beat inline-block text-accent">✦</span>
         <span className="text-sm font-semibold">Pulso</span>
-        <button
-          onClick={() => bridge()?.expand?.()}
-          className="font-meta no-drag ml-auto rounded-full bg-accent px-3 py-1 text-[11px] font-medium text-bg transition hover:brightness-110"
-        >
+        <button onClick={() => bridge()?.expand?.()} className="font-meta no-drag ml-auto rounded-full bg-accent px-3 py-1 text-[11px] font-medium text-bg transition hover:brightness-110">
           Anotar
         </button>
       </div>
@@ -141,12 +195,8 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
             <span className="font-meta text-[11px] text-muted">{elapsed}</span>
             {isDesktop && (
               <>
-                <button onClick={() => bridge()?.collapse?.()} className="no-drag rounded px-1 text-muted transition hover:text-fg" title="Minimizar al borde">
-                  —
-                </button>
-                <button onClick={() => bridge()?.hideWidget?.()} className="no-drag rounded px-1 text-muted transition hover:text-fg" title="Ocultar (Ctrl+Shift+P)">
-                  ✕
-                </button>
+                <button onClick={() => bridge()?.collapse?.()} className="no-drag rounded px-1 text-muted transition hover:text-fg" title="Minimizar al borde">—</button>
+                <button onClick={() => bridge()?.hideWidget?.()} className="no-drag rounded px-1 text-muted transition hover:text-fg" title="Ocultar (Ctrl+Shift+P)">✕</button>
               </>
             )}
           </div>
@@ -158,32 +208,34 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
         <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
+          onPaste={handlePaste}
           rows={2}
-          placeholder="Investigando Intercom…"
+          placeholder="Investigando Intercom…  (pegá una captura con Ctrl+V)"
           className="mt-2 w-full resize-none border-b border-border bg-transparent pb-2 font-display text-lg leading-snug outline-none placeholder:text-muted/40 focus:border-accent"
         />
 
-        {showAttach && (
-          <input
-            value={attach}
-            onChange={(e) => setAttach(e.target.value)}
-            placeholder="Link o ruta (captura manual)"
-            className="mt-3 w-full rounded-lg border border-border bg-bg/60 p-2 text-xs outline-none placeholder:text-muted/50 focus:border-accent"
-          />
+        {image && (
+          <div className="relative mt-3 inline-block">
+            <img src={image} alt="captura adjunta" className="h-16 w-auto rounded-lg border border-border object-cover" />
+            <button
+              onClick={() => setImage(null)}
+              className="no-drag absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-bg text-[10px] text-muted hover:text-fg"
+              title="Quitar captura"
+            >
+              ✕
+            </button>
+          </div>
         )}
 
+        <input ref={fileRef} type="file" accept="image/*" onChange={onFile} className="hidden" />
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
-          <MiniChip active={showAttach} onClick={() => setShowAttach((v) => !v)}>📎</MiniChip>
+          <MiniChip onClick={captureScreen}>{shooting ? '…' : '📎 Captura'}</MiniChip>
           <MiniChip active={intent === 'BLOCKER'} onClick={() => setIntent((v) => (v === 'BLOCKER' ? null : 'BLOCKER'))}>⛔ Bloqueo</MiniChip>
           <MiniChip active={intent === 'DECISION'} onClick={() => setIntent((v) => (v === 'DECISION' ? null : 'DECISION'))}>◆ Decisión</MiniChip>
         </div>
 
         {!draft && (
-          <button
-            onClick={generate}
-            disabled={loading || !canGenerate}
-            className="mt-3 w-full rounded-full bg-accent px-4 py-2 text-sm font-medium text-bg transition hover:brightness-110 disabled:opacity-40"
-          >
+          <button onClick={generate} disabled={loading || !canGenerate} className="mt-3 w-full rounded-full bg-accent px-4 py-2 text-sm font-medium text-bg transition hover:brightness-110 disabled:opacity-40">
             {loading ? 'Generando…' : 'Generar bitácora'}
           </button>
         )}
@@ -195,6 +247,7 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
             <span className="font-meta text-[10px] uppercase tracking-[0.16em] text-muted">Sugerida · {draft.type}</span>
             <h3 className="font-display mt-1 text-base leading-snug">{draft.title}</h3>
             <p className="mt-1 text-xs leading-relaxed text-muted">{draft.content}</p>
+            {image && <img src={image} alt="" className="mt-2 h-14 w-auto rounded border border-border object-cover" />}
             {saved ? (
               <p className="mt-3 text-xs text-emerald-300">✓ Guardado{focusProject ? ` en ${focusProject.name}` : ''}.</p>
             ) : (
@@ -203,6 +256,25 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
                 <button onClick={reset} className="rounded-full px-3 py-1.5 text-muted transition hover:text-fg">Descartar</button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Tareas pendientes del proyecto en foco */}
+        {focusProject && pending.length > 0 && (
+          <div className="mt-4 border-t border-border/60 pt-3">
+            <p className="font-meta text-[10px] uppercase tracking-[0.18em] text-muted">Pendientes</p>
+            <ul className="mt-1.5 space-y-1">
+              {pending.slice(0, 3).map((t) => (
+                <li key={t.id}>
+                  <button onClick={() => toggleTask(t.id)} className="no-drag group flex w-full items-center gap-2 text-left text-xs text-fg/90 transition hover:text-fg">
+                    <span className="inline-block h-3.5 w-3.5 shrink-0 rounded-full border border-muted transition group-hover:border-accent" />
+                    <span className="truncate">{t.title}</span>
+                    {t.priority === 'high' && <span className="ml-auto shrink-0 text-[#d98a5e]">●</span>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {pending.length > 3 && <p className="font-meta mt-1.5 text-[10px] text-muted">+{pending.length - 3} pendientes más</p>}
           </div>
         )}
 
@@ -218,7 +290,7 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
   );
 }
 
-function MiniChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+function MiniChip({ active, onClick, children }: { active?: boolean; onClick: () => void; children: ReactNode }) {
   return (
     <button
       onClick={onClick}
