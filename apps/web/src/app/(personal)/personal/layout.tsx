@@ -26,7 +26,7 @@ export default function PersonalLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
-      <PersonalReady />
+      {onboarded && <PersonalReady />}
       <aside className="flex w-52 shrink-0 flex-col justify-between border-r border-border/70 px-4 py-6">
         <div>
           <div className="mb-8 flex items-center gap-2 px-2 text-base font-semibold">

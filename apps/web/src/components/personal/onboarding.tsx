@@ -1,14 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { usePersonal, type AiMode, type StorageTarget } from '@/lib/personal/store';
+import { ENTRY_LABEL, usePersonal, type AiMode, type StorageTarget } from '@/lib/personal/store';
+import { PersonalWidget } from './personal-widget';
 
-const STEPS = ['intro', 'mode', 'name', 'project', 'storage', 'ai', 'done'] as const;
+const STEPS = ['intro', 'mode', 'name', 'project', 'widget', 'snap', 'storage', 'ai', 'done'] as const;
+
+type ShellBridge = { isDesktop?: boolean; introWidget?: () => void; collapse?: () => void };
+function shell(): ShellBridge | undefined {
+  return typeof window !== 'undefined' ? (window as unknown as { pulso?: ShellBridge }).pulso : undefined;
+}
 
 export function Onboarding() {
   const router = useRouter();
-  const { setName, addProject, setStorage, setAi, completeOnboarding } = usePersonal();
+  const { setName, addProject, setStorage, setAi, completeOnboarding, entries, focusProject } = usePersonal();
 
   const [i, setI] = useState(0);
   const [name, setNameLocal] = useState('');
@@ -16,22 +22,42 @@ export function Onboarding() {
   const [projCtx, setProjCtx] = useState('');
   const [storage, setStorageLocal] = useState<StorageTarget>(null);
   const [ai, setAiLocal] = useState<AiMode>(null);
+  const [committed, setCommitted] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => setIsDesktop(Boolean(shell()?.isDesktop)), []);
 
   const step = STEPS[i];
   const go = (n: number) => setI((v) => Math.min(Math.max(v + n, 0), STEPS.length - 1));
 
+  // Commit nombre + proyecto al entrar al paso del widget (para que tenga destino).
+  function enterWidget() {
+    if (!committed) {
+      setCommitted(true);
+      if (name.trim()) setName(name.trim());
+      addProject({ name: projName.trim() || 'Mi primer proyecto', context: projCtx.trim() || undefined });
+    }
+    go(1);
+  }
+
+  // Al llegar al paso "snap", el widget real ya snapeó al borde → lo minimizamos.
+  useEffect(() => {
+    if (STEPS[i] !== 'snap') return;
+    const t = setTimeout(() => shell()?.collapse?.(), 1200);
+    return () => clearTimeout(t);
+  }, [i]);
+
   function finish() {
-    if (name.trim()) setName(name.trim());
-    if (projName.trim()) addProject({ name: projName.trim(), context: projCtx.trim() || undefined });
     setStorage(storage);
     setAi(ai);
     completeOnboarding();
     router.push('/personal');
   }
 
+  const liveEntries = entries.filter((e) => !focusProject || e.projectId === focusProject.id).slice(0, 4);
+
   return (
     <main className="flex min-h-screen flex-col px-6 py-8">
-      {/* Cabecera */}
       <header className="mx-auto flex w-full max-w-2xl items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-semibold">
           <span className="pulso-beat inline-block text-accent">✦</span> Pulso
@@ -41,7 +67,6 @@ export function Onboarding() {
         </span>
       </header>
 
-      {/* Contenido del paso (re-anima al cambiar) */}
       <div key={step} className="pulso-reveal mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center py-10">
         {step === 'intro' && (
           <div>
@@ -63,18 +88,8 @@ export function Onboarding() {
             <h1 className="font-display text-4xl sm:text-5xl">¿Cómo vas a usar Pulso?</h1>
             <p className="mt-3 text-muted">Misma herramienta, dos formas de trabajar.</p>
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
-              <OptionCard
-                title="Para mí"
-                desc="Notas, proyectos propios, bitácora. Local, sin cuenta. Tus datos son tuyos."
-                badge="Personal"
-                onClick={() => go(1)}
-              />
-              <OptionCard
-                title="Con mi equipo"
-                desc="Equipos, personas, tareas, comunicación y resultados. Requiere cuenta."
-                badge="Teams"
-                onClick={() => router.push('/login')}
-              />
+              <OptionCard title="Para mí" desc="Notas, proyectos propios, bitácora. Local, sin cuenta. Tus datos son tuyos." badge="Personal" onClick={() => go(1)} />
+              <OptionCard title="Con mi equipo" desc="Equipos, personas, tareas, comunicación y resultados. Requiere cuenta." badge="Teams" onClick={() => router.push('/login')} />
             </div>
           </div>
         )}
@@ -113,7 +128,49 @@ export function Onboarding() {
               placeholder="¿De qué trata? (opcional)"
               className="mt-5 w-full resize-none rounded-xl border border-border bg-surface/60 p-3 text-sm outline-none placeholder:text-muted/50 focus:border-accent"
             />
-            <StepNav onBack={() => go(-1)} onNext={() => go(1)} nextLabel={projName.trim() ? 'Continuar' : 'Lo hago después'} />
+            <StepNav onBack={() => go(-1)} onNext={enterWidget} nextLabel={projName.trim() ? 'Continuar' : 'Lo hago después'} />
+          </div>
+        )}
+
+        {step === 'widget' && (
+          <div>
+            <p className="font-meta mb-3 text-xs uppercase tracking-[0.2em] text-accent">Tu widget</p>
+            <h1 className="font-display text-4xl sm:text-5xl">Capturá sin cortar el flujo</h1>
+            <p className="mt-3 max-w-lg text-muted">
+              Contá en una frase qué estás haciendo (o sumá una captura) y la IA arma tu bitácora. <span className="text-fg">Probalo acá 👇</span>
+            </p>
+            <div className="mt-7 flex flex-col gap-5 sm:flex-row sm:items-start">
+              <PersonalWidget embedded />
+              <div className="flex-1">
+                <p className="font-meta mb-2 text-[11px] uppercase tracking-[0.2em] text-muted">Tu bitácora</p>
+                {liveEntries.length === 0 ? (
+                  <p className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted">Lo que generes aparece acá.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {liveEntries.map((e) => (
+                      <li key={e.id} className="pulso-reveal rounded-xl border border-border bg-surface/40 p-3">
+                        <span className="font-meta text-[10px] uppercase tracking-[0.16em] text-accent">{ENTRY_LABEL[e.type]}</span>
+                        <div className="mt-0.5 text-sm">{e.title}</div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+            <StepNav onBack={() => go(-1)} onNext={() => { shell()?.introWidget?.(); go(1); }} nextLabel="Continuar" />
+          </div>
+        )}
+
+        {step === 'snap' && (
+          <div>
+            <p className="font-meta mb-3 text-xs uppercase tracking-[0.2em] text-accent">Siempre a mano</p>
+            <h1 className="font-display text-4xl sm:text-5xl">Vive en el borde</h1>
+            <p className="mt-4 max-w-md text-lg text-muted">
+              Tu widget se minimiza solo y se acomoda en el borde de la pantalla para no molestarte. Cuando necesites anotar algo, abrilo con{' '}
+              <span className="font-meta text-accent">Ctrl + Shift + P</span> o tocá <span className="text-fg">Anotar</span>. Al terminar, vuelve al borde.
+            </p>
+            {isDesktop && <p className="mt-4 text-sm text-muted">👉 Mirá la esquina de tu pantalla: ahí quedó, minimizado.</p>}
+            <StepNav onBack={() => go(-1)} onNext={() => go(1)} nextLabel="Continuar" />
           </div>
         )}
 
@@ -148,7 +205,7 @@ export function Onboarding() {
             <p className="font-meta mb-4 text-xs uppercase tracking-[0.2em] text-accent">Todo listo</p>
             <h1 className="font-display text-5xl sm:text-6xl">{name.trim() ? `Listo, ${name.trim()}.` : 'Listo.'}</h1>
             <p className="mt-5 max-w-md text-lg text-muted">
-              Tu taller está armado. Abrí Pulso y, cuando quieras capturar algo, solo escribí una frase.
+              Tu taller está armado y tu widget espera en el borde. Cuando quieras capturar algo, solo escribí una frase.
             </p>
             <button onClick={finish} className="mt-8 rounded-full bg-accent px-7 py-3 font-medium text-bg transition hover:brightness-110">
               Entrar a Pulso →
@@ -157,13 +214,9 @@ export function Onboarding() {
         )}
       </div>
 
-      {/* Puntos de progreso */}
       <footer className="mx-auto flex w-full max-w-2xl items-center justify-center gap-2">
         {STEPS.map((s, idx) => (
-          <span
-            key={s}
-            className={`h-1.5 rounded-full transition-all ${idx === i ? 'w-6 bg-accent' : 'w-1.5 bg-border'}`}
-          />
+          <span key={s} className={`h-1.5 rounded-full transition-all ${idx === i ? 'w-6 bg-accent' : 'w-1.5 bg-border'}`} />
         ))}
       </footer>
     </main>

@@ -11,7 +11,11 @@ contextBridge.exposeInMainWorld('pulso', {
   version: appVersion,
   showWidget: () => ipcRenderer.send('widget:show'),
   hideWidget: () => ipcRenderer.send('widget:hide'),
-  setView: (view) => ipcRenderer.send('widget:setView', view),
+  // Minimizar (pill pegada al borde) / expandir el widget flotante.
+  collapse: () => ipcRenderer.send('widget:collapse'),
+  expand: () => ipcRenderer.send('widget:expand'),
+  // Onboarding: materializa el widget real y lo snapea al borde (efecto sorpresa).
+  introWidget: () => ipcRenderer.send('widget:intro'),
   // La web avisa cuando el espacio de trabajo está listo para que el shell abra
   // el widget (señal confiable: las navegaciones de Next son client-side "soft").
   personalReady: () => ipcRenderer.send('pulso:personal-ready'),

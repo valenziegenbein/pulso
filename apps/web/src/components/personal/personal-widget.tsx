@@ -4,7 +4,12 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { usePersonal, type EntryType } from '@/lib/personal/store';
 import { ProjectChooser } from './project-chooser';
 
-type Bridge = { isDesktop?: boolean; hideWidget?: () => void };
+type Bridge = {
+  isDesktop?: boolean;
+  hideWidget?: () => void;
+  collapse?: () => void;
+  expand?: () => void;
+};
 function bridge(): Bridge | undefined {
   return typeof window !== 'undefined' ? (window as unknown as { pulso?: Bridge }).pulso : undefined;
 }
@@ -26,10 +31,24 @@ function useElapsed(): string {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
 
+function useWindowWidth(): number {
+  const [w, setW] = useState(1024);
+  useEffect(() => {
+    const onResize = () => setW(window.innerWidth);
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  return w;
+}
+
 /** Widget personal flotante (atelier). Captura local-first; comparte datos con
- *  la app por localStorage. Pensado para vivir en la ventana siempre-encima. */
-export function PersonalWidget() {
+ *  la app por localStorage. Vive en la ventana siempre-encima del shell.
+ *  - `embedded`: se muestra dentro del onboarding (sin controles de ventana).
+ *  - En escritorio puede minimizarse a una "pill" pegada al borde. */
+export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}) {
   const elapsed = useElapsed();
+  const width = useWindowWidth();
   const { focusProject, addEntry } = usePersonal();
   const [isDesktop, setIsDesktop] = useState(false);
   useEffect(() => setIsDesktop(Boolean(bridge()?.isDesktop)), []);
@@ -44,8 +63,10 @@ export function PersonalWidget() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const collapsed = isDesktop && !embedded && width < 240;
+
   async function generate() {
-    if (note.trim().length === 0) return;
+    if (note.trim().length === 0 || !focusProject) return;
     setLoading(true);
     setError(null);
     setSaved(false);
@@ -55,7 +76,7 @@ export function PersonalWidget() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           note,
-          task: focusProject ? { title: focusProject.name } : undefined,
+          task: { title: focusProject.name },
           attachmentsHint: attach ? [attach] : undefined,
         }),
       });
@@ -83,30 +104,54 @@ export function PersonalWidget() {
   }
 
   function save() {
-    if (!draft) return;
+    if (!draft || !focusProject) return;
     setSaving(true);
-    addEntry({ projectId: focusProject?.id ?? null, type: draft.type, title: draft.title, content: draft.content });
+    addEntry({ projectId: focusProject.id, type: draft.type, title: draft.title, content: draft.content });
     setSaved(true);
     setSaving(false);
     setTimeout(reset, 1400);
   }
 
+  // ---- Pill minimizada (pegada al borde) ----
+  if (collapsed) {
+    return (
+      <div className="drag-region flex w-[160px] items-center gap-2 rounded-full border border-border bg-surface/95 px-3 py-2 shadow-2xl backdrop-blur-xl">
+        <span className="pulso-beat inline-block text-accent">✦</span>
+        <span className="text-sm font-semibold">Pulso</span>
+        <button
+          onClick={() => bridge()?.expand?.()}
+          className="font-meta no-drag ml-auto rounded-full bg-accent px-3 py-1 text-[11px] font-medium text-bg transition hover:brightness-110"
+        >
+          Anotar
+        </button>
+      </div>
+    );
+  }
+
+  // ---- Panel completo ----
+  const canGenerate = note.trim().length > 0 && !!focusProject;
   return (
     <div className="w-[360px] rounded-2xl border border-border bg-surface/95 shadow-2xl backdrop-blur-xl">
-      {/* Header (zona de arrastre en escritorio) */}
-      <div className="drag-region flex items-center justify-between rounded-t-2xl border-b border-border/60 px-4 py-2.5">
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <span className="pulso-beat inline-block text-accent">✦</span> Pulso
+      {!embedded && (
+        <div className="drag-region flex items-center justify-between rounded-t-2xl border-b border-border/60 px-4 py-2.5">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <span className="pulso-beat inline-block text-accent">✦</span> Pulso
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="font-meta text-[11px] text-muted">{elapsed}</span>
+            {isDesktop && (
+              <>
+                <button onClick={() => bridge()?.collapse?.()} className="no-drag rounded px-1 text-muted transition hover:text-fg" title="Minimizar al borde">
+                  —
+                </button>
+                <button onClick={() => bridge()?.hideWidget?.()} className="no-drag rounded px-1 text-muted transition hover:text-fg" title="Ocultar (Ctrl+Shift+P)">
+                  ✕
+                </button>
+              </>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="font-meta text-[11px] text-muted">{elapsed}</span>
-          {isDesktop && (
-            <button onClick={() => bridge()?.hideWidget?.()} className="no-drag rounded px-1 text-muted transition hover:text-fg" title="Ocultar">
-              ✕
-            </button>
-          )}
-        </div>
-      </div>
+      )}
 
       <div className="p-4">
         <p className="font-meta text-[10px] uppercase tracking-[0.22em] text-accent">¿Qué estás haciendo?</p>
@@ -136,7 +181,7 @@ export function PersonalWidget() {
         {!draft && (
           <button
             onClick={generate}
-            disabled={loading || note.trim().length === 0}
+            disabled={loading || !canGenerate}
             className="mt-3 w-full rounded-full bg-accent px-4 py-2 text-sm font-medium text-bg transition hover:brightness-110 disabled:opacity-40"
           >
             {loading ? 'Generando…' : 'Generar bitácora'}
@@ -162,7 +207,11 @@ export function PersonalWidget() {
         )}
 
         <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-3">
-          <ProjectChooser variant="inline" />
+          {focusProject ? (
+            <ProjectChooser variant="inline" />
+          ) : (
+            <span className="font-meta text-[11px] uppercase tracking-wide text-muted">Creá un proyecto para empezar</span>
+          )}
         </div>
       </div>
     </div>
