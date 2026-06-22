@@ -17,7 +17,8 @@ export function middleware(req: NextRequest): NextResponse {
 }
 
 export const config = {
-  // /widget se excluye: maneja su propio estado "sin sesión" (cartel compacto),
-  // así la ventana flotante nunca muestra el /login ni el panel completos.
-  matcher: ['/((?!login|widget|api|_next/static|_next/image|favicon.ico).*)'],
+  // Excluidos del guard de auth:
+  // - /widget: maneja su propio estado "sin sesión".
+  // - /welcome y /personal: modo personal local-first (sin cuenta).
+  matcher: ['/((?!login|widget|welcome|personal|api|_next/static|_next/image|favicon.ico).*)'],
 };

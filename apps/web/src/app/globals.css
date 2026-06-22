@@ -41,3 +41,69 @@ body {
   backdrop-filter: blur(18px) saturate(140%);
   -webkit-backdrop-filter: blur(18px) saturate(140%);
 }
+
+/* ============================================================= */
+/* Pulso — modo Personal: tema "atelier" cálido, editorial.      */
+/* ============================================================= */
+.theme-personal {
+  --bg: #15110c;
+  --surface: #1e1810;
+  --surface-2: #261e15;
+  --border: #322619;
+  --muted: #a4917a;
+  --fg: #f3ece0;
+  --accent: #e7c79a;
+  --accent-2: #c98a5e;
+  color: var(--fg);
+  background-color: var(--bg);
+  font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display {
+  font-family: var(--font-display), Georgia, "Times New Roman", serif;
+  font-optical-sizing: auto;
+}
+.font-meta {
+  font-family: var(--font-mono), ui-monospace, "SFMono-Regular", monospace;
+}
+
+/* Atmósfera: brillo cálido + grano sutil (no invade, da textura de papel). */
+.atelier-glow {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(60rem 40rem at 75% -10%, rgba(231, 199, 154, 0.10), transparent 60%),
+    radial-gradient(50rem 40rem at 0% 110%, rgba(201, 138, 94, 0.07), transparent 55%);
+}
+.atelier-grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.04;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Movimiento: revelado escalonado + latido. */
+@keyframes pulso-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.pulso-reveal {
+  opacity: 0;
+  animation: pulso-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+@keyframes pulso-beat {
+  0%, 100% { opacity: 0.45; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1); }
+}
+.pulso-beat { animation: pulso-beat 2.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pulso-reveal { animation: none; opacity: 1; }
+  .pulso-beat { animation: none; }
+}

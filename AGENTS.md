@@ -84,7 +84,8 @@ Flujo de cada agente:
 | Área | Dueño actual | Notas |
 |---|---|---|
 | `apps/desktop/**` (Electron, widget, auto-update, packaging/release) | **Claude** | No tocar sin coordinar. |
-| `apps/web/**` (pantallas, componentes, server actions, queries) | **Codex** | Features de producto. |
+| `apps/web/src/app/(personal)/**`, `components/personal/**`, `lib/personal/**` | **Claude** | Modo **Personal** (local-first). |
+| `apps/web/src/app/(app)/**` (Teams) + resto de `apps/web` | **Codex** | Pantallas Teams + bugfixes. |
 | `packages/domain/**` (reglas de negocio, casos de uso) | Codex (coordinar) | |
 | `packages/llm/**` | Compartido | Cambios additivos. |
 
