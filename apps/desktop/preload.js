@@ -12,7 +12,8 @@ contextBridge.exposeInMainWorld('pulso', {
   showWidget: () => ipcRenderer.send('widget:show'),
   hideWidget: () => ipcRenderer.send('widget:hide'),
   setView: (view) => ipcRenderer.send('widget:setView', view),
-  // La web avisa cuando hay sesión (página autenticada montada) para que el
-  // shell abra el widget. Señal confiable (las navegaciones de Next son "soft").
+  // La web avisa cuando el espacio de trabajo está listo para que el shell abra
+  // el widget (señal confiable: las navegaciones de Next son client-side "soft").
+  personalReady: () => ipcRenderer.send('pulso:personal-ready'),
   authState: (state) => ipcRenderer.send('pulso:auth', state),
 });

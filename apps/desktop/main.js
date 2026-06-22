@@ -1,8 +1,8 @@
-// Shell de escritorio de Pulso (Electron).
-// - En desarrollo: apunta a PULSO_URL (server Next levantado aparte).
-// - Empaquetado: levanta el server Next standalone embebido y apunta a él.
-// Además: panel principal, widget flotante (colapsado/rápido/completo) con glass,
-// snap a borde, persistencia, system tray y atajo global.
+// Shell de escritorio de Pulso (Electron) — experiencia por defecto: modo Personal.
+// - Ventana principal: /personal (onboarding /welcome si todavía no se configuró).
+// - Widget flotante: /captura (captura personal, local-first, always-on-top).
+// - Empaquetado: levanta el server Next standalone embebido (SQLite) y apunta a él.
+// - En dev: apunta a PULSO_URL.
 const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, screen, shell, dialog } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { spawn } = require('node:child_process');
@@ -14,22 +14,17 @@ const path = require('node:path');
 app.setName('Pulso'); // userData limpio: %APPDATA%\Pulso
 
 const SERVER_PORT = 41789;
+const WIDGET_SIZE = { width: 384, height: 520 };
 let BASE_URL = process.env.PULSO_URL || 'http://localhost:3000';
-
-// Tamaño de la ventana del widget según su estado (incluye padding del panel).
-const VIEW_SIZES = {
-  collapsed: { width: 184, height: 54 },
-  quick: { width: 372, height: 336 },
-  full: { width: 384, height: 620 },
-};
 
 let mainWindow = null;
 let widgetWindow = null;
 let tray = null;
 let serverProcess = null;
 let programmaticMove = false;
+let widgetOpened = false;
 
-// --- Configuración del usuario (DB + secretos), persistida en userData ---
+// --- Configuración del usuario (secretos + DB), persistida en userData ---
 function loadConfig() {
   const cfgPath = path.join(app.getPath('userData'), 'pulso.config.json');
   let cfg = {};
@@ -55,10 +50,10 @@ function loadConfig() {
       /* no crítico */
     }
   }
-  return { cfg, cfgPath };
+  return { cfg };
 }
 
-// SQLite embebido: copia la DB semilla a userData en el primer arranque.
+// SQLite embebido (lo usa el modo Teams). Personal es local-first en el cliente.
 function ensureDatabase() {
   const dbPath = path.join(app.getPath('userData'), 'pulso.db');
   if (!fs.existsSync(dbPath)) {
@@ -76,15 +71,12 @@ function ensureDatabase() {
 function startEmbeddedServer() {
   const { cfg } = loadConfig();
   const dbPath = ensureDatabase();
-  // App con SQLite embebido: solo respetamos un DATABASE_URL `file:` explícito;
-  // cualquier otra cosa (config vieja con Postgres, etc.) cae al SQLite local.
   const databaseUrl =
     typeof cfg.DATABASE_URL === 'string' && cfg.DATABASE_URL.startsWith('file:')
       ? cfg.DATABASE_URL
       : `file:${dbPath.replace(/\\/g, '/')}`;
   const serverJs = path.join(process.resourcesPath, 'server', 'apps', 'web', 'server.js');
-  const logPath = path.join(app.getPath('userData'), 'server.log');
-  const out = fs.openSync(logPath, 'a');
+  const out = fs.openSync(path.join(app.getPath('userData'), 'server.log'), 'a');
   serverProcess = spawn(process.execPath, [serverJs], {
     cwd: path.dirname(serverJs),
     env: {
@@ -105,9 +97,9 @@ function startEmbeddedServer() {
   });
 }
 
-// --- Persistencia de posición/estado del widget ---
+// --- Persistencia de posición del widget ---
 let statePath = null;
-let state = { x: null, y: null, view: 'full' };
+let state = { x: null, y: null };
 function loadState() {
   statePath = path.join(app.getPath('userData'), 'widget-state.json');
   try {
@@ -124,15 +116,13 @@ function saveState() {
   }
 }
 
-function widgetUrl() {
-  return `${BASE_URL}/widget?view=${state.view}`;
-}
+const widgetUrl = () => `${BASE_URL}/captura`;
 
 function waitForServer(url, timeoutMs = 60000) {
   return new Promise((resolve) => {
     const start = Date.now();
     const attempt = () => {
-      const req = http.get(`${url}/login`, (res) => {
+      const req = http.get(`${url}/captura`, (res) => {
         res.resume();
         resolve(true);
       });
@@ -147,7 +137,7 @@ function waitForServer(url, timeoutMs = 60000) {
 
 function attachWindowOpenHandler(contents) {
   contents.setWindowOpenHandler(({ url }) => {
-    if (url.includes('/widget')) showWidget();
+    if (url.includes('/captura') || url.includes('/widget')) showWidget();
     else if (/^https?:\/\//.test(url) && !url.startsWith(BASE_URL)) shell.openExternal(url);
     return { action: 'deny' };
   });
@@ -165,27 +155,26 @@ function createMainWindow() {
     minWidth: 900,
     minHeight: 600,
     title: 'Pulso',
-    backgroundColor: '#0e0f12',
+    backgroundColor: '#15110c',
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       additionalArguments: [`--pulso-version=${app.getVersion()}`],
     },
   });
-  mainWindow.loadURL(`${BASE_URL}/`);
+  mainWindow.loadURL(`${BASE_URL}/personal`);
   attachWindowOpenHandler(mainWindow.webContents);
 }
 
 function createWidgetWindow() {
   if (widgetWindow && !widgetWindow.isDestroyed()) return widgetWindow;
   const { workArea } = screen.getPrimaryDisplay();
-  const size = VIEW_SIZES[state.view] || VIEW_SIZES.full;
-  const x = state.x ?? workArea.x + workArea.width - size.width - 24;
+  const x = state.x ?? workArea.x + workArea.width - WIDGET_SIZE.width - 24;
   const y = state.y ?? workArea.y + 24;
 
   widgetWindow = new BrowserWindow({
-    width: size.width,
-    height: size.height,
+    width: WIDGET_SIZE.width,
+    height: WIDGET_SIZE.height,
     x: Math.round(x),
     y: Math.round(y),
     frame: false,
@@ -221,26 +210,6 @@ function createWidgetWindow() {
   return widgetWindow;
 }
 
-function applyView(view) {
-  state.view = VIEW_SIZES[view] ? view : 'full';
-  if (!widgetWindow || widgetWindow.isDestroyed()) return;
-  const size = VIEW_SIZES[state.view];
-  const { workArea } = screen.getPrimaryDisplay();
-  let [x, y] = widgetWindow.getPosition();
-  if (state.view === 'collapsed') {
-    const center = x + size.width / 2;
-    x = center < workArea.x + workArea.width / 2 ? workArea.x + 8 : workArea.x + workArea.width - size.width - 8;
-  }
-  x = Math.max(workArea.x + 8, Math.min(x, workArea.x + workArea.width - size.width - 8));
-  y = Math.max(workArea.y + 8, Math.min(y, workArea.y + workArea.height - size.height - 8));
-  programmaticMove = true;
-  widgetWindow.setBounds({ x: Math.round(x), y: Math.round(y), width: size.width, height: size.height });
-  programmaticMove = false;
-  state.x = Math.round(x);
-  state.y = Math.round(y);
-  saveState();
-}
-
 function showWidget() {
   const wnd = createWidgetWindow();
   wnd.show();
@@ -252,6 +221,12 @@ function hideWidget() {
 function toggleWidget() {
   if (widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()) hideWidget();
   else showWidget();
+}
+/** Abre el widget la primera vez que el modo personal/teams está listo. */
+function openWidgetOnce() {
+  if (widgetOpened) return;
+  widgetOpened = true;
+  showWidget();
 }
 
 function trayIcon() {
@@ -335,8 +310,8 @@ app.whenReady().then(async () => {
   await waitForServer(BASE_URL);
   createTray();
   createMainWindow();
-  // El widget NO se abre al inicio: se abre tras iniciar sesión (ver did-navigate),
-  // o manualmente desde el panel / bandeja / Ctrl+Shift+P.
+  // El widget se abre cuando el modo personal/teams está listo (ver ipc), o
+  // manualmente desde la bandeja / Ctrl+Shift+P.
   globalShortcut.register('CommandOrControl+Shift+P', toggleWidget);
   setupAutoUpdater();
   checkForUpdates();
@@ -344,12 +319,11 @@ app.whenReady().then(async () => {
 
 ipcMain.on('widget:hide', hideWidget);
 ipcMain.on('widget:show', showWidget);
-ipcMain.on('widget:setView', (_e, view) => applyView(view));
-// La web reporta sesión activa → abrir el widget (si no está ya abierto).
-ipcMain.on('pulso:auth', (_e, state) => {
-  if (state !== 'authed') return;
-  if (!widgetWindow || widgetWindow.isDestroyed()) showWidget();
-  else widgetWindow.loadURL(widgetUrl()); // re-sincronizar si quedó en el cartel
+// La web avisa cuando el espacio de trabajo está listo (personal onboarded o
+// sesión Teams activa) → abrimos el widget flotante una vez.
+ipcMain.on('pulso:personal-ready', openWidgetOnce);
+ipcMain.on('pulso:auth', (_e, s) => {
+  if (s === 'authed') openWidgetOnce();
 });
 
 app.on('window-all-closed', () => {});
