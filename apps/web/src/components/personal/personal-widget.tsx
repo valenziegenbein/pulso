@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type ReactNode } from 'react';
 import { TASK_PRIORITY_ORDER, usePersonal, type EntryType } from '@/lib/personal/store';
+import { AiError, generateDraft } from '@/lib/personal/ai';
 import { ProjectChooser } from './project-chooser';
 
 type Bridge = {
@@ -14,8 +15,6 @@ type Bridge = {
 function bridge(): Bridge | undefined {
   return typeof window !== 'undefined' ? (window as unknown as { pulso?: Bridge }).pulso : undefined;
 }
-
-const ENTRY_TYPES: EntryType[] = ['PROGRESS', 'RESEARCH', 'DECISION', 'BLOCKER', 'NOTE', 'DELIVERY'];
 
 interface Draft {
   type: EntryType;
@@ -75,7 +74,7 @@ function useWindowWidth(): number {
 export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}) {
   const elapsed = useElapsed();
   const width = useWindowWidth();
-  const { focusProject, addEntry, tasks, toggleTask } = usePersonal();
+  const { focusProject, addEntry, tasks, toggleTask, ai, aiConfig } = usePersonal();
   const [isDesktop, setIsDesktop] = useState(false);
   useEffect(() => setIsDesktop(Boolean(bridge()?.isDesktop)), []);
 
@@ -133,20 +132,14 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
     setError(null);
     setSaved(false);
     try {
-      const res = await fetch('/api/worklog/suggest', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ note, task: { title: focusProject.name } }),
-      });
-      if (!res.ok) {
-        setError(res.status === 429 ? 'Demasiados pedidos. Probá en un momento.' : 'No se pudo generar.');
-        return;
-      }
-      const data = (await res.json()) as { suggestion: { type: string; title: string; content: string } };
-      const t = ENTRY_TYPES.includes(data.suggestion.type as EntryType) ? (data.suggestion.type as EntryType) : 'NOTE';
-      setDraft({ type: intent ?? t, title: data.suggestion.title, content: data.suggestion.content });
-    } catch {
-      setError('Error de red.');
+      const s = await generateDraft({ note, task: { title: focusProject.name }, ai, config: aiConfig });
+      setDraft({ type: intent ?? s.type, title: s.title, content: s.content });
+    } catch (e) {
+      setError(
+        e instanceof AiError && e.code === 'rate_limited'
+          ? 'Demasiados pedidos. Probá en un momento.'
+          : 'No se pudo generar. Revisá tu IA en Ajustes.',
+      );
     } finally {
       setLoading(false);
     }

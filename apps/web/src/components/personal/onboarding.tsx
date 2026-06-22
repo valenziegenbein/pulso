@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ENTRY_LABEL, usePersonal, type AiMode, type StorageTarget } from '@/lib/personal/store';
 import { PersonalWidget } from './personal-widget';
+import { LocalAiSetup } from './local-ai-setup';
 
 const STEPS = ['intro', 'mode', 'name', 'project', 'storage', 'ai', 'widget', 'snap', 'done'] as const;
 
@@ -196,6 +197,16 @@ export function Onboarding() {
               <OptionCard small title="IA local" desc="Ollama, LM Studio, vLLM." selected={ai === 'local'} onClick={() => setAiLocal('local')} />
               <OptionCard small title="Sin IA por ahora" desc="Bitácora manual." selected={ai === 'none'} onClick={() => setAiLocal('none')} />
             </div>
+            {ai === 'local' && (
+              <div className="pulso-reveal mt-6">
+                <LocalAiSetup />
+              </div>
+            )}
+            {ai === 'byok' && (
+              <p className="pulso-reveal mt-4 text-sm text-muted">
+                La API key propia (OpenAI / Anthropic) llega pronto. Por ahora podés usar <span className="text-fg">IA local</span> con LM Studio u Ollama.
+              </p>
+            )}
             <StepNav onBack={() => go(-1)} onNext={enterWidget} nextLabel={ai ? 'Continuar' : 'Decidir después'} />
           </div>
         )}

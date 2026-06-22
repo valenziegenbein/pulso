@@ -11,6 +11,15 @@ export type EntryType = 'PROGRESS' | 'RESEARCH' | 'DECISION' | 'BLOCKER' | 'NOTE
 export type TaskPriority = 'high' | 'medium' | 'low';
 export type StorageTarget = 'pulso' | 'markdown' | 'notion' | null;
 export type AiMode = 'byok' | 'local' | 'none' | null;
+export type AiProvider = 'lmstudio' | 'ollama' | 'custom';
+
+/** Conexión concreta a un servidor LLM compatible con OpenAI (LM Studio, Ollama, etc.). */
+export interface AiConfig {
+  provider: AiProvider;
+  /** Base OpenAI-compatible, p.ej. http://localhost:1234/v1 */
+  baseUrl: string;
+  model: string;
+}
 
 export interface Project {
   id: string;
@@ -50,6 +59,7 @@ export interface PersonalState {
   focusProjectId: string | null;
   storage: StorageTarget;
   ai: AiMode;
+  aiConfig: AiConfig | null;
 }
 
 const STORAGE_KEY = 'pulso.personal.v1';
@@ -62,6 +72,7 @@ const DEFAULT_STATE: PersonalState = {
   focusProjectId: null,
   storage: null,
   ai: null,
+  aiConfig: null,
 };
 
 interface PersonalContextValue extends PersonalState {
@@ -76,6 +87,7 @@ interface PersonalContextValue extends PersonalState {
   setFocusProject: (id: string) => void;
   setStorage: (target: StorageTarget) => void;
   setAi: (mode: AiMode) => void;
+  setAiConfig: (config: AiConfig | null) => void;
   completeOnboarding: () => void;
   reset: () => void;
 }
@@ -129,6 +141,7 @@ export function PersonalProvider({ children }: { children: ReactNode }) {
   const setName = useCallback((name: string) => setState((s) => ({ ...s, name })), []);
   const setStorage = useCallback((storage: StorageTarget) => setState((s) => ({ ...s, storage })), []);
   const setAi = useCallback((ai: AiMode) => setState((s) => ({ ...s, ai })), []);
+  const setAiConfig = useCallback((aiConfig: AiConfig | null) => setState((s) => ({ ...s, aiConfig })), []);
   const completeOnboarding = useCallback(() => setState((s) => ({ ...s, onboarded: true })), []);
   const reset = useCallback(() => setState(DEFAULT_STATE), []);
   const setFocusProject = useCallback((focusProjectId: string) => setState((s) => ({ ...s, focusProjectId })), []);
@@ -209,10 +222,11 @@ export function PersonalProvider({ children }: { children: ReactNode }) {
       setFocusProject,
       setStorage,
       setAi,
+      setAiConfig,
       completeOnboarding,
       reset,
     }),
-    [state, ready, focusProject, setName, addProject, updateProjectContext, addEntry, addTask, toggleTask, setFocusProject, setStorage, setAi, completeOnboarding, reset],
+    [state, ready, focusProject, setName, addProject, updateProjectContext, addEntry, addTask, toggleTask, setFocusProject, setStorage, setAi, setAiConfig, completeOnboarding, reset],
   );
 
   return <PersonalContext.Provider value={value}>{children}</PersonalContext.Provider>;

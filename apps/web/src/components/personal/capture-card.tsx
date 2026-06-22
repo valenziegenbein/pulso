@@ -2,9 +2,8 @@
 
 import { useState, type ReactNode } from 'react';
 import { usePersonal, type EntryType } from '@/lib/personal/store';
+import { AiError, generateDraft } from '@/lib/personal/ai';
 import { ProjectChooser } from './project-chooser';
-
-const ENTRY_TYPES: EntryType[] = ['PROGRESS', 'RESEARCH', 'DECISION', 'BLOCKER', 'NOTE', 'DELIVERY'];
 
 interface Draft {
   type: EntryType;
@@ -15,7 +14,7 @@ interface Draft {
 /** Superficie de captura: una frase → la IA propone una entrada → el humano
  *  guarda/edita/descarta. Se guarda en el proyecto en foco. */
 export function CaptureCard({ projectId }: { projectId?: string } = {}) {
-  const { focusProject, projects, addEntry } = usePersonal();
+  const { focusProject, projects, addEntry, ai, aiConfig } = usePersonal();
   const project = projectId ? projects.find((p) => p.id === projectId) : focusProject;
   const [note, setNote] = useState('');
   const [attach, setAttach] = useState('');
@@ -34,24 +33,20 @@ export function CaptureCard({ projectId }: { projectId?: string } = {}) {
     setError(null);
     setSaved(false);
     try {
-      const res = await fetch('/api/worklog/suggest', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          note,
-          task: project ? { title: project.name } : undefined,
-          attachmentsHint: attach ? [attach] : undefined,
-        }),
+      const s = await generateDraft({
+        note,
+        task: project ? { title: project.name } : undefined,
+        attachmentsHint: attach ? [attach] : undefined,
+        ai,
+        config: aiConfig,
       });
-      if (!res.ok) {
-        setError('No se pudo generar la sugerencia.');
-        return;
-      }
-      const data = (await res.json()) as { suggestion: { type: string; title: string; content: string } };
-      const suggested = ENTRY_TYPES.includes(data.suggestion.type as EntryType) ? (data.suggestion.type as EntryType) : 'NOTE';
-      setDraft({ type: intent ?? suggested, title: data.suggestion.title, content: data.suggestion.content });
-    } catch {
-      setError('Error de red.');
+      setDraft({ type: intent ?? s.type, title: s.title, content: s.content });
+    } catch (e) {
+      setError(
+        e instanceof AiError && e.code === 'rate_limited'
+          ? 'Demasiados pedidos. Probá en un momento.'
+          : 'No se pudo generar. Revisá tu IA en Ajustes.',
+      );
     } finally {
       setLoading(false);
     }
