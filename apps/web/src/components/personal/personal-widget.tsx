@@ -131,9 +131,9 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
   // ---- Panel completo ----
   const canGenerate = note.trim().length > 0 && !!focusProject;
   return (
-    <div className="w-[360px] rounded-2xl border border-border bg-surface/95 shadow-2xl backdrop-blur-xl">
+    <div className={`flex w-[360px] flex-col overflow-hidden rounded-2xl border border-border bg-surface/95 shadow-2xl backdrop-blur-xl ${embedded ? '' : 'max-h-[calc(100vh-1rem)]'}`}>
       {!embedded && (
-        <div className="drag-region flex items-center justify-between rounded-t-2xl border-b border-border/60 px-4 py-2.5">
+        <div className="drag-region flex shrink-0 items-center justify-between rounded-t-2xl border-b border-border/60 px-4 py-2.5">
           <div className="flex items-center gap-2 text-sm font-semibold">
             <span className="pulso-beat inline-block text-accent">✦</span> Pulso
           </div>
@@ -153,7 +153,7 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
         </div>
       )}
 
-      <div className="p-4">
+      <div className="overflow-y-auto p-4">
         <p className="font-meta text-[10px] uppercase tracking-[0.22em] text-accent">¿Qué estás haciendo?</p>
         <textarea
           value={note}

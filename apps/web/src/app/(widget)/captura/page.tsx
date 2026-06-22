@@ -4,7 +4,7 @@ import { PersonalWidget } from '@/components/personal/personal-widget';
  *  shell de escritorio; también se puede ver en el navegador. */
 export default function CapturaPage() {
   return (
-    <main className="flex min-h-screen items-start justify-center p-3">
+    <main className="flex min-h-screen items-start justify-center overflow-hidden p-2">
       <PersonalWidget />
     </main>
   );

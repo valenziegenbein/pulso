@@ -15,7 +15,7 @@ app.setName('Pulso'); // userData limpio: %APPDATA%\Pulso
 
 const SERVER_PORT = 41789;
 const WIDGET_FULL = { width: 384, height: 520 };
-const WIDGET_PILL = { width: 188, height: 56 };
+const WIDGET_PILL = { width: 188, height: 64 };
 let BASE_URL = process.env.PULSO_URL || 'http://localhost:3000';
 
 let mainWindow = null;
@@ -196,7 +196,7 @@ function createWidgetWindow() {
   widgetWindow.loadURL(widgetUrl());
   attachWindowOpenHandler(widgetWindow.webContents);
   widgetWindow.webContents.on('did-finish-load', () => {
-    widgetWindow.webContents.insertCSS('html,body{background:transparent !important;}');
+    widgetWindow.webContents.insertCSS('html,body{background:transparent !important; overflow:hidden !important;}');
   });
   widgetWindow.on('moved', () => {
     if (programmaticMove || !widgetWindow) return;

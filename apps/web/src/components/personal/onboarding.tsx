@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ENTRY_LABEL, usePersonal, type AiMode, type StorageTarget } from '@/lib/personal/store';
 import { PersonalWidget } from './personal-widget';
 
-const STEPS = ['intro', 'mode', 'name', 'project', 'widget', 'snap', 'storage', 'ai', 'done'] as const;
+const STEPS = ['intro', 'mode', 'name', 'project', 'storage', 'ai', 'widget', 'snap', 'done'] as const;
 
 type ShellBridge = { isDesktop?: boolean; introWidget?: () => void; collapse?: () => void };
 function shell(): ShellBridge | undefined {
@@ -128,7 +128,7 @@ export function Onboarding() {
               placeholder="¿De qué trata? (opcional)"
               className="mt-5 w-full resize-none rounded-xl border border-border bg-surface/60 p-3 text-sm outline-none placeholder:text-muted/50 focus:border-accent"
             />
-            <StepNav onBack={() => go(-1)} onNext={enterWidget} nextLabel={projName.trim() ? 'Continuar' : 'Lo hago después'} />
+            <StepNav onBack={() => go(-1)} onNext={() => go(1)} nextLabel={projName.trim() ? 'Continuar' : 'Lo hago después'} />
           </div>
         )}
 
@@ -196,7 +196,7 @@ export function Onboarding() {
               <OptionCard small title="IA local" desc="Ollama, LM Studio, vLLM." selected={ai === 'local'} onClick={() => setAiLocal('local')} />
               <OptionCard small title="Sin IA por ahora" desc="Bitácora manual." selected={ai === 'none'} onClick={() => setAiLocal('none')} />
             </div>
-            <StepNav onBack={() => go(-1)} onNext={() => go(1)} nextLabel={ai ? 'Continuar' : 'Decidir después'} />
+            <StepNav onBack={() => go(-1)} onNext={enterWidget} nextLabel={ai ? 'Continuar' : 'Decidir después'} />
           </div>
         )}
 
