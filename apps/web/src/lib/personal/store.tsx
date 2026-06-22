@@ -67,6 +67,7 @@ interface PersonalContextValue extends PersonalState {
   focusProject: Project | undefined;
   setName: (name: string) => void;
   addProject: (input: { name: string; context?: string }) => Project;
+  updateProjectContext: (id: string, context: string) => void;
   addEntry: (input: { projectId?: string | null; type: EntryType; title: string; content: string }) => Entry;
   addTask: (input: { projectId: string; title: string; note?: string; priority?: TaskPriority }) => Task;
   toggleTask: (id: string) => void;
@@ -100,11 +101,28 @@ export function PersonalProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!ready) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      const serialized = JSON.stringify(state);
+      // Evita reescrituras innecesarias (corta el eco del sync entre ventanas).
+      if (localStorage.getItem(STORAGE_KEY) !== serialized) localStorage.setItem(STORAGE_KEY, serialized);
     } catch {
       /* sin persistencia: seguimos en memoria */
     }
   }, [state, ready]);
+
+  // Sync entre ventanas (la app y el widget comparten el mismo origen).
+  useEffect(() => {
+    function onStorage(e: StorageEvent) {
+      if (e.key === STORAGE_KEY && e.newValue) {
+        try {
+          setState({ ...DEFAULT_STATE, ...(JSON.parse(e.newValue) as Partial<PersonalState>) });
+        } catch {
+          /* ignora payloads inválidos */
+        }
+      }
+    }
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   const setName = useCallback((name: string) => setState((s) => ({ ...s, name })), []);
   const setStorage = useCallback((storage: StorageTarget) => setState((s) => ({ ...s, storage })), []);
@@ -121,6 +139,10 @@ export function PersonalProvider({ children }: { children: ReactNode }) {
       focusProjectId: s.focusProjectId ?? project.id,
     }));
     return project;
+  }, []);
+
+  const updateProjectContext = useCallback((id: string, context: string) => {
+    setState((s) => ({ ...s, projects: s.projects.map((p) => (p.id === id ? { ...p, context } : p)) }));
   }, []);
 
   const addEntry = useCallback(
@@ -177,6 +199,7 @@ export function PersonalProvider({ children }: { children: ReactNode }) {
       focusProject,
       setName,
       addProject,
+      updateProjectContext,
       addEntry,
       addTask,
       toggleTask,
@@ -186,7 +209,7 @@ export function PersonalProvider({ children }: { children: ReactNode }) {
       completeOnboarding,
       reset,
     }),
-    [state, ready, focusProject, setName, addProject, addEntry, addTask, toggleTask, setFocusProject, setStorage, setAi, completeOnboarding, reset],
+    [state, ready, focusProject, setName, addProject, updateProjectContext, addEntry, addTask, toggleTask, setFocusProject, setStorage, setAi, completeOnboarding, reset],
   );
 
   return <PersonalContext.Provider value={value}>{children}</PersonalContext.Provider>;

@@ -14,8 +14,9 @@ interface Draft {
 
 /** Superficie de captura: una frase → la IA propone una entrada → el humano
  *  guarda/edita/descarta. Se guarda en el proyecto en foco. */
-export function CaptureCard() {
-  const { focusProject, addEntry } = usePersonal();
+export function CaptureCard({ projectId }: { projectId?: string } = {}) {
+  const { focusProject, projects, addEntry } = usePersonal();
+  const project = projectId ? projects.find((p) => p.id === projectId) : focusProject;
   const [note, setNote] = useState('');
   const [attach, setAttach] = useState('');
   const [showAttach, setShowAttach] = useState(false);
@@ -38,7 +39,7 @@ export function CaptureCard() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           note,
-          task: focusProject ? { title: focusProject.name } : undefined,
+          task: project ? { title: project.name } : undefined,
           attachmentsHint: attach ? [attach] : undefined,
         }),
       });
@@ -68,7 +69,7 @@ export function CaptureCard() {
 
   function save() {
     if (!draft) return;
-    addEntry({ projectId: focusProject?.id ?? null, type: draft.type, title: draft.title, content: draft.content });
+    addEntry({ projectId: project?.id ?? null, type: draft.type, title: draft.title, content: draft.content });
     setSaved(true);
     setTimeout(reset, 1500);
   }
@@ -137,7 +138,7 @@ export function CaptureCard() {
           )}
 
           {saved ? (
-            <p className="mt-4 text-sm text-emerald-300">✓ Guardado en {focusProject?.name ?? 'tu bitácora'}.</p>
+            <p className="mt-4 text-sm text-emerald-300">✓ Guardado en {project?.name ?? 'tu bitácora'}.</p>
           ) : (
             <div className="mt-4 flex gap-2 text-sm">
               <button onClick={save} className="rounded-full bg-accent px-5 py-2 font-medium text-bg transition hover:brightness-110">Guardar</button>
@@ -149,7 +150,13 @@ export function CaptureCard() {
       )}
 
       <div className="mt-5 flex items-center justify-between gap-3 border-t border-border/60 pt-4">
-        <ProjectChooser variant="inline" />
+        {projectId ? (
+          <span className="font-meta text-[11px] uppercase tracking-[0.14em] text-muted">
+            en <span className="text-accent">{project?.name}</span>
+          </span>
+        ) : (
+          <ProjectChooser variant="inline" />
+        )}
         <span className="font-meta text-[10px] uppercase tracking-[0.18em] text-muted/60">✦ la IA propone · vos aprobás</span>
       </div>
     </section>

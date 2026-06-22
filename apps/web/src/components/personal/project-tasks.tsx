@@ -11,14 +11,15 @@ const PRIORITY_DOT: Record<TaskPriority, string> = {
 };
 const VISIBLE = 4;
 
-export function ProjectTasks() {
-  const { focusProject, tasks, addTask, toggleTask } = usePersonal();
+export function ProjectTasks({ projectId }: { projectId?: string } = {}) {
+  const { focusProject, projects, tasks, addTask, toggleTask } = usePersonal();
+  const project = projectId ? projects.find((p) => p.id === projectId) : focusProject;
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState('');
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [showAll, setShowAll] = useState(false);
 
-  if (!focusProject) {
+  if (!project) {
     return (
       <section>
         <h2 className="font-meta mb-3 text-[11px] uppercase tracking-[0.2em] text-muted">Tareas pendientes</h2>
@@ -29,7 +30,7 @@ export function ProjectTasks() {
     );
   }
 
-  const all = tasks.filter((t) => t.projectId === focusProject.id);
+  const all = tasks.filter((t) => t.projectId === project.id);
   const pending = all
     .filter((t) => !t.done)
     .sort((a, b) => TASK_PRIORITY_ORDER[a.priority] - TASK_PRIORITY_ORDER[b.priority] || b.createdAt - a.createdAt);
@@ -38,7 +39,7 @@ export function ProjectTasks() {
 
   function create() {
     if (!title.trim()) return;
-    addTask({ projectId: focusProject!.id, title: title.trim(), priority });
+    addTask({ projectId: project!.id, title: title.trim(), priority });
     setTitle('');
     setPriority('medium');
   }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { usePersonal } from '@/lib/personal/store';
 
 function relative(ts: number): string {
@@ -69,14 +70,19 @@ export default function ProyectosPage() {
             const count = entries.filter((e) => e.projectId === p.id).length;
             const last = entries.find((e) => e.projectId === p.id);
             return (
-              <li key={p.id} className="rounded-2xl border border-border bg-surface/40 p-5">
-                <div className="font-display text-2xl">{p.name}</div>
-                {p.context && <p className="mt-2 line-clamp-2 text-sm text-muted">{p.context}</p>}
-                <div className="font-meta mt-4 flex items-center gap-3 text-[11px] uppercase tracking-wide text-muted">
-                  <span>{count} {count === 1 ? 'entrada' : 'entradas'}</span>
-                  <span>·</span>
-                  <span>{last ? relative(last.createdAt) : 'sin avances'}</span>
-                </div>
+              <li key={p.id}>
+                <Link
+                  href={`/personal/proyectos/${p.id}`}
+                  className="block rounded-2xl border border-border bg-surface/40 p-5 transition hover:-translate-y-0.5 hover:bg-surface"
+                >
+                  <div className="font-display text-2xl">{p.name}</div>
+                  {p.context && <p className="mt-2 line-clamp-2 text-sm text-muted">{p.context}</p>}
+                  <div className="font-meta mt-4 flex items-center gap-3 text-[11px] uppercase tracking-wide text-muted">
+                    <span>{count} {count === 1 ? 'entrada' : 'entradas'}</span>
+                    <span>·</span>
+                    <span>{last ? relative(last.createdAt) : 'sin avances'}</span>
+                  </div>
+                </Link>
               </li>
             );
           })}

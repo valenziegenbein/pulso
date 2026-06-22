@@ -20,5 +20,5 @@ export const config = {
   // Excluidos del guard de auth:
   // - /widget: maneja su propio estado "sin sesión".
   // - /welcome y /personal: modo personal local-first (sin cuenta).
-  matcher: ['/((?!login|widget|welcome|personal|api|_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!login|widget|welcome|personal|captura|api|_next/static|_next/image|favicon.ico).*)'],
 };
