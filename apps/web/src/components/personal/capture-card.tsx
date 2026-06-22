@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from 'react';
 import { usePersonal, type EntryType } from '@/lib/personal/store';
+import { ProjectChooser } from './project-chooser';
 
 const ENTRY_TYPES: EntryType[] = ['PROGRESS', 'RESEARCH', 'DECISION', 'BLOCKER', 'NOTE', 'DELIVERY'];
 
@@ -11,23 +12,20 @@ interface Draft {
   content: string;
 }
 
-/** Superficie de captura: una frase → la IA propone una entrada de bitácora →
- *  el humano guarda, edita o descarta. Es la acción principal del modo personal. */
+/** Superficie de captura: una frase → la IA propone una entrada → el humano
+ *  guarda/edita/descarta. Se guarda en el proyecto en foco. */
 export function CaptureCard() {
-  const { projects, addEntry } = usePersonal();
+  const { focusProject, addEntry } = usePersonal();
   const [note, setNote] = useState('');
   const [attach, setAttach] = useState('');
   const [showAttach, setShowAttach] = useState(false);
   const [intent, setIntent] = useState<EntryType | null>(null);
-  const [projectId, setProjectId] = useState<string | undefined>(projects[0]?.id);
 
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saved, setSaved] = useState(false);
-
-  const project = projects.find((p) => p.id === projectId);
 
   async function generate() {
     if (note.trim().length === 0) return;
@@ -40,7 +38,7 @@ export function CaptureCard() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           note,
-          task: project ? { title: project.name } : undefined,
+          task: focusProject ? { title: focusProject.name } : undefined,
           attachmentsHint: attach ? [attach] : undefined,
         }),
       });
@@ -49,9 +47,7 @@ export function CaptureCard() {
         return;
       }
       const data = (await res.json()) as { suggestion: { type: string; title: string; content: string } };
-      const suggested = ENTRY_TYPES.includes(data.suggestion.type as EntryType)
-        ? (data.suggestion.type as EntryType)
-        : 'NOTE';
+      const suggested = ENTRY_TYPES.includes(data.suggestion.type as EntryType) ? (data.suggestion.type as EntryType) : 'NOTE';
       setDraft({ type: intent ?? suggested, title: data.suggestion.title, content: data.suggestion.content });
     } catch {
       setError('Error de red.');
@@ -72,7 +68,7 @@ export function CaptureCard() {
 
   function save() {
     if (!draft) return;
-    addEntry({ projectId: projectId ?? null, type: draft.type, title: draft.title, content: draft.content });
+    addEntry({ projectId: focusProject?.id ?? null, type: draft.type, title: draft.title, content: draft.content });
     setSaved(true);
     setTimeout(reset, 1500);
   }
@@ -99,23 +95,9 @@ export function CaptureCard() {
       )}
 
       <div className="mt-5 flex flex-wrap items-center gap-2">
-        {projects.length > 0 && (
-          <select
-            value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
-            className="font-meta rounded-full border border-border bg-bg/60 px-3 py-1.5 text-xs text-fg outline-none"
-          >
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        )}
         <Chip active={showAttach} onClick={() => setShowAttach((v) => !v)}>📎 Adjuntar</Chip>
         <Chip active={intent === 'BLOCKER'} onClick={() => setIntent((v) => (v === 'BLOCKER' ? null : 'BLOCKER'))}>⛔ Bloqueo</Chip>
         <Chip active={intent === 'DECISION'} onClick={() => setIntent((v) => (v === 'DECISION' ? null : 'DECISION'))}>◆ Decisión</Chip>
-
         <button
           onClick={generate}
           disabled={loading || note.trim().length === 0}
@@ -155,26 +137,21 @@ export function CaptureCard() {
           )}
 
           {saved ? (
-            <p className="mt-4 text-sm text-emerald-300">✓ Guardado en tu bitácora.</p>
+            <p className="mt-4 text-sm text-emerald-300">✓ Guardado en {focusProject?.name ?? 'tu bitácora'}.</p>
           ) : (
             <div className="mt-4 flex gap-2 text-sm">
-              <button onClick={save} className="rounded-full bg-accent px-5 py-2 font-medium text-bg transition hover:brightness-110">
-                Guardar
-              </button>
-              <button onClick={() => setEditing((v) => !v)} className="rounded-full border border-border px-4 py-2 transition hover:border-accent">
-                {editing ? 'Listo' : 'Editar'}
-              </button>
-              <button onClick={reset} className="rounded-full px-4 py-2 text-muted transition hover:text-fg">
-                Descartar
-              </button>
+              <button onClick={save} className="rounded-full bg-accent px-5 py-2 font-medium text-bg transition hover:brightness-110">Guardar</button>
+              <button onClick={() => setEditing((v) => !v)} className="rounded-full border border-border px-4 py-2 transition hover:border-accent">{editing ? 'Listo' : 'Editar'}</button>
+              <button onClick={reset} className="rounded-full px-4 py-2 text-muted transition hover:text-fg">Descartar</button>
             </div>
           )}
         </div>
       )}
 
-      <p className="font-meta mt-5 text-center text-[10px] uppercase tracking-[0.2em] text-muted/70">
-        ✦ La IA propone · vos aprobás
-      </p>
+      <div className="mt-5 flex items-center justify-between gap-3 border-t border-border/60 pt-4">
+        <ProjectChooser variant="inline" />
+        <span className="font-meta text-[10px] uppercase tracking-[0.18em] text-muted/60">✦ la IA propone · vos aprobás</span>
+      </div>
     </section>
   );
 }
