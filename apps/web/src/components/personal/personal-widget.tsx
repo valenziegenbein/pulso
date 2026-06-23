@@ -132,7 +132,13 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
     setError(null);
     setSaved(false);
     try {
-      const s = await generateDraft({ note, task: { title: focusProject.name }, ai, config: aiConfig });
+      const s = await generateDraft({
+        note,
+        task: { title: focusProject.name },
+        images: image ? [{ dataUrl: image }] : undefined,
+        ai,
+        config: aiConfig,
+      });
       setDraft({ type: intent ?? s.type, title: s.title, content: s.content });
     } catch (e) {
       setError(

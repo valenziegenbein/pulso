@@ -64,6 +64,11 @@ export interface DraftSuggestion {
   content: string;
 }
 
+export interface DraftImage {
+  dataUrl: string;
+  mediaType?: string;
+}
+
 export class AiError extends Error {
   constructor(readonly code: 'rate_limited' | 'unavailable' | 'network' | 'unauthorized') {
     super(code);
@@ -152,16 +157,18 @@ export async function generateDraft(params: {
   note: string;
   task?: { title?: string };
   attachmentsHint?: string[];
+  images?: DraftImage[];
   ai: AiMode;
   config: AiConfig | null;
 }): Promise<DraftSuggestion> {
-  const { note, task, attachmentsHint, ai, config } = params;
+  const { note, task, attachmentsHint, images, ai, config } = params;
   if (ai === 'none') return manualDraft(note);
   if (aiReady(ai, config) && config) {
     return postSuggest('/api/personal/suggest', {
       note,
       task,
       attachmentsHint,
+      images,
       provider: config.provider,
       baseUrl: config.baseUrl,
       model: config.model,

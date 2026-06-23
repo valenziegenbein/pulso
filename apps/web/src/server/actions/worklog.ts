@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@pulso/database';
-import { approveWorklog } from '@pulso/domain';
+import { approveWorklog, canApproveWorklog } from '@pulso/domain';
 import { saveWorklogSchema, type WorklogSource } from '@pulso/shared';
 import { requireAuth } from '@/lib/auth/context';
 import { auditLogger, worklogRepo } from '@/server/deps';
@@ -16,6 +16,7 @@ export async function saveWorklogDraftAction(input: {
   type: string;
   title: string;
   content: string;
+  teamId?: string;
   taskId?: string;
   source?: WorklogSource;
   /** Adjunto manual y voluntario (captura o link). Se persiste como Attachment. */
@@ -26,13 +27,19 @@ export async function saveWorklogDraftAction(input: {
     type: input.type,
     title: input.title,
     content: input.content,
+    teamId: input.teamId,
     taskId: input.taskId,
   });
+  const task = data.taskId
+    ? await prisma.task.findFirst({ where: { id: data.taskId, organizationId: ctx.organizationId } })
+    : null;
+  const teamId = task?.teamId ?? data.teamId ?? null;
 
   const entry = await prisma.worklogEntry.create({
     data: {
       organizationId: ctx.organizationId,
       authorId: ctx.user.id,
+      teamId,
       taskId: data.taskId ?? null,
       type: data.type,
       status: 'DRAFT',
@@ -68,8 +75,9 @@ export async function createWorklogFormAction(formData: FormData): Promise<void>
   const type = String(formData.get('type') ?? 'NOTE');
   const title = String(formData.get('title') ?? '').trim();
   const content = String(formData.get('content') ?? '').trim();
+  const teamId = String(formData.get('teamId') ?? '').trim() || undefined;
   const taskId = String(formData.get('taskId') ?? '').trim() || undefined;
-  await saveWorklogDraftAction({ type, title, content, taskId, source: 'MANUAL' });
+  await saveWorklogDraftAction({ type, title, content, teamId, taskId, source: 'MANUAL' });
 }
 
 /** Publica (aprueba) un borrador. Único camino DRAFT → PUBLISHED. */
@@ -83,6 +91,10 @@ export async function approveWorklogAction(formData: FormData): Promise<void> {
     where: { id: worklogId, organizationId: ctx.organizationId },
   });
   if (!entry) throw new Error('Entrada no encontrada.');
+  const teamIds = await prisma.teamMembership.findMany({ where: { userId: ctx.user.id }, select: { teamId: true } });
+  if (!canApproveWorklog({ ...ctx.user, role: ctx.role, permissions: ctx.permissions, teamIds: teamIds.map((t) => t.teamId) }, entry)) {
+    throw new Error('Sin permiso para aprobar esta bitacora.');
+  }
 
   await approveWorklog(
     { worklog: worklogRepo, audit: auditLogger },

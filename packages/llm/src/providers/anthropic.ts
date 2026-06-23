@@ -1,4 +1,5 @@
 import {
+  type ChatMessage,
   type CompletionRequest,
   type CompletionResult,
   type LLMProvider,
@@ -14,6 +15,14 @@ export interface AnthropicOptions {
 }
 
 const ANTHROPIC_VERSION = '2023-06-01';
+
+type AnthropicMessageRole = 'user' | 'assistant';
+type AnthropicMessageContent =
+  | string
+  | Array<
+      | { type: 'text'; text: string }
+      | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } }
+    >;
 
 /** Adapter para la API de mensajes de Anthropic. */
 export class AnthropicProvider implements LLMProvider {
@@ -31,8 +40,8 @@ export class AnthropicProvider implements LLMProvider {
       .map((m) => m.content)
       .join('\n\n');
     const messages = request.messages
-      .filter((m) => m.role !== 'system')
-      .map((m) => ({ role: m.role, content: m.content }));
+      .filter((m): m is ChatMessage & { role: AnthropicMessageRole } => m.role !== 'system')
+      .map((m) => ({ role: m.role, content: toAnthropicContent(m.content) }));
 
     let res: Response;
     try {
@@ -69,4 +78,28 @@ export class AnthropicProvider implements LLMProvider {
       .join('');
     return { text, model: data.model ?? this.opts.model };
   }
+}
+
+function toAnthropicContent(content: ChatMessage['content']): AnthropicMessageContent {
+  if (typeof content === 'string') return content;
+  return content.map((part) => {
+    if (part.type === 'text') return { type: 'text', text: part.text };
+    const parsed = parseDataUrl(part.dataUrl);
+    return {
+      type: 'image',
+      source: {
+        type: 'base64',
+        media_type: part.mediaType ?? parsed.mediaType,
+        data: parsed.data,
+      },
+    };
+  });
+}
+
+function parseDataUrl(dataUrl: string): { mediaType: string; data: string } {
+  const match = dataUrl.match(/^data:([^;,]+);base64,(.*)$/s);
+  return {
+    mediaType: match?.[1] ?? 'image/jpeg',
+    data: match?.[2] ?? dataUrl,
+  };
 }

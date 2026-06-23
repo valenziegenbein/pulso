@@ -9,13 +9,21 @@ const appVersion = versionArg.split('=')[1] || '';
 contextBridge.exposeInMainWorld('pulso', {
   isDesktop: true,
   version: appVersion,
-  showWidget: () => ipcRenderer.send('widget:show'),
+  showWidget: (mode) => ipcRenderer.send('widget:show', mode),
+  showPersonalWidget: () => ipcRenderer.send('widget:show', 'personal'),
+  showTeamsWidget: () => ipcRenderer.send('widget:show', 'teams'),
   hideWidget: () => ipcRenderer.send('widget:hide'),
+  setView: (view) => ipcRenderer.send('widget:view', view),
+  onWidgetView: (handler) => {
+    const listener = (_event, view) => handler(view);
+    ipcRenderer.on('widget:view-state', listener);
+    return () => ipcRenderer.removeListener('widget:view-state', listener);
+  },
   // Minimizar (pill pegada al borde) / expandir el widget flotante.
   collapse: () => ipcRenderer.send('widget:collapse'),
   expand: () => ipcRenderer.send('widget:expand'),
   // Onboarding: materializa el widget real y lo snapea al borde (efecto sorpresa).
-  introWidget: () => ipcRenderer.send('widget:intro'),
+  introWidget: (mode) => ipcRenderer.send('widget:intro', mode),
   // Captura rápida de pantalla → devuelve un data URL (JPEG) o null.
   screenshot: () => ipcRenderer.invoke('pulso:screenshot'),
   // La web avisa cuando el espacio de trabajo está listo para que el shell abra

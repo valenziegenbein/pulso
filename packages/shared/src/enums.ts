@@ -50,6 +50,12 @@ export type WorklogStatus = (typeof WORKLOG_STATUS)[number];
 export const WORKLOG_SOURCE = ['MANUAL', 'AI_SUGGESTED'] as const;
 export type WorklogSource = (typeof WORKLOG_SOURCE)[number];
 
+export const BLOCKER_STATUS = ['OPEN', 'RESOLVED'] as const;
+export type BlockerStatus = (typeof BLOCKER_STATUS)[number];
+
+export const DECISION_STATUS = ['OPEN', 'RESOLVED', 'CANCELED'] as const;
+export type DecisionStatus = (typeof DECISION_STATUS)[number];
+
 export const AGENDA_EVENT_TYPE = [
   'MEETING',
   'FOCUS_BLOCK',

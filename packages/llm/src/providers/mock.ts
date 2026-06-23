@@ -1,4 +1,4 @@
-import type { CompletionRequest, CompletionResult, LLMProvider } from '../provider';
+import { messageContentText, type CompletionRequest, type CompletionResult, type LLMProvider } from '../provider';
 
 /**
  * Proveedor de desarrollo/tests: no usa red ni API key.
@@ -10,7 +10,8 @@ export class MockProvider implements LLMProvider {
 
   async complete(request: CompletionRequest): Promise<CompletionResult> {
     const userMsg = [...request.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
-    const note = extractNote(userMsg);
+    const userText = messageContentText(userMsg);
+    const note = extractNote(userText);
     const lower = note.toLowerCase();
 
     const type = lower.includes('bloque')

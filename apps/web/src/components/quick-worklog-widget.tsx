@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { WORKLOG_TYPE, type WorklogType } from '@pulso/shared';
+import { addBlockerAction } from '@/server/actions/tasks';
+import { requestDecisionAction } from '@/server/actions/decisions';
 import { saveWorklogDraftAction } from '@/server/actions/worklog';
 
 interface Draft {
@@ -72,7 +74,22 @@ export function QuickWorklogWidget({ task, taskId }: { task?: TaskContext; taskI
         content: draft.content,
         taskId,
         source: 'AI_SUGGESTED',
+        attachment: link.trim() ? { url: link.trim(), kind: 'LINK' } : undefined,
       });
+      if (taskId && draft.type === 'BLOCKER') {
+        const form = new FormData();
+        form.set('taskId', taskId);
+        form.set('title', draft.title);
+        form.set('description', draft.content);
+        await addBlockerAction(form);
+      }
+      if (taskId && draft.type === 'DECISION') {
+        const form = new FormData();
+        form.set('taskId', taskId);
+        form.set('title', draft.title);
+        form.set('context', draft.content);
+        await requestDecisionAction(form);
+      }
       setSaved(true);
     } catch {
       setError('No se pudo guardar el borrador.');

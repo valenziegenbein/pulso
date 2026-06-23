@@ -1,6 +1,10 @@
 'use client';
 
-type PulsoBridge = { isDesktop?: boolean; showWidget?: () => void };
+type PulsoBridge = {
+  isDesktop?: boolean;
+  showWidget?: (mode?: 'personal' | 'teams') => void;
+  showTeamsWidget?: () => void;
+};
 function desktopBridge(): PulsoBridge | undefined {
   return typeof window !== 'undefined'
     ? (window as unknown as { pulso?: PulsoBridge }).pulso
@@ -13,7 +17,8 @@ export function OpenWidgetButton() {
   function open() {
     const bridge = desktopBridge();
     if (bridge?.isDesktop) {
-      bridge.showWidget?.();
+      if (bridge.showTeamsWidget) bridge.showTeamsWidget();
+      else bridge.showWidget?.('teams');
     } else {
       window.open('/widget', 'pulso-widget', 'width=400,height=720,menubar=no,toolbar=no,location=no,status=no');
     }

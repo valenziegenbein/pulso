@@ -6,15 +6,25 @@ import { rateLimit } from '@/lib/rate-limit';
 
 const LIMIT = Number(process.env.WORKLOG_RATE_LIMIT ?? 20);
 const WINDOW_MS = Number(process.env.WORKLOG_RATE_WINDOW_MS ?? 60_000);
+const MAX_IMAGES = 3;
+const MAX_IMAGE_CHARS = 2_000_000;
+const IMAGE_DATA_URL = /^data:(image\/(?:png|jpe?g|webp|gif));base64,([a-z0-9+/=\r\n]+)$/i;
 
 interface SuggestBody {
   note?: unknown;
   task?: { title?: unknown };
   attachmentsHint?: unknown;
+  image?: unknown;
+  images?: unknown;
   provider?: unknown;
   baseUrl?: unknown;
   model?: unknown;
   apiKey?: unknown;
+}
+
+interface SuggestImage {
+  dataUrl: string;
+  mediaType: string;
 }
 
 /**
@@ -73,6 +83,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const attachmentsHint = Array.isArray(body?.attachmentsHint)
     ? body.attachmentsHint.filter((a): a is string => typeof a === 'string').slice(0, 5)
     : undefined;
+  let images: SuggestImage[] | undefined;
+  try {
+    images = parseImages(body?.images ?? body?.image);
+  } catch {
+    return NextResponse.json({ error: 'invalid_image' }, { status: 400 });
+  }
 
   let resolved: LLMProviderResolved;
   try {
@@ -86,9 +102,32 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       note,
       task: title ? { title } : undefined,
       attachmentsHint,
+      images,
     });
     return NextResponse.json({ status: 'DRAFT', suggestion });
   } catch {
     return NextResponse.json({ error: 'llm_unavailable' }, { status: 502 });
   }
+}
+
+function parseImages(input: unknown): SuggestImage[] | undefined {
+  const rawImages = Array.isArray(input) ? input : input ? [input] : [];
+  if (rawImages.length === 0) return undefined;
+
+  return rawImages.slice(0, MAX_IMAGES).map((raw) => {
+    const dataUrl =
+      typeof raw === 'string'
+        ? raw
+        : typeof raw === 'object' && raw !== null && 'dataUrl' in raw && typeof raw.dataUrl === 'string'
+          ? raw.dataUrl
+          : '';
+    if (dataUrl.length === 0 || dataUrl.length > MAX_IMAGE_CHARS) throw new Error('invalid_image');
+
+    const match = dataUrl.match(IMAGE_DATA_URL);
+    if (!match?.[1]) throw new Error('invalid_image');
+    return {
+      dataUrl,
+      mediaType: match[1].toLowerCase().replace('image/jpg', 'image/jpeg'),
+    };
+  });
 }

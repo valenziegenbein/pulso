@@ -1,5 +1,5 @@
 import { WORKLOG_TYPE, type WorklogType } from '@pulso/shared';
-import type { LLMProvider } from './provider';
+import type { ChatContentPart, LLMProvider } from './provider';
 
 export interface TaskContext {
   title?: string;
@@ -13,7 +13,15 @@ export interface SuggestionInput {
   note: string;
   task?: TaskContext;
   attachmentsHint?: string[];
+  /** Imagenes/capturas adjuntas manualmente para contexto visual del borrador. */
+  images?: SuggestionImage[];
   locale?: string;
+}
+
+export interface SuggestionImage {
+  dataUrl: string;
+  mediaType?: string;
+  detail?: 'auto' | 'low' | 'high';
 }
 
 export interface WorklogSuggestion {
@@ -50,13 +58,32 @@ export class WorklogSuggestionService {
     const { text } = await this.provider.complete({
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: buildUserPrompt(input) },
+        { role: 'user', content: buildUserContent(input) },
       ],
       temperature: 0.3,
       maxTokens: 600,
     });
     return parseSuggestion(text, input);
   }
+}
+
+function buildUserContent(input: SuggestionInput): string | ChatContentPart[] {
+  const prompt = buildUserPrompt(input);
+  const images = input.images?.filter((image) => image.dataUrl.trim().length > 0).slice(0, 3) ?? [];
+  if (images.length === 0) return prompt;
+
+  return [
+    {
+      type: 'text',
+      text: `${prompt}\n\nSi hay imagen adjunta, usala solo como contexto visual voluntario. No inventes datos que no esten claros en la nota o la imagen.`,
+    },
+    ...images.map((image) => ({
+      type: 'image' as const,
+      dataUrl: image.dataUrl,
+      mediaType: image.mediaType,
+      detail: image.detail ?? 'auto',
+    })),
+  ];
 }
 
 function buildUserPrompt(input: SuggestionInput): string {
@@ -70,6 +97,9 @@ function buildUserPrompt(input: SuggestionInput): string {
   }
   if (input.attachmentsHint?.length) {
     lines.push(`Adjuntos/links de referencia: ${input.attachmentsHint.join(', ')}`);
+  }
+  if (input.images?.length) {
+    lines.push(`Imagenes adjuntas: ${input.images.length} captura(s) manual(es) para contexto visual`);
   }
   return lines.join('\n');
 }

@@ -20,6 +20,7 @@ export async function createTeamAction(formData: FormData): Promise<void> {
 
   const parsed = createTeamSchema.parse({
     name: str(formData, 'name'),
+    description: str(formData, 'description'),
     focus: str(formData, 'focus'),
     parentTeamId,
   });
@@ -28,11 +29,13 @@ export async function createTeamAction(formData: FormData): Promise<void> {
     data: {
       organizationId: ctx.organizationId,
       name: parsed.name,
+      description: parsed.description ?? null,
       focus: parsed.focus ?? null,
       parentTeamId: parsed.parentTeamId ?? null,
     },
   });
   revalidatePath('/teams');
+  revalidatePath('/');
 }
 
 export async function invitePersonAction(formData: FormData): Promise<void> {
@@ -84,4 +87,5 @@ export async function invitePersonAction(formData: FormData): Promise<void> {
   });
 
   revalidatePath('/teams');
+  revalidatePath('/members');
 }

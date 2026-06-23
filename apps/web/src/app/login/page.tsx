@@ -17,8 +17,8 @@ export default async function LoginPage() {
         <div className="rounded-xl border border-border bg-surface p-6">
           <LoginForm />
         </div>
-        <p className="mt-4 text-center text-[11px] text-muted">
-          Demo: admin@pulso.local / pulso1234
+        <p className="mt-4 text-center text-[11px] leading-relaxed text-muted">
+          Demo: admin@pulso.local, luis@pulso.local, ana@pulso.local / pulso1234
         </p>
       </div>
     </main>

@@ -2,6 +2,7 @@
 // servidor y nunca debe llegar al bundle del navegador.
 import {
   createLLMProvider,
+  TaskSuggestionService,
   WorklogSuggestionService,
   type LLMProviderResolved,
 } from '@pulso/llm';
@@ -26,4 +27,8 @@ function resolveConfigFromEnv(): LLMProviderResolved {
  */
 export function getWorklogSuggestionService(): WorklogSuggestionService {
   return new WorklogSuggestionService(createLLMProvider(resolveConfigFromEnv()));
+}
+
+export function getTaskSuggestionService(): TaskSuggestionService {
+  return new TaskSuggestionService(createLLMProvider(resolveConfigFromEnv()));
 }

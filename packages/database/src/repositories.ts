@@ -24,6 +24,7 @@ function toTaskRecord(row: Task): TaskRecord {
     parentTaskId: row.parentTaskId,
     title: row.title,
     description: row.description,
+    expectedOutcome: row.expectedOutcome,
     assigneeId: row.assigneeId,
     createdById: row.createdById,
     priority: row.priority as TaskRecord['priority'],
@@ -52,6 +53,7 @@ export class PrismaTaskRepository implements TaskRepository {
         parentTaskId: input.parentTaskId,
         title: input.title,
         description: input.description,
+        expectedOutcome: input.expectedOutcome,
         assigneeId: input.assigneeId,
         createdById: input.createdById,
         priority: input.priority,
@@ -69,6 +71,7 @@ export class PrismaTaskRepository implements TaskRepository {
       data: {
         title: patch.title,
         description: patch.description,
+        expectedOutcome: patch.expectedOutcome,
         assigneeId: patch.assigneeId,
         priority: patch.priority,
         status: patch.status,

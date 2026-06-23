@@ -5,7 +5,7 @@ import type { TaskPriority, TaskStatus, WorklogType } from '@pulso/shared';
 // strings que devuelve SQLite/Prisma sin romper el tipado.
 
 const STATUS_LABEL_MAP = {
-  BACKLOG: 'Backlog',
+  BACKLOG: 'Pendiente',
   TODO: 'Pendiente',
   IN_PROGRESS: 'En curso',
   BLOCKED: 'Bloqueada',

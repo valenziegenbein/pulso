@@ -9,6 +9,7 @@ export * from './providers/openai-compatible';
 export * from './providers/anthropic';
 export * from './providers/mock';
 export * from './worklog-suggestion.service';
+export * from './task-suggestion.service';
 
 export interface LLMProviderResolved {
   type: LLMProviderType;

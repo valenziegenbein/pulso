@@ -1,9 +1,17 @@
 import {
+  type ChatMessage,
   type CompletionRequest,
   type CompletionResult,
   type LLMProvider,
   LLMRequestError,
 } from '../provider';
+
+type OpenAIMessageContent =
+  | string
+  | Array<
+      | { type: 'text'; text: string }
+      | { type: 'image_url'; image_url: { url: string; detail?: 'auto' | 'low' | 'high' } }
+    >;
 
 export interface OpenAICompatibleOptions {
   /** Ej: https://api.openai.com/v1  |  http://localhost:11434/v1 (Ollama)  |  LM Studio / vLLM */
@@ -38,7 +46,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
         },
         body: JSON.stringify({
           model: this.opts.model,
-          messages: request.messages,
+          messages: request.messages.map(toOpenAIMessage),
           temperature: request.temperature ?? 0.3,
           max_tokens: request.maxTokens ?? 600,
         }),
@@ -60,4 +68,21 @@ export class OpenAICompatibleProvider implements LLMProvider {
       model: data.model ?? this.opts.model,
     };
   }
+}
+
+function toOpenAIMessage(message: ChatMessage): { role: ChatMessage['role']; content: OpenAIMessageContent } {
+  if (typeof message.content === 'string') return { role: message.role, content: message.content };
+  return {
+    role: message.role,
+    content: message.content.map((part) => {
+      if (part.type === 'text') return { type: 'text', text: part.text };
+      return {
+        type: 'image_url',
+        image_url: {
+          url: part.dataUrl,
+          ...(part.detail ? { detail: part.detail } : {}),
+        },
+      };
+    }),
+  };
 }

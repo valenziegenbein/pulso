@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import {
   AGENDA_EVENT_TYPE,
+  BLOCKER_STATUS,
+  DECISION_STATUS,
   LLM_PROVIDER_TYPE,
   TASK_PRIORITY,
   TASK_STATUS,
@@ -16,6 +18,7 @@ const cuid = z.string().min(1);
 
 export const createTeamSchema = z.object({
   name: z.string().min(2).max(120),
+  description: z.string().max(1000).optional(),
   focus: z.string().max(280).optional(),
   parentTeamId: cuid.optional(),
 });
@@ -32,6 +35,7 @@ export type InvitePersonInput = z.infer<typeof invitePersonSchema>;
 export const createTaskSchema = z.object({
   title: z.string().min(2).max(200),
   description: z.string().max(5000).optional(),
+  expectedOutcome: z.string().max(1500).optional(),
   teamId: cuid,
   assigneeId: cuid.optional(),
   priority: z.enum(TASK_PRIORITY).default('MEDIUM'),
@@ -56,10 +60,22 @@ export const changeTaskStatusSchema = z.object({
 export type ChangeTaskStatusInput = z.infer<typeof changeTaskStatusSchema>;
 
 export const addBlockerSchema = z.object({
-  taskId: cuid,
+  taskId: cuid.optional(),
+  teamId: cuid.optional(),
+  title: z.string().min(2).max(200).optional(),
   description: z.string().min(2).max(1000),
+  status: z.enum(BLOCKER_STATUS).default('OPEN'),
 });
 export type AddBlockerInput = z.infer<typeof addBlockerSchema>;
+
+export const requestDecisionSchema = z.object({
+  teamId: cuid,
+  taskId: cuid.optional(),
+  title: z.string().min(2).max(200),
+  context: z.string().min(2).max(2000),
+  status: z.enum(DECISION_STATUS).default('OPEN'),
+});
+export type RequestDecisionInput = z.infer<typeof requestDecisionSchema>;
 
 export const createAgendaEventSchema = z.object({
   title: z.string().min(2).max(200),
@@ -84,6 +100,10 @@ export const worklogSuggestRequestSchema = z.object({
   task: taskContextSchema.optional(),
   /** Links o referencias que la persona adjuntó manualmente (no captura automática). */
   attachmentsHint: z.array(z.string().max(500)).max(5).optional(),
+  images: z.array(z.object({
+    dataUrl: z.string().max(2_000_000),
+    mediaType: z.string().max(100).optional(),
+  })).max(3).optional(),
   locale: z.string().max(10).default('es'),
 });
 export type WorklogSuggestRequest = z.infer<typeof worklogSuggestRequestSchema>;
@@ -93,10 +113,30 @@ export const saveWorklogSchema = z.object({
   type: z.enum(WORKLOG_TYPE),
   title: z.string().min(2).max(200),
   content: z.string().min(1).max(5000),
+  teamId: cuid.optional(),
   taskId: cuid.optional(),
   suggestionId: cuid.optional(),
 });
 export type SaveWorklogInput = z.infer<typeof saveWorklogSchema>;
+
+export const taskSuggestionRequestSchema = z.object({
+  instruction: z.string().min(3).max(1000),
+  teamId: cuid.optional(),
+  assigneeId: cuid.optional(),
+});
+export type TaskSuggestionRequest = z.infer<typeof taskSuggestionRequestSchema>;
+
+export const taskSuggestionSchema = z.object({
+  title: z.string().min(2).max(200),
+  description: z.string().min(1).max(5000),
+  expectedOutcome: z.string().max(1500).optional(),
+  definitionOfDone: z.string().max(1500).optional(),
+  suggestedPriority: z.enum(TASK_PRIORITY).default('MEDIUM'),
+  suggestedAssigneeId: cuid.optional(),
+  dueDate: z.string().optional(),
+  reasoning: z.string().max(1000).optional(),
+});
+export type TaskSuggestion = z.infer<typeof taskSuggestionSchema>;
 
 export const configureLLMSchema = z.object({
   providerType: z.enum(LLM_PROVIDER_TYPE),

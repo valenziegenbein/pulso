@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MockProvider } from './providers/mock';
 import { WorklogSuggestionService } from './worklog-suggestion.service';
-import type { LLMProvider } from './provider';
+import type { CompletionRequest, LLMProvider } from './provider';
 
 describe('WorklogSuggestionService', () => {
   it('genera un borrador a partir de una micro-nota (MockProvider)', async () => {
@@ -42,5 +42,35 @@ describe('WorklogSuggestionService', () => {
 
     expect(suggestion.type).toBe('DECISION');
     expect(suggestion.title).toBe('Elegir CRM');
+  });
+
+  it('pasa capturas adjuntas como contexto multimodal al proveedor', async () => {
+    let captured: CompletionRequest | undefined;
+    const multimodal: LLMProvider = {
+      id: 'fake-multimodal',
+      async complete(request) {
+        captured = request;
+        return {
+          text: '{"type":"PROGRESS","title":"Revisar pantalla","content":"Estoy revisando la pantalla adjunta."}',
+          model: 'x',
+        };
+      },
+    };
+
+    const service = new WorklogSuggestionService(multimodal);
+    await service.suggest({
+      note: 'revisando la pantalla del widget',
+      images: [{ dataUrl: 'data:image/jpeg;base64,abc123', mediaType: 'image/jpeg' }],
+    });
+
+    const userMessage = captured?.messages.find((message) => message.role === 'user');
+    expect(Array.isArray(userMessage?.content)).toBe(true);
+    if (!Array.isArray(userMessage?.content)) throw new Error('expected multimodal content');
+    expect(userMessage.content).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'text', text: expect.stringContaining('revisando la pantalla del widget') }),
+        expect.objectContaining({ type: 'image', dataUrl: 'data:image/jpeg;base64,abc123' }),
+      ]),
+    );
   });
 });

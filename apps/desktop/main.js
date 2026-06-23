@@ -16,6 +16,7 @@ app.setName('Pulso'); // userData limpio: %APPDATA%\Pulso
 const SERVER_PORT = 41789;
 const WIDGET_FULL = { width: 384, height: 520 };
 const WIDGET_PILL = { width: 188, height: 64 };
+const WIDGET_VIEWS = new Set(['collapsed', 'quick', 'full']);
 let BASE_URL = process.env.PULSO_URL || 'http://localhost:3000';
 
 let mainWindow = null;
@@ -24,6 +25,8 @@ let tray = null;
 let serverProcess = null;
 let programmaticMove = false;
 let widgetOpened = false;
+let widgetMode = 'personal';
+let widgetView = 'full';
 
 // --- Configuración del usuario (secretos + DB), persistida en userData ---
 function loadConfig() {
@@ -55,14 +58,44 @@ function loadConfig() {
 }
 
 // SQLite embebido (lo usa el modo Teams). Personal es local-first en el cliente.
+function logDesktop(msg) {
+  try {
+    fs.appendFileSync(path.join(app.getPath('userData'), 'desktop.log'), `[${new Date().toISOString()}] ${msg}\n`);
+  } catch {
+    /* no critico */
+  }
+}
+
+function safeTimestamp() {
+  return new Date().toISOString().replace(/[:.]/g, '-');
+}
+
+function databaseHasTeamsSchema(dbPath) {
+  try {
+    const buf = fs.readFileSync(dbPath);
+    return ['DecisionRequest', 'Blocker', 'expectedOutcome'].every((marker) => buf.includes(Buffer.from(marker)));
+  } catch {
+    return false;
+  }
+}
+
 function ensureDatabase() {
   const dbPath = path.join(app.getPath('userData'), 'pulso.db');
+  const template = path.join(process.resourcesPath, 'db-template', 'pulso.db');
   if (!fs.existsSync(dbPath)) {
-    const template = path.join(process.resourcesPath, 'db-template', 'pulso.db');
     try {
       fs.copyFileSync(template, dbPath);
     } catch {
       /* sin template (dev) */
+    }
+  } else if (fs.existsSync(template) && !databaseHasTeamsSchema(dbPath)) {
+    const backupPath = path.join(app.getPath('userData'), `pulso.backup-${safeTimestamp()}.db`);
+    try {
+      fs.copyFileSync(dbPath, backupPath);
+      fs.copyFileSync(template, dbPath);
+      logDesktop(`database schema refreshed for Teams MVP; previous DB backed up at ${backupPath}`);
+    } catch (err) {
+      logDesktop(`database refresh failed: ${err == null ? '' : err.message || err}`);
     }
   }
   return dbPath;
@@ -117,7 +150,18 @@ function saveState() {
   }
 }
 
-const widgetUrl = () => `${BASE_URL}/captura`;
+function normalizeWidgetMode(mode) {
+  return mode === 'teams' ? 'teams' : 'personal';
+}
+
+function normalizeWidgetView(view) {
+  return WIDGET_VIEWS.has(view) ? view : 'full';
+}
+
+function widgetUrl() {
+  if (widgetMode === 'teams') return `${BASE_URL}/widget?view=${widgetView}`;
+  return `${BASE_URL}/captura`;
+}
 
 function waitForServer(url, timeoutMs = 60000) {
   return new Promise((resolve) => {
@@ -138,7 +182,8 @@ function waitForServer(url, timeoutMs = 60000) {
 
 function attachWindowOpenHandler(contents) {
   contents.setWindowOpenHandler(({ url }) => {
-    if (url.includes('/captura') || url.includes('/widget')) showWidget();
+    if (url.includes('/widget')) showWidget('teams');
+    else if (url.includes('/captura')) showWidget('personal');
     else if (/^https?:\/\//.test(url) && !url.startsWith(BASE_URL)) shell.openExternal(url);
     return { action: 'deny' };
   });
@@ -211,6 +256,22 @@ function createWidgetWindow() {
   return widgetWindow;
 }
 
+function ensureWidgetRoute(mode = widgetMode, view = widgetView) {
+  const nextMode = normalizeWidgetMode(mode);
+  const nextView = normalizeWidgetView(view);
+  const changed = widgetMode !== nextMode || widgetView !== nextView;
+  widgetMode = nextMode;
+  widgetView = nextView;
+  if (widgetWindow && !widgetWindow.isDestroyed() && changed) {
+    widgetWindow.loadURL(widgetUrl());
+  }
+}
+
+function sendWidgetView(view) {
+  if (widgetMode !== 'teams' || !widgetWindow || widgetWindow.isDestroyed()) return;
+  widgetWindow.webContents.send('widget:view-state', view);
+}
+
 function clampY(y, h) {
   const { workArea } = screen.getPrimaryDisplay();
   return Math.max(workArea.y + 8, Math.min(y, workArea.y + workArea.height - h - 8));
@@ -265,11 +326,19 @@ function expandWidget() {
   animateTo(widgetWindow, { x, y: clampY(b.y, WIDGET_FULL.height), ...WIDGET_FULL });
 }
 
-function showWidget() {
+function applyWidgetView(view, notifyRenderer = false) {
+  widgetView = normalizeWidgetView(view);
+  if (widgetView === 'collapsed') collapseWidget();
+  else expandWidget();
+  if (notifyRenderer) sendWidgetView(widgetView);
+}
+
+function showWidget(mode = widgetMode) {
+  ensureWidgetRoute(mode, 'full');
   const wnd = createWidgetWindow();
   wnd.show();
   wnd.focus();
-  expandWidget();
+  applyWidgetView('full', true);
 }
 function hideWidget() {
   if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.hide();
@@ -278,16 +347,17 @@ function toggleWidget() {
   if (!widgetWindow || widgetWindow.isDestroyed()) return showWidget();
   if (!widgetWindow.isVisible()) {
     widgetWindow.show();
-    expandWidget();
+    applyWidgetView('full', true);
   } else if (widgetWindow.getBounds().width < 240) {
     widgetWindow.focus();
-    expandWidget();
+    applyWidgetView('full', true);
   } else {
     hideWidget();
   }
 }
 /** Onboarding: el widget "aparece dentro de la app" (centro) y vuela al borde. */
-function introWidget() {
+function introWidget(mode = 'personal') {
+  ensureWidgetRoute(mode, 'full');
   const wnd = createWidgetWindow();
   const { workArea } = screen.getPrimaryDisplay();
   programmaticMove = true;
@@ -306,9 +376,11 @@ function introWidget() {
   );
 }
 /** Apertura no invasiva (relanzados ya configurados): pill pegada al borde. */
-function openWidgetCollapsed() {
-  if (widgetOpened) return;
+function openWidgetCollapsed(mode = widgetMode) {
+  const nextMode = normalizeWidgetMode(mode);
+  if (widgetOpened && widgetMode === nextMode) return;
   widgetOpened = true;
+  ensureWidgetRoute(nextMode, 'collapsed');
   const wnd = createWidgetWindow();
   const { workArea } = screen.getPrimaryDisplay();
   programmaticMove = true;
@@ -319,6 +391,7 @@ function openWidgetCollapsed() {
   });
   programmaticMove = false;
   wnd.show();
+  sendWidgetView('collapsed');
 }
 
 function trayIcon() {
@@ -410,15 +483,16 @@ app.whenReady().then(async () => {
 });
 
 ipcMain.on('widget:hide', hideWidget);
-ipcMain.on('widget:show', showWidget);
+ipcMain.on('widget:show', (_e, mode) => showWidget(mode));
 ipcMain.on('widget:collapse', collapseWidget);
 ipcMain.on('widget:expand', expandWidget);
-ipcMain.on('widget:intro', introWidget);
+ipcMain.on('widget:view', (_e, view) => applyWidgetView(view, false));
+ipcMain.on('widget:intro', (_e, mode) => introWidget(mode));
 // La web avisa cuando el espacio de trabajo está listo (personal onboarded o
 // sesión Teams activa) → abrimos el widget minimizado en el borde (no invasivo).
-ipcMain.on('pulso:personal-ready', openWidgetCollapsed);
+ipcMain.on('pulso:personal-ready', () => openWidgetCollapsed('personal'));
 ipcMain.on('pulso:auth', (_e, s) => {
-  if (s === 'authed') openWidgetCollapsed();
+  if (s === 'authed') openWidgetCollapsed('teams');
 });
 
 // Captura rápida de pantalla. Oculta el widget un instante para no salir en la foto.

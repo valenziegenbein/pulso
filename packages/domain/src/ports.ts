@@ -20,6 +20,7 @@ export interface TaskRecord {
   parentTaskId: string | null;
   title: string;
   description: string | null;
+  expectedOutcome: string | null;
   assigneeId: string | null;
   createdById: string;
   priority: TaskPriority;
