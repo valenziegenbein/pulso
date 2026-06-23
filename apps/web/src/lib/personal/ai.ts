@@ -11,7 +11,39 @@ export interface ProviderPreset {
   hint: string;
 }
 
-export const PROVIDER_PRESETS: Record<Exclude<AiProvider, 'custom'>, ProviderPreset> = {
+export type CloudProvider = 'openai' | 'anthropic';
+
+export interface CloudPreset {
+  label: string;
+  keyPlaceholder: string;
+  keyUrl: string;
+  /** Modelos por defecto si no se pueden listar (clave inválida, sin red). */
+  fallbackModels: string[];
+}
+
+export const CLOUD_PRESETS: Record<CloudProvider, CloudPreset> = {
+  openai: {
+    label: 'OpenAI',
+    keyPlaceholder: 'sk-…',
+    keyUrl: 'https://platform.openai.com/api-keys',
+    fallbackModels: ['gpt-4o-mini', 'gpt-4o'],
+  },
+  anthropic: {
+    label: 'Anthropic',
+    keyPlaceholder: 'sk-ant-…',
+    keyUrl: 'https://console.anthropic.com/settings/keys',
+    fallbackModels: ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6'],
+  },
+};
+
+export function isCloudProvider(p: AiProvider): p is CloudProvider {
+  return p === 'openai' || p === 'anthropic';
+}
+
+/** Servidores locales OpenAI-compatible que ofrece la UI. */
+export type LocalProvider = Exclude<AiProvider, 'custom' | CloudProvider>;
+
+export const PROVIDER_PRESETS: Record<LocalProvider, ProviderPreset> = {
   lmstudio: {
     label: 'LM Studio',
     port: 1234,
@@ -33,15 +65,17 @@ export interface DraftSuggestion {
 }
 
 export class AiError extends Error {
-  constructor(readonly code: 'rate_limited' | 'unavailable' | 'network') {
+  constructor(readonly code: 'rate_limited' | 'unavailable' | 'network' | 'unauthorized') {
     super(code);
     this.name = 'AiError';
   }
 }
 
-/** ¿La config alcanza para generar con IA local? */
+/** ¿La config alcanza para generar? (cloud necesita además la API key). */
 export function aiReady(ai: AiMode, config: AiConfig | null): boolean {
-  return ai !== 'none' && Boolean(config?.baseUrl && config?.model);
+  if (ai === 'none' || !config?.baseUrl || !config?.model) return false;
+  if (isCloudProvider(config.provider) && !config.apiKey) return false;
+  return true;
 }
 
 /** Lista los modelos cargados en el servidor local (vía proxy server-side). */
@@ -56,6 +90,24 @@ export async function listModels(baseUrl: string): Promise<string[]> {
   } catch {
     throw new AiError('network');
   }
+  if (!res.ok) throw new AiError('unavailable');
+  const data = (await res.json()) as { models?: string[] };
+  return data.models ?? [];
+}
+
+/** Verifica la API key de un proveedor cloud y devuelve sus modelos (vía proxy server-side). */
+export async function verifyCloud(provider: CloudProvider, apiKey: string): Promise<string[]> {
+  let res: Response;
+  try {
+    res = await fetch('/api/personal/ai/verify', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ provider, apiKey }),
+    });
+  } catch {
+    throw new AiError('network');
+  }
+  if (res.status === 401) throw new AiError('unauthorized');
   if (!res.ok) throw new AiError('unavailable');
   const data = (await res.json()) as { models?: string[] };
   return data.models ?? [];
@@ -106,7 +158,15 @@ export async function generateDraft(params: {
   const { note, task, attachmentsHint, ai, config } = params;
   if (ai === 'none') return manualDraft(note);
   if (aiReady(ai, config) && config) {
-    return postSuggest('/api/personal/suggest', { note, task, attachmentsHint, baseUrl: config.baseUrl, model: config.model });
+    return postSuggest('/api/personal/suggest', {
+      note,
+      task,
+      attachmentsHint,
+      provider: config.provider,
+      baseUrl: config.baseUrl,
+      model: config.model,
+      apiKey: config.apiKey,
+    });
   }
   return postSuggest('/api/worklog/suggest', { note, task, attachmentsHint });
 }

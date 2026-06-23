@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { AiError, listModels, PROVIDER_PRESETS } from '@/lib/personal/ai';
-import { usePersonal, type AiProvider } from '@/lib/personal/store';
+import { AiError, listModels, PROVIDER_PRESETS, type LocalProvider } from '@/lib/personal/ai';
+import { usePersonal } from '@/lib/personal/store';
 
 type Status = 'idle' | 'connecting' | 'connected' | 'error';
 
@@ -14,9 +14,8 @@ type Status = 'idle' | 'connecting' | 'connected' | 'error';
 export function LocalAiSetup() {
   const { aiConfig, setAiConfig } = usePersonal();
 
-  const initialProvider: Exclude<AiProvider, 'custom'> =
-    aiConfig?.provider === 'ollama' ? 'ollama' : 'lmstudio';
-  const [provider, setProvider] = useState<Exclude<AiProvider, 'custom'>>(initialProvider);
+  const initialProvider: LocalProvider = aiConfig?.provider === 'ollama' ? 'ollama' : 'lmstudio';
+  const [provider, setProvider] = useState<LocalProvider>(initialProvider);
   const [port, setPort] = useState<number>(() => {
     const fromUrl = aiConfig?.baseUrl?.match(/:(\d+)/)?.[1];
     return fromUrl ? Number(fromUrl) : PROVIDER_PRESETS[initialProvider].port;
@@ -28,7 +27,7 @@ export function LocalAiSetup() {
   const preset = PROVIDER_PRESETS[provider];
   const baseUrl = preset.baseUrl(port);
 
-  function pickProvider(p: Exclude<AiProvider, 'custom'>) {
+  function pickProvider(p: LocalProvider) {
     setProvider(p);
     setPort(PROVIDER_PRESETS[p].port);
     setStatus('idle');

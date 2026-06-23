@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ENTRY_LABEL, usePersonal, type AiMode, type StorageTarget } from '@/lib/personal/store';
 import { PersonalWidget } from './personal-widget';
 import { LocalAiSetup } from './local-ai-setup';
+import { CloudAiSetup } from './cloud-ai-setup';
 
 const STEPS = ['intro', 'mode', 'name', 'project', 'storage', 'ai', 'widget', 'snap', 'done'] as const;
 
@@ -203,9 +204,9 @@ export function Onboarding() {
               </div>
             )}
             {ai === 'byok' && (
-              <p className="pulso-reveal mt-4 text-sm text-muted">
-                La API key propia (OpenAI / Anthropic) llega pronto. Por ahora podés usar <span className="text-fg">IA local</span> con LM Studio u Ollama.
-              </p>
+              <div className="pulso-reveal mt-6">
+                <CloudAiSetup />
+              </div>
             )}
             <StepNav onBack={() => go(-1)} onNext={enterWidget} nextLabel={ai ? 'Continuar' : 'Decidir después'} />
           </div>

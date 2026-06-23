@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePersonal, type AiMode, type StorageTarget } from '@/lib/personal/store';
 import { LocalAiSetup } from '@/components/personal/local-ai-setup';
+import { CloudAiSetup } from '@/components/personal/cloud-ai-setup';
 
 export default function AjustesPage() {
   const router = useRouter();
@@ -33,7 +34,9 @@ export default function AjustesPage() {
           </div>
         )}
         {ai === 'byok' && (
-          <p className="mt-3 text-sm text-muted">La API key propia llega pronto. Por ahora usá IA local (LM Studio / Ollama).</p>
+          <div className="mt-4">
+            <CloudAiSetup />
+          </div>
         )}
       </Section>
 

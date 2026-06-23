@@ -11,14 +11,16 @@ export type EntryType = 'PROGRESS' | 'RESEARCH' | 'DECISION' | 'BLOCKER' | 'NOTE
 export type TaskPriority = 'high' | 'medium' | 'low';
 export type StorageTarget = 'pulso' | 'markdown' | 'notion' | null;
 export type AiMode = 'byok' | 'local' | 'none' | null;
-export type AiProvider = 'lmstudio' | 'ollama' | 'custom';
+export type AiProvider = 'lmstudio' | 'ollama' | 'openai' | 'anthropic' | 'custom';
 
-/** Conexión concreta a un servidor LLM compatible con OpenAI (LM Studio, Ollama, etc.). */
+/** Conexión concreta a un proveedor LLM (local OpenAI-compatible o cloud BYOK). */
 export interface AiConfig {
   provider: AiProvider;
-  /** Base OpenAI-compatible, p.ej. http://localhost:1234/v1 */
+  /** Base del proveedor. Local: http://localhost:1234/v1 · Cloud: la fuerza el server. */
   baseUrl: string;
   model: string;
+  /** Solo cloud (BYOK). Vive solo en este equipo; nunca vuelve del server. */
+  apiKey?: string;
 }
 
 export interface Project {

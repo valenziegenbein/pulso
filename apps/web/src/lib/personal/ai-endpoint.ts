@@ -7,6 +7,12 @@
 
 const LOOPBACK_NAMES = new Set(['localhost', '::1', '[::1]', '0.0.0.0']);
 
+/** Hosts cloud permitidos para BYOK. El server fuerza estos destinos (no SSRF). */
+export const CLOUD_HOSTS = {
+  openai: 'api.openai.com',
+  anthropic: 'api.anthropic.com',
+} as const;
+
 export class LocalUrlError extends Error {
   constructor(readonly code: 'bad_url' | 'bad_protocol' | 'not_local') {
     super(code);
