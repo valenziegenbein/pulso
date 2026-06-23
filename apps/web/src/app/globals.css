@@ -46,7 +46,8 @@ body {
 /* Pulso — modo Personal: tema "atelier" cálido, editorial.      */
 /* ============================================================= */
 .theme-personal,
-.theme-personal-bare {
+.theme-personal-bare,
+.theme-teams {
   --bg: #15110c;
   --surface: #1e1810;
   --surface-2: #261e15;
@@ -55,12 +56,18 @@ body {
   --fg: #f3ece0;
   --accent: #e7c79a;
   --accent-2: #c98a5e;
+  /* Color semántico de estados (cálido, sin salir de la paleta). */
+  --ok: #93b08f;
+  --warn: #d2a36a;
+  --danger: #d9694e;
+  --info: #8fa6c4;
   color: var(--fg);
   font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 /* Páginas completas: fondo cálido. El widget usa la variante "bare" (transparente). */
-.theme-personal {
+.theme-personal,
+.theme-teams {
   background-color: var(--bg);
 }
 

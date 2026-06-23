@@ -6,7 +6,8 @@ import { addBlockerAction, changeStatusAction } from '@/server/actions/tasks';
 import { requestDecisionAction } from '@/server/actions/decisions';
 import { approveWorklogAction, createWorklogFormAction } from '@/server/actions/worklog';
 import { AssignTaskForm } from '@/components/assign-task-form';
-import { PRIORITY_LABEL, STATUS_LABEL, WORKLOG_TYPE_LABEL, formatDate } from '@/lib/labels';
+import { Card, PriorityBadge, StatusBadge, btnPrimary, inputCls, selectCls, textareaCls } from '@/components/teams/ui';
+import { STATUS_LABEL, WORKLOG_TYPE_LABEL, formatDate } from '@/lib/labels';
 
 export default async function TaskDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -20,56 +21,52 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
   const transitions = TASK_STATUS_TRANSITIONS[task.status as TaskStatus];
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-8">
-      <header className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-muted">{task.team.name}</p>
-          <h1 className="mt-1 text-2xl font-semibold">{task.title}</h1>
-          <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted">
-            <span>{STATUS_LABEL[task.status]}</span>
-            <span>{PRIORITY_LABEL[task.priority]}</span>
-            <span>vence {formatDate(task.dueDate)}</span>
-            <span>{task.assignee?.name ?? 'Sin responsable'}</span>
+    <main className="pulso-reveal mx-auto max-w-5xl px-6 py-10 sm:py-12">
+      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <p className="font-meta mb-2 text-[11px] uppercase tracking-[0.22em] text-accent">{task.team.name}</p>
+          <h1 className="font-display text-4xl leading-[1.05] sm:text-5xl">{task.title}</h1>
+          <div className="mt-3 flex flex-wrap items-center gap-4">
+            <StatusBadge status={task.status} />
+            <PriorityBadge priority={task.priority} />
+            <span className="font-meta text-[11px] text-muted">vence {formatDate(task.dueDate)}</span>
+            <span className="font-meta text-[11px] text-muted">{task.assignee?.name ?? 'Sin responsable'}</span>
           </div>
         </div>
-        <div className="flex gap-2 text-sm">
-          <a href="#avance" className="rounded-lg bg-accent px-4 py-2 font-medium text-bg">Registrar avance</a>
-          <a href="#estado" className="rounded-lg border border-border px-4 py-2 hover:border-accent">Cambiar estado</a>
-          <button className="rounded-lg border border-border px-3 py-2 text-muted">...</button>
+        <div className="flex flex-wrap gap-2">
+          <a href="#avance" className={btnPrimary}>Registrar avance</a>
+          <a href="#estado" className="rounded-full border border-border px-4 py-2 text-sm text-muted transition hover:border-accent hover:text-fg">Cambiar estado</a>
         </div>
       </header>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <section className="rounded-xl border border-border bg-surface p-4 text-sm">
-            <h2 className="mb-2 text-sm font-medium">Descripcion</h2>
-            <p className="text-muted">{task.description ?? 'Sin descripcion.'}</p>
-          </section>
+          <Card title="Descripción">
+            <p className="text-sm leading-relaxed text-fg/90">{task.description ?? 'Sin descripción.'}</p>
+          </Card>
 
-          <section className="rounded-xl border border-border bg-surface p-4">
-            <h2 className="mb-3 text-sm font-medium">Resultado y terminado</h2>
-            <div className="space-y-3 text-sm">
+          <Card title="Resultado y terminado">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <p className="text-xs uppercase tracking-wide text-muted">Resultado esperado</p>
-                <p>{task.expectedOutcome ?? 'Sin resultado esperado definido.'}</p>
+                <p className="font-meta mb-1 text-[10px] uppercase tracking-[0.16em] text-muted">Resultado esperado</p>
+                <p className="text-sm">{task.expectedOutcome ?? 'Sin resultado esperado definido.'}</p>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-muted">Definicion de terminado</p>
-                <p>{task.definitionOfDone ?? 'Sin criterio de terminado definido.'}</p>
+                <p className="font-meta mb-1 text-[10px] uppercase tracking-[0.16em] text-muted">Definición de terminado</p>
+                <p className="text-sm">{task.definitionOfDone ?? 'Sin criterio de terminado definido.'}</p>
               </div>
             </div>
-          </section>
+          </Card>
 
-          <section className="rounded-xl border border-border bg-surface p-4">
-            <h2 className="mb-3 text-sm font-medium">Bloqueos</h2>
+          <Card title="Bloqueos">
             {openBlockers.length === 0 ? (
-              <p className="mb-3 text-sm text-muted">Sin bloqueos abiertos.</p>
+              <p className="mb-3 text-sm text-muted/70">Sin bloqueos abiertos.</p>
             ) : (
-              <ul className="mb-3 space-y-2 text-sm">
+              <ul className="mb-4 space-y-2">
                 {openBlockers.map((b) => (
-                  <li key={b.id} className="rounded-lg border border-border bg-bg p-2">
-                    <p className="font-medium text-red-300">{b.title}</p>
-                    <p className="text-xs text-muted">{b.description}</p>
+                  <li key={b.id} className="rounded-xl border border-[var(--danger)]/30 bg-bg/40 p-3">
+                    <p className="text-sm font-medium text-[var(--danger)]">{b.title}</p>
+                    <p className="mt-0.5 text-xs text-muted">{b.description}</p>
                   </li>
                 ))}
               </ul>
@@ -77,92 +74,93 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
             <form action={addBlockerAction} className="flex gap-2">
               <input type="hidden" name="taskId" value={task.id} />
               <input type="hidden" name="teamId" value={task.teamId} />
-              <input name="description" required placeholder="Describir bloqueo" className="flex-1 rounded-lg border border-border bg-bg p-2 text-sm outline-none focus:border-accent" />
-              <button className="rounded-lg border border-border px-3 text-sm hover:border-accent">Marcar</button>
+              <input name="description" required placeholder="Describir un bloqueo" className={inputCls} />
+              <button className="shrink-0 rounded-xl border border-border px-4 text-sm transition hover:border-accent">Marcar</button>
             </form>
-          </section>
+          </Card>
 
-          <section className="rounded-xl border border-border bg-surface p-4">
-            <h2 className="mb-3 text-sm font-medium">Decisiones pendientes</h2>
+          <Card title="Decisiones pendientes">
             {openDecisions.length === 0 ? (
-              <p className="mb-3 text-sm text-muted">Sin decisiones abiertas.</p>
+              <p className="mb-3 text-sm text-muted/70">Sin decisiones abiertas.</p>
             ) : (
-              <ul className="mb-3 space-y-2 text-sm">
+              <ul className="mb-4 space-y-2">
                 {openDecisions.map((d) => (
-                  <li key={d.id} className="rounded-lg border border-border bg-bg p-2">
-                    <p className="font-medium">{d.title}</p>
-                    <p className="text-xs text-muted">{d.context}</p>
+                  <li key={d.id} className="rounded-xl border border-border bg-bg/40 p-3">
+                    <p className="text-sm font-medium">{d.title}</p>
+                    <p className="mt-0.5 text-xs text-muted">{d.context}</p>
                   </li>
                 ))}
               </ul>
             )}
-            <form action={requestDecisionAction} className="space-y-2 text-sm">
+            <form action={requestDecisionAction} className="space-y-2">
               <input type="hidden" name="taskId" value={task.id} />
               <input type="hidden" name="teamId" value={task.teamId} />
-              <input name="title" required placeholder="Decision necesaria" className="w-full rounded-lg border border-border bg-bg p-2 outline-none focus:border-accent" />
-              <textarea name="context" required rows={2} placeholder="Contexto breve" className="w-full resize-none rounded-lg border border-border bg-bg p-2 outline-none focus:border-accent" />
-              <button className="rounded-lg border border-border px-3 py-1.5 hover:border-accent">Pedir decision</button>
+              <input name="title" required placeholder="Decisión necesaria" className={inputCls} />
+              <textarea name="context" required rows={2} placeholder="Contexto breve" className={textareaCls} />
+              <button className="rounded-full border border-border px-4 py-1.5 text-sm transition hover:border-accent">Pedir decisión</button>
             </form>
-          </section>
+          </Card>
 
-          <section id="avance" className="rounded-xl border border-border bg-surface p-4">
-            <h2 className="mb-3 text-sm font-medium">Bitacora asociada</h2>
+          <Card id="avance" title="Bitácora asociada">
             {task.worklogEntries.length === 0 ? (
-              <p className="mb-3 text-sm text-muted">Sin entradas.</p>
+              <p className="mb-4 text-sm text-muted/70">Sin entradas.</p>
             ) : (
-              <ul className="mb-4 space-y-2 text-sm">
+              <ul className="mb-5 space-y-2.5">
                 {task.worklogEntries.map((w) => (
-                  <li key={w.id} className="rounded-lg border border-border bg-bg p-2">
+                  <li key={w.id} className="rounded-xl border border-border bg-bg/40 p-3">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-xs text-muted">[{WORKLOG_TYPE_LABEL[w.type]}] {w.status === 'DRAFT' ? 'borrador' : 'aprobada'}</span>
+                      <span className="font-meta text-[10px] uppercase tracking-wide text-muted">
+                        {WORKLOG_TYPE_LABEL[w.type]} · {w.status === 'DRAFT' ? 'borrador' : 'aprobada'}
+                      </span>
                       {w.status === 'DRAFT' && (
                         <form action={approveWorklogAction}>
                           <input type="hidden" name="worklogId" value={w.id} />
-                          <button className="rounded border border-border px-2 py-0.5 text-xs hover:border-accent">Aprobar</button>
+                          <button className="font-meta rounded-full border border-border px-3 py-0.5 text-[11px] transition hover:border-accent">Aprobar</button>
                         </form>
                       )}
                     </div>
-                    <p className="mt-1 font-medium">{w.title}</p>
-                    <p className="text-muted">{w.content}</p>
+                    <p className="mt-1.5 font-medium">{w.title}</p>
+                    <p className="mt-0.5 text-sm leading-relaxed text-muted">{w.content}</p>
                   </li>
                 ))}
               </ul>
             )}
 
-            <form action={createWorklogFormAction} className="space-y-2 text-sm">
+            <form action={createWorklogFormAction} className="space-y-2.5">
               <input type="hidden" name="taskId" value={task.id} />
               <input type="hidden" name="teamId" value={task.teamId} />
               <div className="flex gap-2">
-                <select name="type" defaultValue="PROGRESS" className="rounded-lg border border-border bg-bg p-2">
+                <select name="type" defaultValue="PROGRESS" className={`${selectCls} max-w-[10rem]`}>
                   {WORKLOG_TYPE.map((t) => (
                     <option key={t} value={t}>{WORKLOG_TYPE_LABEL[t]}</option>
                   ))}
                 </select>
-                <input name="title" required placeholder="Titulo" className="flex-1 rounded-lg border border-border bg-bg p-2 outline-none focus:border-accent" />
+                <input name="title" required placeholder="Título" className={inputCls} />
               </div>
-              <textarea name="content" required rows={2} placeholder="Que paso" className="w-full resize-none rounded-lg border border-border bg-bg p-2 outline-none focus:border-accent" />
-              <button className="rounded-lg border border-border px-3 py-1.5 hover:border-accent">Guardar borrador</button>
+              <textarea name="content" required rows={2} placeholder="¿Qué pasó?" className={textareaCls} />
+              <p className="font-meta flex items-center justify-between gap-3 pt-0.5 text-[10px] uppercase tracking-[0.16em] text-muted/70">
+                <span>✦ la IA propone · vos aprobás</span>
+                <button className="rounded-full border border-border px-4 py-1.5 text-[11px] normal-case tracking-normal text-fg transition hover:border-accent">Guardar borrador</button>
+              </p>
             </form>
-          </section>
+          </Card>
         </div>
 
         <div className="space-y-6 lg:col-span-1">
-          <section className="rounded-xl border border-border bg-surface p-4">
-            <h2 className="mb-3 text-sm font-medium">Responsable</h2>
+          <Card title="Responsable">
             <AssignTaskForm taskId={task.id} people={people} currentAssigneeId={task.assigneeId} />
-          </section>
+          </Card>
 
           {transitions.length > 0 && (
-            <section id="estado" className="rounded-xl border border-border bg-surface p-4">
-              <h2 className="mb-3 text-sm font-medium">Cambiar estado</h2>
-              <form action={changeStatusAction} className="space-y-2">
+            <Card id="estado" title="Cambiar estado">
+              <form action={changeStatusAction} className="space-y-2.5">
                 <input type="hidden" name="taskId" value={task.id} />
-                <select name="status" className="w-full rounded-lg border border-border bg-bg p-2 text-sm">
-                  {transitions.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+                <select name="status" className={selectCls}>
+                  {transitions.map((s) => <option key={s} value={s}>{STATUS_LABEL[s] ?? s}</option>)}
                 </select>
-                <button className="w-full rounded-lg border border-border px-3 py-1.5 text-sm hover:border-accent">Aplicar</button>
+                <button className="w-full rounded-xl border border-border px-3 py-2 text-sm transition hover:border-accent">Aplicar</button>
               </form>
-            </section>
+            </Card>
           )}
         </div>
       </div>

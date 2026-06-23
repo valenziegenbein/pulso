@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { createTaskAction } from '@/server/actions/tasks';
 import { PRIORITY_LABEL } from '@/lib/labels';
+import { inputCls, selectCls, textareaCls } from './ui';
 
 interface TeamOption {
   id: string;
@@ -66,28 +67,31 @@ export function TaskSuggestionPanel({ teams, people }: { teams: TeamOption[]; pe
   }
 
   return (
-    <section className="rounded-xl border border-border bg-surface p-4">
-      <div className="mb-3">
-        <h2 className="text-sm font-medium">Asignar tarea con IA</h2>
-        <p className="text-xs text-muted">La IA propone. El admin aprueba.</p>
+    <section className="rounded-2xl border border-accent/30 bg-surface/60 p-5">
+      <div className="mb-3 flex items-center gap-2">
+        <span className="pulso-beat inline-block text-accent">✦</span>
+        <div>
+          <h2 className="font-display text-lg leading-tight">Asignar tarea con IA</h2>
+          <p className="font-meta text-[10px] uppercase tracking-[0.16em] text-muted">La IA propone · el admin aprueba</p>
+        </div>
       </div>
 
       <textarea
         value={instruction}
         onChange={(e) => setInstruction(e.target.value)}
         rows={3}
-        placeholder="Ej: Preparar propuesta para mejorar tickets internos y definir proximos pasos"
-        className="w-full resize-none rounded-lg border border-border bg-bg p-2 text-sm outline-none focus:border-accent"
+        placeholder="Ej: Preparar propuesta para mejorar tickets internos y definir próximos pasos"
+        className={textareaCls}
       />
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
-        <select value={teamId} onChange={(e) => setTeamId(e.target.value)} className="rounded-lg border border-border bg-bg p-2 text-sm">
+        <select value={teamId} onChange={(e) => setTeamId(e.target.value)} className={selectCls}>
           {teams.map((team) => (
             <option key={team.id} value={team.id}>
               {team.name}
             </option>
           ))}
         </select>
-        <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} className="rounded-lg border border-border bg-bg p-2 text-sm">
+        <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} className={selectCls}>
           <option value="">Responsable sugerido</option>
           {people.map((person) => (
             <option key={person.id} value={person.id}>
@@ -99,14 +103,14 @@ export function TaskSuggestionPanel({ teams, people }: { teams: TeamOption[]; pe
       <button
         onClick={generate}
         disabled={loading || !instruction.trim() || teams.length === 0}
-        className="mt-3 w-full rounded-lg bg-accent px-3 py-2 text-sm font-medium text-bg disabled:opacity-40"
+        className="mt-3 w-full rounded-xl bg-accent px-3 py-2.5 text-sm font-medium text-bg transition hover:brightness-110 disabled:opacity-40"
       >
-        {loading ? 'Generando...' : 'Generar tarea'}
+        {loading ? 'Generando…' : 'Generar tarea'}
       </button>
-      {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+      {error && <p className="mt-2 text-xs text-[var(--danger)]">{error}</p>}
 
       {suggestion && (
-        <div className="mt-4 rounded-xl border border-border bg-bg/60 p-3">
+        <div className="pulso-reveal mt-4 rounded-xl border border-border bg-bg/50 p-4">
           <form action={createTaskAction} className="space-y-2">
             <input type="hidden" name="teamId" value={teamId} />
             <input type="hidden" name="assigneeId" value={assigneeId} />
@@ -119,28 +123,28 @@ export function TaskSuggestionPanel({ teams, people }: { teams: TeamOption[]; pe
                   name="title"
                   value={suggestion.title}
                   onChange={(e) => update('title', e.target.value)}
-                  className="w-full rounded border border-border bg-surface p-2 text-sm font-medium outline-none focus:border-accent"
+                  className={`${inputCls} font-medium`}
                 />
                 <textarea
                   name="description"
                   value={suggestion.description}
                   onChange={(e) => update('description', e.target.value)}
                   rows={3}
-                  className="w-full resize-none rounded border border-border bg-surface p-2 text-sm outline-none focus:border-accent"
+                  className={textareaCls}
                 />
                 <input
                   name="expectedOutcome"
                   value={suggestion.expectedOutcome ?? ''}
                   onChange={(e) => update('expectedOutcome', e.target.value)}
                   placeholder="Resultado esperado"
-                  className="w-full rounded border border-border bg-surface p-2 text-sm outline-none focus:border-accent"
+                  className={inputCls}
                 />
                 <input
                   name="definitionOfDone"
                   value={suggestion.definitionOfDone ?? ''}
                   onChange={(e) => update('definitionOfDone', e.target.value)}
-                  placeholder="Definicion de terminado"
-                  className="w-full rounded border border-border bg-surface p-2 text-sm outline-none focus:border-accent"
+                  placeholder="Definición de terminado"
+                  className={inputCls}
                 />
               </>
             ) : (
@@ -151,10 +155,10 @@ export function TaskSuggestionPanel({ teams, people }: { teams: TeamOption[]; pe
                 <input type="hidden" name="definitionOfDone" value={suggestion.definitionOfDone ?? ''} />
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="text-sm font-medium">{suggestion.title}</h3>
-                    <p className="mt-1 text-xs leading-relaxed text-muted">{suggestion.description}</p>
+                    <h3 className="font-display text-lg leading-tight">{suggestion.title}</h3>
+                    <p className="mt-1 text-sm leading-relaxed text-muted">{suggestion.description}</p>
                   </div>
-                  <span className="rounded bg-surface px-2 py-1 text-[10px] text-muted">
+                  <span className="font-meta shrink-0 rounded-full border border-border px-2.5 py-1 text-[10px] uppercase tracking-wide text-accent">
                     {PRIORITY_LABEL[suggestion.suggestedPriority] ?? suggestion.suggestedPriority}
                   </span>
                 </div>
@@ -163,16 +167,16 @@ export function TaskSuggestionPanel({ teams, people }: { teams: TeamOption[]; pe
                     <span className="text-fg">Resultado:</span> {suggestion.expectedOutcome}
                   </p>
                 )}
-                {suggestion.reasoning && <p className="text-[11px] text-muted">Por que se sugiere: {suggestion.reasoning}</p>}
+                {suggestion.reasoning && <p className="text-[11px] italic text-muted/80">Por qué se sugiere: {suggestion.reasoning}</p>}
               </>
             )}
 
-            <div className="flex gap-2 pt-1 text-xs">
-              <button className="rounded-lg bg-accent px-4 py-2 font-medium text-bg">Asignar</button>
-              <button type="button" onClick={() => setEditing((v) => !v)} className="rounded-lg border border-border px-3 py-2 hover:border-accent">
+            <div className="flex gap-2 pt-1">
+              <button className="rounded-full bg-accent px-5 py-2 text-sm font-medium text-bg transition hover:brightness-110">Asignar</button>
+              <button type="button" onClick={() => setEditing((v) => !v)} className="rounded-full border border-border px-4 py-2 text-sm transition hover:border-accent">
                 {editing ? 'Listo' : 'Editar'}
               </button>
-              <button type="button" onClick={() => setSuggestion(null)} className="rounded-lg border border-border px-3 py-2 text-muted hover:border-muted">
+              <button type="button" onClick={() => setSuggestion(null)} className="rounded-full px-4 py-2 text-sm text-muted transition hover:text-fg">
                 Descartar
               </button>
             </div>

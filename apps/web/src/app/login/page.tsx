@@ -1,26 +1,35 @@
 import { redirect } from 'next/navigation';
+import { Fraunces, Hanken_Grotesk, JetBrains_Mono } from 'next/font/google';
 import { getAuthContext } from '@/lib/auth/context';
 import { LoginForm } from '@/components/login-form';
+
+const display = Fraunces({ subsets: ['latin'], variable: '--font-display', display: 'swap' });
+const body = Hanken_Grotesk({ subsets: ['latin'], variable: '--font-body', display: 'swap' });
+const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' });
 
 export default async function LoginPage() {
   if (await getAuthContext()) redirect('/');
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-6">
-      <div className="w-full max-w-sm">
-        <div className="mb-6 text-center">
-          <div className="text-2xl font-semibold">
-            <span className="text-accent">✦</span> Pulso
+    <div className={`${display.variable} ${body.variable} ${mono.variable} theme-teams relative min-h-screen overflow-hidden`}>
+      <div className="atelier-glow" aria-hidden />
+      <div className="atelier-grain" aria-hidden />
+      <main className="relative z-10 flex min-h-screen items-center justify-center px-6">
+        <div className="pulso-reveal w-full max-w-sm">
+          <div className="mb-7 text-center">
+            <div className="flex items-center justify-center gap-2 text-2xl font-semibold">
+              <span className="pulso-beat inline-block text-accent">✦</span> Pulso
+            </div>
+            <p className="font-meta mt-2 text-[11px] uppercase tracking-[0.22em] text-muted">Organizador interno</p>
           </div>
-          <p className="mt-1 text-sm text-muted">Organizador interno</p>
+          <div className="rounded-2xl border border-border bg-surface/70 p-6 backdrop-blur-sm">
+            <LoginForm />
+          </div>
+          <p className="mt-5 text-center text-[11px] leading-relaxed text-muted/80">
+            Demo · admin@pulso.local · luis@pulso.local · ana@pulso.local / pulso1234
+          </p>
         </div>
-        <div className="rounded-xl border border-border bg-surface p-6">
-          <LoginForm />
-        </div>
-        <p className="mt-4 text-center text-[11px] leading-relaxed text-muted">
-          Demo: admin@pulso.local, luis@pulso.local, ana@pulso.local / pulso1234
-        </p>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }

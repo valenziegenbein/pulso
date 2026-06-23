@@ -6,7 +6,8 @@ import { approveWorklogAction } from '@/server/actions/worklog';
 import { QuickWorklogWidget } from '@/components/quick-worklog-widget';
 import { OpenWidgetButton } from '@/components/open-widget-button';
 import { TaskSuggestionPanel } from '@/components/teams/task-suggestion-panel';
-import { PRIORITY_LABEL, STATUS_LABEL, WORKLOG_TYPE_LABEL, formatDate } from '@/lib/labels';
+import { Card, EmptyState, PageHeader, PriorityBadge, Stat, StatusBadge, btnGhost, btnPrimary } from '@/components/teams/ui';
+import { STATUS_LABEL, WORKLOG_TYPE_LABEL, formatDate } from '@/lib/labels';
 
 export default async function DashboardPage() {
   const ctx = await requireAuth();
@@ -17,181 +18,171 @@ export default async function DashboardPage() {
     const overloaded = data.perPerson.filter((p) => p.active >= 4 || p.high >= 2 || p.blocked > 0);
 
     return (
-      <main className="mx-auto max-w-6xl px-6 py-8">
-        <header className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold">Hola, {firstName}</h1>
-            <p className="text-sm text-muted">Que esta avanzando, que esta bloqueado, que necesita decision.</p>
-          </div>
-          <div className="flex gap-2 text-sm">
-            <a href="#asignar" className="rounded-lg bg-accent px-4 py-2 font-medium text-bg">Asignar tarea</a>
-            <Link href="/teams" className="rounded-lg border border-border px-4 py-2 hover:border-accent">Añadir equipo</Link>
-            <button className="rounded-lg border border-border px-3 py-2 text-muted">...</button>
-          </div>
-        </header>
+      <main className="pulso-reveal mx-auto max-w-6xl px-6 py-10 sm:py-12">
+        <PageHeader
+          kicker="Resumen"
+          title={`Hola, ${firstName}`}
+          subtitle="Qué está avanzando, qué está bloqueado, qué necesita una decisión."
+          actions={
+            <>
+              <a href="#asignar" className={btnPrimary}>Asignar tarea</a>
+              <Link href="/teams" className={btnGhost}>Añadir equipo</Link>
+            </>
+          }
+        />
 
-        <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-4">
           <Stat label="Equipos activos" value={data.teams.length} />
-          <Stat label="Tareas en curso" value={inProgress} />
-          <Stat label="Bloqueos abiertos" value={data.openBlockers.length} />
-          <Stat label="Decisiones pendientes" value={data.decisions.length} />
+          <Stat label="Tareas en curso" value={inProgress} tone="accent" />
+          <Stat label="Bloqueos abiertos" value={data.openBlockers.length} tone={data.openBlockers.length ? 'danger' : 'fg'} />
+          <Stat label="Decisiones pendientes" value={data.decisions.length} tone={data.decisions.length ? 'warn' : 'fg'} />
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <section className="rounded-xl border border-border bg-surface p-4 lg:col-span-2">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-medium">Equipos</h2>
-              <Link href="/teams" className="text-xs text-muted hover:text-fg">Ver todos</Link>
-            </div>
-            <ul className="divide-y divide-border">
+          <Card title="Equipos" className="lg:col-span-2" action={<Link href="/teams" className="text-xs text-muted transition hover:text-fg">Ver todos</Link>}>
+            <ul className="divide-y divide-border/60">
               {data.teams.map((team) => {
                 const blockers = team.tasks.reduce((sum, task) => sum + task.blockers.length, 0) + team.blockers.length;
                 const last = team.tasks.flatMap((task) => task.worklogEntries).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
                 return (
-                  <li key={team.id} className="flex items-center justify-between gap-4 py-3 text-sm">
-                    <div>
-                      <Link href={`/teams/${team.id}`} className="font-medium hover:text-accent">{team.name}</Link>
-                      <p className="text-xs text-muted">{team.focus ?? 'Sin foco definido'}</p>
-                      <p className="mt-1 text-xs text-muted">Ultimo avance: {last?.title ?? 'sin registros recientes'}</p>
+                  <li key={team.id} className="flex items-center justify-between gap-4 py-3.5 first:pt-0 last:pb-0">
+                    <div className="min-w-0">
+                      <Link href={`/teams/${team.id}`} className="font-display text-lg transition hover:text-accent">{team.name}</Link>
+                      <p className="truncate text-sm text-muted">{team.focus ?? 'Sin foco definido'}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted/80">Último avance: {last?.title ?? 'sin registros recientes'}</p>
                     </div>
-                    <div className="flex shrink-0 items-center gap-3 text-xs text-muted">
+                    <div className="font-meta flex shrink-0 items-center gap-3 text-[11px] text-muted">
                       <span>{team.tasks.length} activas</span>
-                      <span>{blockers} bloqueos</span>
-                      <Link href={`/teams/${team.id}`} className="rounded border border-border px-2 py-1 hover:border-accent">Ver</Link>
+                      <span className={blockers ? 'text-[var(--danger)]' : ''}>{blockers} bloqueos</span>
                     </div>
                   </li>
                 );
               })}
             </ul>
-          </section>
+          </Card>
 
           <div id="asignar">
             <TaskSuggestionPanel teams={data.teams.map((t) => ({ id: t.id, name: t.name }))} people={people} />
           </div>
 
-          <section className="rounded-xl border border-border bg-surface p-4 lg:col-span-2">
-            <h2 className="mb-3 text-sm font-medium">Necesita atencion</h2>
-            <div className="grid gap-4 md:grid-cols-3">
-              <Attention title="Bloqueos" items={data.openBlockers.map((b) => `${b.task?.title ?? b.title}: ${b.description}`)} />
-              <Attention title="Decisiones" items={data.decisions.map((d) => `${d.team.name}: ${d.title}`)} />
-              <Attention title="Carga a cuidar" items={overloaded.map((p) => `${p.user.name}: ${p.active} activas`)} />
+          <Card title="Necesita atención" className="lg:col-span-2">
+            <div className="grid gap-5 md:grid-cols-3">
+              <Attention title="Bloqueos" tone="danger" items={data.openBlockers.map((b) => `${b.task?.title ?? b.title}: ${b.description}`)} />
+              <Attention title="Decisiones" tone="warn" items={data.decisions.map((d) => `${d.team.name}: ${d.title}`)} />
+              <Attention title="Carga a cuidar" tone="info" items={overloaded.map((p) => `${p.user.name}: ${p.active} activas`)} />
             </div>
-          </section>
+          </Card>
 
-          <section className="rounded-xl border border-border bg-surface p-4">
-            <h2 className="mb-3 text-sm font-medium">Resultados recientes</h2>
+          <Card title="Resultados recientes">
             {data.recentWorklog.length === 0 ? (
-              <p className="text-sm text-muted">Sin avances publicados.</p>
+              <EmptyState>Sin avances publicados.</EmptyState>
             ) : (
-              <ul className="space-y-2 text-sm">
+              <ul className="space-y-3">
                 {data.recentWorklog.map((w) => (
                   <li key={w.id}>
-                    <p className="truncate">{w.title}</p>
-                    <p className="text-xs text-muted">{w.team?.name ?? w.task?.team.name ?? 'Equipo'} · {w.author.name}</p>
+                    <p className="truncate text-sm">{w.title}</p>
+                    <p className="font-meta text-[11px] text-muted">{w.team?.name ?? w.task?.team.name ?? 'Equipo'} · {w.author.name}</p>
                   </li>
                 ))}
               </ul>
             )}
-          </section>
+          </Card>
         </div>
       </main>
     );
   }
 
   const { tasks, agenda, worklog, openBlockers, decisions } = await getMemberDashboard(ctx);
+  const firstName = ctx.user.name.split(' ')[0] ?? ctx.user.name;
   return (
-    <main className="mx-auto max-w-5xl px-6 py-8">
-      <header className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Mis tareas</h1>
-          <p className="text-sm text-muted">Avances, bloqueos y decisiones de tu equipo. Sin vigilancia.</p>
-        </div>
-        <OpenWidgetButton />
-      </header>
+    <main className="pulso-reveal mx-auto max-w-5xl px-6 py-10 sm:py-12">
+      <PageHeader
+        kicker="Mi día"
+        title={`Hola, ${firstName}`}
+        subtitle="Tus avances, bloqueos y decisiones. Sin vigilancia."
+        actions={<OpenWidgetButton />}
+      />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <section className="rounded-xl border border-border bg-surface p-4 lg:col-span-2">
-          <h2 className="mb-3 text-sm font-medium">Mis tareas activas</h2>
+        <Card title="Mis tareas activas" className="lg:col-span-2">
           {tasks.length === 0 ? (
-            <p className="text-sm text-muted">No tenes tareas activas.</p>
+            <EmptyState>No tenés tareas activas.</EmptyState>
           ) : (
-            <ul className="divide-y divide-border">
+            <ul className="divide-y divide-border/60">
               {tasks.map((t) => (
-                <li key={t.id} className="flex items-center justify-between py-2.5 text-sm">
-                  <Link href={`/tasks/${t.id}`} className="hover:text-accent">
+                <li key={t.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                  <Link href={`/tasks/${t.id}`} className="min-w-0 truncate text-sm transition hover:text-accent">
                     {t.title}
-                    {t.blockers.length > 0 && <span className="ml-2 text-xs text-red-400">bloqueada</span>}
+                    {t.blockers.length > 0 && <span className="font-meta ml-2 text-[10px] uppercase tracking-wide text-[var(--danger)]">bloqueada</span>}
                   </Link>
-                  <span className="text-xs text-muted">{PRIORITY_LABEL[t.priority]} · {STATUS_LABEL[t.status]} · {formatDate(t.dueDate)}</span>
+                  <span className="flex shrink-0 items-center gap-3">
+                    <PriorityBadge priority={t.priority} />
+                    <StatusBadge status={t.status} />
+                    <span className="font-meta text-[11px] text-muted">{formatDate(t.dueDate)}</span>
+                  </span>
                 </li>
               ))}
             </ul>
           )}
-        </section>
+        </Card>
 
         <QuickWorklogWidget taskId={tasks[0]?.id} task={tasks[0] ? { title: tasks[0].title, teamName: tasks[0].team.name } : undefined} />
 
-        <section className="rounded-xl border border-border bg-surface p-4">
-          <h2 className="mb-3 text-sm font-medium">Mis bloqueos</h2>
-          <Attention title="" items={openBlockers.map((b) => `${b.task?.title ?? b.title}: ${b.description}`)} />
-        </section>
+        <Card title="Mis bloqueos">
+          <Attention tone="danger" items={openBlockers.map((b) => `${b.task?.title ?? b.title}: ${b.description}`)} />
+        </Card>
 
-        <section className="rounded-xl border border-border bg-surface p-4">
-          <h2 className="mb-3 text-sm font-medium">Proximo en mi agenda</h2>
-          <Attention title="" items={agenda.map((e) => `${e.title} · ${formatDate(e.startsAt)}`)} />
-        </section>
+        <Card title="Próximo en mi agenda">
+          <Attention tone="info" items={agenda.map((e) => `${e.title} · ${formatDate(e.startsAt)}`)} />
+        </Card>
 
-        <section className="rounded-xl border border-border bg-surface p-4">
-          <h2 className="mb-3 text-sm font-medium">Decisiones pendientes</h2>
-          <Attention title="" items={decisions.map((d) => `${d.team.name}: ${d.title}`)} />
-        </section>
+        <Card title="Decisiones pendientes">
+          <Attention tone="warn" items={decisions.map((d) => `${d.team.name}: ${d.title}`)} />
+        </Card>
 
-        <section className="rounded-xl border border-border bg-surface p-4 lg:col-span-3">
-          <h2 className="mb-3 text-sm font-medium">Bitacora reciente</h2>
+        <Card title="Bitácora reciente" className="lg:col-span-3">
           {worklog.length === 0 ? (
-            <p className="text-sm text-muted">Sin entradas todavia.</p>
+            <EmptyState>Sin entradas todavía.</EmptyState>
           ) : (
-            <ul className="space-y-2 text-sm">
+            <ul className="space-y-2.5">
               {worklog.map((w) => (
-                <li key={w.id} className="flex items-center justify-between gap-3">
-                  <span className="truncate"><span className="text-xs text-muted">[{WORKLOG_TYPE_LABEL[w.type]}]</span> {w.title}</span>
+                <li key={w.id} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="min-w-0 truncate">
+                    <span className="font-meta mr-2 text-[10px] uppercase tracking-wide text-muted">{WORKLOG_TYPE_LABEL[w.type]}</span>
+                    {w.title}
+                  </span>
                   {w.status === 'DRAFT' ? (
                     <form action={approveWorklogAction}>
                       <input type="hidden" name="worklogId" value={w.id} />
-                      <button className="rounded border border-border px-2 py-0.5 text-xs hover:border-accent">Aprobar</button>
+                      <button className="font-meta shrink-0 rounded-full border border-border px-3 py-1 text-[11px] transition hover:border-accent">Aprobar</button>
                     </form>
                   ) : (
-                    <span className="text-xs text-emerald-400">aprobada</span>
+                    <span className="font-meta shrink-0 text-[11px] text-[var(--ok)]">aprobada</span>
                   )}
                 </li>
               ))}
             </ul>
           )}
-        </section>
+        </Card>
       </div>
     </main>
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-xl border border-border bg-surface p-3">
-      <div className="text-2xl font-semibold">{value}</div>
-      <div className="text-xs text-muted">{label}</div>
-    </div>
-  );
-}
-
-function Attention({ title, items }: { title: string; items: string[] }) {
+function Attention({ title, items, tone = 'muted' }: { title?: string; items: string[]; tone?: 'danger' | 'warn' | 'info' | 'muted' }) {
+  const dot = { danger: 'var(--danger)', warn: 'var(--warn)', info: 'var(--info)', muted: 'var(--muted)' }[tone];
   return (
     <div>
-      {title && <p className="mb-1 text-xs uppercase tracking-wide text-muted">{title}</p>}
+      {title && <p className="font-meta mb-2 text-[10px] uppercase tracking-[0.18em] text-muted">{title}</p>}
       {items.length === 0 ? (
-        <p className="text-sm text-muted">Sin pendientes.</p>
+        <p className="text-sm text-muted/70">Sin pendientes.</p>
       ) : (
-        <ul className="space-y-1 text-sm">
+        <ul className="space-y-1.5 text-sm">
           {items.slice(0, 5).map((item, i) => (
-            <li key={i} className="text-muted">{item}</li>
+            <li key={i} className="flex gap-2 text-muted">
+              <span className="mt-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: dot }} />
+              <span className="min-w-0">{item}</span>
+            </li>
           ))}
         </ul>
       )}

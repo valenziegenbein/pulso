@@ -26,7 +26,7 @@ export function OpenWidgetButton() {
   return (
     <button
       onClick={open}
-      className="rounded-lg border border-border px-3 py-2 text-xs text-muted hover:border-accent hover:text-fg"
+      className="rounded-full border border-border px-4 py-2 text-sm text-muted transition hover:border-accent hover:text-fg"
     >
       ⧉ Abrir widget
     </button>

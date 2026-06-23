@@ -4,13 +4,14 @@ import { requireAuth } from '@/lib/auth/context';
 import { getAssignablePeople, getTaskList, getTeamsPage } from '@/server/queries';
 import { createTaskAction } from '@/server/actions/tasks';
 import { TaskSuggestionPanel } from '@/components/teams/task-suggestion-panel';
+import { Card, EmptyState, PageHeader, PriorityBadge, StatusBadge, btnPrimary, inputCls, selectCls, textareaCls } from '@/components/teams/ui';
 import { PRIORITY_LABEL, STATUS_LABEL, formatDate } from '@/lib/labels';
 
 const GROUPS: Array<[TaskStatus, string]> = [
   ['TODO', 'Pendiente'],
   ['IN_PROGRESS', 'En curso'],
   ['BLOCKED', 'Bloqueada'],
-  ['IN_REVIEW', 'En revision'],
+  ['IN_REVIEW', 'En revisión'],
   ['DONE', 'Terminada'],
 ];
 
@@ -30,83 +31,84 @@ export default async function TasksPage({
   });
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-8">
-      <header className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Tareas</h1>
-          <p className="text-sm text-muted">Gestionar trabajo del equipo sin tablero gigante.</p>
-        </div>
-        <div className="flex gap-2 text-sm">
-          <a href="#nueva" className="rounded-lg bg-accent px-4 py-2 font-medium text-bg">Nueva tarea</a>
-          <a href="#ia" className="rounded-lg border border-border px-4 py-2 hover:border-accent">Asignar con IA</a>
-          <button className="rounded-lg border border-border px-3 py-2 text-muted">...</button>
-        </div>
-      </header>
+    <main className="pulso-reveal mx-auto max-w-6xl px-6 py-10 sm:py-12">
+      <PageHeader
+        kicker="Trabajo del equipo"
+        title="Tareas"
+        subtitle="Coordinar sin tablero gigante."
+        actions={
+          <>
+            <a href="#nueva" className={btnPrimary}>Nueva tarea</a>
+            <a href="#ia" className="rounded-full border border-border px-4 py-2 text-sm text-muted transition hover:border-accent hover:text-fg">Asignar con IA</a>
+          </>
+        }
+      />
 
-      <form className="mb-4 grid gap-2 rounded-xl border border-border bg-surface p-3 text-sm md:grid-cols-4">
-        <select name="team" defaultValue={filters.team ?? ''} className="rounded-lg border border-border bg-bg p-2">
-          <option value="">Equipo</option>
+      <form className="mb-6 grid gap-2 rounded-2xl border border-border bg-surface/60 p-3 md:grid-cols-4">
+        <select name="team" defaultValue={filters.team ?? ''} className={selectCls}>
+          <option value="">Todos los equipos</option>
           {teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
         </select>
-        <select name="assignee" defaultValue={filters.assignee ?? ''} className="rounded-lg border border-border bg-bg p-2">
-          <option value="">Responsable</option>
+        <select name="assignee" defaultValue={filters.assignee ?? ''} className={selectCls}>
+          <option value="">Cualquier responsable</option>
           {people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
         </select>
-        <select name="status" defaultValue={filters.status ?? ''} className="rounded-lg border border-border bg-bg p-2">
-          <option value="">Estado</option>
+        <select name="status" defaultValue={filters.status ?? ''} className={selectCls}>
+          <option value="">Cualquier estado</option>
           {GROUPS.map(([status, label]) => <option key={status} value={status}>{label}</option>)}
         </select>
-        <button className="rounded-lg border border-border px-3 py-2 hover:border-accent">Filtrar</button>
+        <button className="rounded-xl bg-accent/90 px-3 py-2 text-sm font-medium text-bg transition hover:brightness-110">Filtrar</button>
       </form>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <section className="space-y-4 lg:col-span-2">
+        <section className="space-y-5 lg:col-span-2">
           {GROUPS.map(([status, label]) => {
             const groupTasks = tasks.filter((task) => task.status === status);
             if (groupTasks.length === 0) return null;
             return (
-              <div key={status} className="rounded-xl border border-border bg-surface p-4">
-                <h2 className="mb-3 text-sm font-medium">{label}</h2>
-                <ul className="divide-y divide-border">
+              <Card key={status} title={`${label} · ${groupTasks.length}`}>
+                <ul className="divide-y divide-border/60">
                   {groupTasks.map((task) => (
-                    <li key={task.id} className="flex items-center justify-between gap-4 py-2.5 text-sm">
-                      <div>
-                        <Link href={`/tasks/${task.id}`} className="font-medium hover:text-accent">{task.title}</Link>
-                        <p className="text-xs text-muted">
-                          {task.team.name} · {task.assignee?.name ?? 'Sin responsable'} · ultimo avance: {task.worklogEntries[0]?.title ?? 'sin registro'}
+                    <li key={task.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                      <div className="min-w-0">
+                        <Link href={`/tasks/${task.id}`} className="text-sm transition hover:text-accent">{task.title}</Link>
+                        <p className="font-meta mt-0.5 truncate text-[11px] text-muted">
+                          {task.team.name} · {task.assignee?.name ?? 'Sin responsable'} · {task.worklogEntries[0]?.title ?? 'sin avance'}
                         </p>
                       </div>
-                      <span className="shrink-0 text-xs text-muted">{PRIORITY_LABEL[task.priority]} · {formatDate(task.dueDate)}</span>
+                      <span className="flex shrink-0 items-center gap-3">
+                        <PriorityBadge priority={task.priority} />
+                        <span className="font-meta text-[11px] text-muted">{formatDate(task.dueDate)}</span>
+                      </span>
                     </li>
                   ))}
                 </ul>
-              </div>
+              </Card>
             );
           })}
-          {tasks.length === 0 && <p className="rounded-xl border border-border bg-surface p-4 text-sm text-muted">No hay tareas con esos filtros.</p>}
+          {tasks.length === 0 && <EmptyState>No hay tareas con esos filtros.</EmptyState>}
         </section>
 
         <div className="space-y-6">
-          <section id="nueva" className="rounded-xl border border-border bg-surface p-4">
-            <h2 className="mb-3 text-sm font-medium">Nueva tarea</h2>
-            <form action={createTaskAction} className="space-y-2 text-sm">
-              <input name="title" required placeholder="Titulo" className="w-full rounded-lg border border-border bg-bg p-2 outline-none focus:border-accent" />
-              <textarea name="description" rows={2} placeholder="Descripcion" className="w-full resize-none rounded-lg border border-border bg-bg p-2 outline-none focus:border-accent" />
-              <input name="expectedOutcome" placeholder="Resultado esperado" className="w-full rounded-lg border border-border bg-bg p-2 outline-none focus:border-accent" />
-              <select name="teamId" required className="w-full rounded-lg border border-border bg-bg p-2">
+          <Card id="nueva" title="Nueva tarea">
+            <form action={createTaskAction} className="space-y-2.5">
+              <input name="title" required placeholder="Título" className={inputCls} />
+              <textarea name="description" rows={2} placeholder="Descripción" className={textareaCls} />
+              <input name="expectedOutcome" placeholder="Resultado esperado" className={inputCls} />
+              <select name="teamId" required className={selectCls}>
                 {teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
               </select>
-              <select name="assigneeId" className="w-full rounded-lg border border-border bg-bg p-2">
+              <select name="assigneeId" className={selectCls}>
                 <option value="">Sin responsable</option>
                 {people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
               </select>
-              <select name="priority" defaultValue="MEDIUM" className="w-full rounded-lg border border-border bg-bg p-2">
+              <select name="priority" defaultValue="MEDIUM" className={selectCls}>
                 {TASK_PRIORITY.filter((p) => p !== 'URGENT').map((p) => <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>)}
               </select>
-              <input name="definitionOfDone" placeholder="Definicion de terminado" className="w-full rounded-lg border border-border bg-bg p-2 outline-none focus:border-accent" />
-              <button className="w-full rounded-lg bg-accent px-3 py-2 font-medium text-bg">Crear tarea</button>
+              <input name="definitionOfDone" placeholder="Definición de terminado" className={inputCls} />
+              <button className="w-full rounded-xl bg-accent px-3 py-2.5 text-sm font-medium text-bg transition hover:brightness-110">Crear tarea</button>
             </form>
-          </section>
+          </Card>
 
           <div id="ia">
             <TaskSuggestionPanel teams={teams.map((team) => ({ id: team.id, name: team.name }))} people={people} />

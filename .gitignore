@@ -40,3 +40,6 @@ packages/database/generated/
 # desktop packaging output / db template
 apps/desktop/dist/
 apps/desktop/db-template/
+
+# Preview/launch config (machine-specific)
+.claude/launch.json

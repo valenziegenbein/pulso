@@ -5,6 +5,8 @@ import { WORKLOG_TYPE, type WorklogType } from '@pulso/shared';
 import { addBlockerAction } from '@/server/actions/tasks';
 import { requestDecisionAction } from '@/server/actions/decisions';
 import { saveWorklogDraftAction } from '@/server/actions/worklog';
+import { WORKLOG_TYPE_LABEL } from '@/lib/labels';
+import { inputCls, selectCls, textareaCls } from '@/components/teams/ui';
 
 interface Draft {
   type: WorklogType;
@@ -99,51 +101,49 @@ export function QuickWorklogWidget({ task, taskId }: { task?: TaskContext; taskI
   }
 
   return (
-    <section className="rounded-xl border border-border bg-surface p-4">
+    <section className="rounded-2xl border border-accent/30 bg-surface/60 p-5">
       <div className="mb-1 flex items-center gap-2">
-        <span className="text-accent">✦</span>
-        <h2 className="text-sm font-medium">Registrar avance</h2>
+        <span className="pulso-beat inline-block text-accent">✦</span>
+        <h2 className="font-display text-lg leading-tight">Registrar avance</h2>
       </div>
-      <p className="mb-3 text-xs text-muted">Contá en una frase qué estás haciendo.</p>
+      <p className="mb-3 text-sm text-muted">Contá en una frase qué estás haciendo.</p>
 
       <textarea
         value={note}
         onChange={(e) => setNote(e.target.value)}
         rows={2}
         placeholder="Ej: investigando intercom para tickets internos"
-        className="w-full resize-none rounded-lg border border-border bg-bg p-2 text-sm outline-none focus:border-accent"
+        className={textareaCls}
       />
       <input
         value={link}
         onChange={(e) => setLink(e.target.value)}
         placeholder="Adjuntar link (opcional)"
-        className="mt-2 w-full rounded-lg border border-border bg-bg p-2 text-xs outline-none focus:border-accent"
+        className={`${inputCls} mt-2`}
       />
 
       <button
         onClick={generate}
         disabled={loading || note.trim().length === 0}
-        className="mt-3 w-full rounded-lg bg-accent px-3 py-2 text-sm font-medium text-bg disabled:opacity-40"
+        className="mt-3 w-full rounded-xl bg-accent px-3 py-2.5 text-sm font-medium text-bg transition hover:brightness-110 disabled:opacity-40"
       >
         {loading ? 'Generando…' : 'Generar sugerencia'}
       </button>
 
-      {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+      {error && <p className="mt-2 text-xs text-[var(--danger)]">{error}</p>}
 
       {draft && (
-        <div className="mt-4 rounded-lg border border-border bg-bg p-3">
+        <div className="pulso-reveal mt-4 rounded-xl border border-border bg-bg/50 p-4">
           <div className="mb-2 flex items-center justify-between">
-            <span className="rounded bg-surface px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
-              Borrador · IA
-            </span>
+            <span className="font-meta text-[10px] uppercase tracking-[0.16em] text-accent">Borrador · IA</span>
             <select
               value={draft.type}
               onChange={(e) => setDraft({ ...draft, type: e.target.value as WorklogType })}
-              className="rounded border border-border bg-surface px-2 py-1 text-xs"
+              className="rounded-lg border border-border bg-surface px-2 py-1 text-xs outline-none focus:border-accent"
             >
               {WORKLOG_TYPE.map((t) => (
                 <option key={t} value={t}>
-                  {t}
+                  {WORKLOG_TYPE_LABEL[t] ?? t}
                 </option>
               ))}
             </select>
@@ -152,39 +152,33 @@ export function QuickWorklogWidget({ task, taskId }: { task?: TaskContext; taskI
           <input
             value={draft.title}
             onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-            className="mb-2 w-full rounded border border-border bg-surface p-2 text-sm font-medium outline-none focus:border-accent"
+            className={`${inputCls} mb-2 font-medium`}
           />
           <textarea
             value={draft.content}
             onChange={(e) => setDraft({ ...draft, content: e.target.value })}
             rows={4}
-            className="w-full resize-none rounded border border-border bg-surface p-2 text-sm outline-none focus:border-accent"
+            className={textareaCls}
           />
 
           {saved ? (
-            <p className="mt-3 text-xs text-emerald-400">✓ Guardado como borrador. Aprobalo para publicarlo.</p>
+            <p className="mt-3 text-xs text-[var(--ok)]">✓ Guardado como borrador. Aprobalo para publicarlo.</p>
           ) : (
             <div className="mt-3 flex flex-wrap gap-2 text-xs">
               <button
                 onClick={accept}
                 disabled={saving}
-                className="rounded-lg bg-accent px-3 py-1.5 font-medium text-bg disabled:opacity-40"
+                className="rounded-full bg-accent px-4 py-1.5 font-medium text-bg transition hover:brightness-110 disabled:opacity-40"
               >
                 {saving ? 'Guardando…' : 'Aceptar'}
               </button>
-              <button
-                onClick={() => setDraft({ ...draft, type: 'BLOCKER' })}
-                className="rounded-lg border border-border px-3 py-1.5"
-              >
+              <button onClick={() => setDraft({ ...draft, type: 'BLOCKER' })} className="rounded-full border border-border px-3 py-1.5 transition hover:border-accent">
                 Convertir en bloqueo
               </button>
-              <button
-                onClick={() => setDraft({ ...draft, type: 'DECISION' })}
-                className="rounded-lg border border-border px-3 py-1.5"
-              >
+              <button onClick={() => setDraft({ ...draft, type: 'DECISION' })} className="rounded-full border border-border px-3 py-1.5 transition hover:border-accent">
                 Convertir en decisión
               </button>
-              <button onClick={discard} className="rounded-lg border border-border px-3 py-1.5 text-muted">
+              <button onClick={discard} className="rounded-full px-3 py-1.5 text-muted transition hover:text-fg">
                 Descartar
               </button>
             </div>
@@ -192,7 +186,7 @@ export function QuickWorklogWidget({ task, taskId }: { task?: TaskContext; taskI
         </div>
       )}
 
-      <p className="mt-3 text-center text-[11px] text-muted">✦ La IA propone. Vos decidís.</p>
+      <p className="font-meta mt-3 text-center text-[10px] uppercase tracking-[0.16em] text-muted/70">✦ la IA propone · vos decidís</p>
     </section>
   );
 }
