@@ -1,17 +1,18 @@
-// Pulso — esquema de datos (SQLite embebido).
+// Pulso — esquema de datos (PostgreSQL).
 // Multi-tenant lógico: todo cuelga de Organization y se filtra por organizationId.
 // Privacidad por diseño: no hay tablas de actividad, mouse, teclado ni capturas
 // automáticas. Las capturas (Attachment kind=SCREENSHOT) son siempre manuales.
 //
-// Nota: SQLite no soporta enums ni listas escalares. Los "enums" se guardan como
-// String (validados por las uniones de @pulso/shared) y permissions como JSON.
+// Nota: los "enums" se guardan como String (validados por las uniones de
+// @pulso/shared) y permissions/metadata como JSON en texto. Es a propósito:
+// mantiene el dominio agnóstico y la migración desde el prototipo SQLite trivial.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

@@ -1,36 +1,43 @@
+# Pulso — stack de producción (app + Postgres). Ver DEPLOY.md.
+# Variables sensibles en un .env junto a este archivo (ver .env.docker.example).
+
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:16
     container_name: pulso-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: pulso
-      POSTGRES_PASSWORD: pulso
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en .env}
       POSTGRES_DB: pulso
-    ports:
-      # El puerto del host es configurable (PULSO_DB_PORT) para evitar choques
-      # con otros Postgres locales. Por defecto 5432.
-      - "${PULSO_DB_PORT:-5432}:5432"
     volumes:
       - pulso-db-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pulso -d pulso"]
+      test: ['CMD-SHELL', 'pg_isready -U pulso -d pulso']
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
 
-  # --- Opcional: LLM local OpenAI-compatible ---
-  # Descomentá para correr un modelo local sin enviar datos afuera.
-  # Luego en .env: LLM_PROVIDER=OPENAI_COMPATIBLE, LLM_BASE_URL=http://localhost:11434/v1
-  # ollama:
-  #   image: ollama/ollama:latest
-  #   container_name: pulso-ollama
-  #   restart: unless-stopped
-  #   ports:
-  #     - "11434:11434"
-  #   volumes:
-  #     - pulso-ollama-data:/root/.ollama
+  app:
+    build: .
+    container_name: pulso-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://pulso:${POSTGRES_PASSWORD}@db:5432/pulso?schema=public
+      AUTH_SECRET: ${AUTH_SECRET:?Falta AUTH_SECRET en .env}
+      WORKLOG_ENCRYPTION_KEY: ${WORKLOG_ENCRYPTION_KEY:?Falta WORKLOG_ENCRYPTION_KEY en .env}
+      # IA opcional para el pulso/sugerencias. Sin esto: heurístico/mock (no rompe).
+      LLM_PROVIDER: ${LLM_PROVIDER:-MOCK}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      NODE_ENV: production
+      PORT: '3000'
+    ports:
+      - '${APP_PORT:-3000}:3000'
 
 volumes:
   pulso-db-data:
-  # pulso-ollama-data:

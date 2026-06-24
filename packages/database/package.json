@@ -11,8 +11,10 @@
   "scripts": {
     "generate": "prisma generate",
     "migrate": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
     "studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
+    "tenant": "tsx prisma/create-tenant.ts",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit"
   },
