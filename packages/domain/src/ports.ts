@@ -56,6 +56,7 @@ export interface TaskRepository {
   listByAssignee(organizationId: string, assigneeId: string): Promise<TaskRecord[]>;
   create(input: Omit<TaskRecord, 'id'>): Promise<TaskRecord>;
   update(id: string, patch: Partial<TaskRecord>): Promise<TaskRecord>;
+  updateInOrganization(organizationId: string, id: string, patch: Partial<TaskRecord>): Promise<TaskRecord>;
 }
 
 export interface WorklogRepository {

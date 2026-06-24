@@ -2,16 +2,15 @@ import Link from 'next/link';
 import { PERMISSIONS } from '@pulso/domain';
 import { hasPermission, requireAuth } from '@/lib/auth/context';
 import { getAdminDashboard, getAssignablePeople, getMemberDashboard } from '@/server/queries';
-import { approveWorklogAction } from '@/server/actions/worklog';
 import { resolveDecisionAction } from '@/server/actions/decisions';
 import { heuristicPulse, peopleToWatch } from '@/lib/teams/digest';
 import { QuickWorklogWidget } from '@/components/quick-worklog-widget';
 import { OpenWidgetButton } from '@/components/open-widget-button';
 import { TaskSuggestionPanel } from '@/components/teams/task-suggestion-panel';
-import { LastVisitBadge } from '@/components/teams/last-visit-badge';
-import { PulseText } from '@/components/teams/pulse-text';
 import { Card, EmptyState, PageHeader, PriorityBadge, StatusBadge, btnGhost, btnPrimary } from '@/components/teams/ui';
-import { WORKLOG_TYPE_LABEL, formatDate } from '@/lib/labels';
+import { formatDate } from '@/lib/labels';
+
+type Auth = Awaited<ReturnType<typeof requireAuth>>;
 
 export default async function DashboardPage() {
   const ctx = await requireAuth();
@@ -21,60 +20,46 @@ export default async function DashboardPage() {
   return MemberDashboard(ctx);
 }
 
-// ===================== Vista de líder / CEO =====================
-async function AdminDashboard(ctx: Awaited<ReturnType<typeof requireAuth>>) {
+async function AdminDashboard(ctx: Auth) {
   const [data, people] = await Promise.all([getAdminDashboard(ctx), getAssignablePeople(ctx)]);
   const firstName = ctx.user.name.split(' ')[0] ?? ctx.user.name;
-  const pulseText = data.recentWorklog.length > 0 ? heuristicPulse(data) : null;
+  const pulseText = heuristicPulse(data);
   const watch = peopleToWatch(data.perPerson);
-
-  const activity = [
-    ...data.recentWorklog.map((w) => w.createdAt),
-    ...data.openBlockers.map((b) => b.createdAt),
-    ...data.decisions.map((d) => d.createdAt),
-  ].map((d) => new Date(d).toISOString());
-
-  const attention = data.decisions.length + data.openBlockers.length + watch.length;
+  const activeTaskCount =
+    (data.byStatus.TODO ?? 0) +
+    (data.byStatus.IN_PROGRESS ?? 0) +
+    (data.byStatus.BLOCKED ?? 0) +
+    (data.byStatus.IN_REVIEW ?? 0);
 
   return (
     <main className="pulso-reveal mx-auto max-w-5xl px-6 py-10 sm:py-12">
       <PageHeader
         kicker="Resumen"
         title={`Hola, ${firstName}`}
-        subtitle="Tu organización en una lectura: qué se movió y qué te espera."
+        subtitle="Que esta avanzando, que esta bloqueado, que necesita decision."
         actions={
           <>
             <a href="#asignar" className={btnPrimary}>Asignar tarea</a>
-            <Link href="/teams" className={btnGhost}>Equipos</Link>
+            <Link href="/teams" className={btnGhost}>Anadir equipo</Link>
           </>
         }
       />
 
-      {/* 1 · PARA LEER — el pulso */}
-      {pulseText ? (
-        <section className="rounded-2xl border border-accent/25 bg-surface/60 p-6 sm:p-8">
-          <p className="font-meta mb-4 text-[11px] uppercase tracking-[0.22em] text-accent">El pulso · esta semana</p>
-          <PulseText initial={pulseText} />
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-4">
-            <LastVisitBadge activity={activity} />
-            <Glance
-              items={[
-                { n: data.teams.length, label: 'equipos' },
-                { n: data.decisions.length, label: data.decisions.length === 1 ? 'decisión' : 'decisiones', tone: data.decisions.length ? 'warn' : undefined },
-                { n: data.openBlockers.length, label: data.openBlockers.length === 1 ? 'bloqueo' : 'bloqueos', tone: data.openBlockers.length ? 'danger' : undefined },
-                { n: watch.length, label: 'a cuidar', tone: watch.length ? 'info' : undefined },
-              ]}
-            />
-          </div>
-        </section>
-      ) : (
-        <OnboardingHero teamCount={data.teams.length} />
-      )}
+      <section className="rounded-2xl border border-accent/25 bg-surface/60 p-6 sm:p-8">
+        <p className="font-meta mb-3 text-[11px] uppercase tracking-[0.22em] text-accent">Pulso de la organizacion</p>
+        <p className="max-w-3xl text-lg leading-relaxed text-fg/90">{pulseText}</p>
+      </section>
 
-      {/* 2 · PARA DECIDIR — necesita tu atención */}
-      {attention > 0 && (
+      <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Equipos activos" value={data.teams.length} />
+        <StatCard label="Tareas en curso" value={activeTaskCount} />
+        <StatCard label="Bloqueos abiertos" value={data.openBlockers.length} tone={data.openBlockers.length ? 'danger' : undefined} />
+        <StatCard label="Decisiones pendientes" value={data.decisions.length} tone={data.decisions.length ? 'warn' : undefined} />
+      </section>
+
+      {(data.openBlockers.length > 0 || data.decisions.length > 0 || watch.length > 0) && (
         <section className="mt-6">
-          <h2 className="font-meta mb-4 text-[11px] uppercase tracking-[0.2em] text-muted">Necesita tu atención</h2>
+          <h2 className="font-meta mb-4 text-[11px] uppercase tracking-[0.2em] text-muted">Necesita tu atencion</h2>
           <div className="grid gap-4 md:grid-cols-3">
             <DecisionInbox decisions={data.decisions} />
             <AttentionCol
@@ -97,26 +82,30 @@ async function AdminDashboard(ctx: Awaited<ReturnType<typeof requireAuth>>) {
         </section>
       )}
 
-      {/* 3 · PARA EXPLORAR — equipos + gestión */}
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card title="Equipos" className="lg:col-span-2" action={<Link href="/teams" className="text-xs text-muted transition hover:text-fg">Ver todos</Link>}>
-          <ul className="divide-y divide-border/60">
-            {data.teams.map((team) => {
-              const blockers = team.tasks.reduce((sum, t) => sum + t.blockers.length, 0) + team.blockers.length;
-              return (
-                <li key={team.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-                  <div className="min-w-0">
-                    <Link href={`/teams/${team.id}`} className="transition hover:text-accent">{team.name}</Link>
-                    <p className="truncate text-xs text-muted">{team.focus ?? 'Sin foco definido'}</p>
-                  </div>
-                  <div className="font-meta flex shrink-0 items-center gap-3 text-[11px] text-muted">
-                    <span>{team.tasks.length} activas</span>
-                    {blockers > 0 && <span className="text-[var(--danger)]">{blockers} bloqueos</span>}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+          {data.teams.length === 0 ? (
+            <EmptyState>Todavia no hay equipos.</EmptyState>
+          ) : (
+            <ul className="divide-y divide-border/60">
+              {data.teams.map((team) => {
+                const blockers = team.tasks.reduce((sum, t) => sum + t.blockers.length, 0) + team.blockers.length;
+                const last = team.tasks.flatMap((t) => t.worklogEntries)[0]?.title ?? 'Sin avances recientes';
+                return (
+                  <li key={team.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                    <div className="min-w-0">
+                      <Link href={`/teams/${team.id}`} className="transition hover:text-accent">{team.name}</Link>
+                      <p className="truncate text-xs text-muted">{team.focus ?? last}</p>
+                    </div>
+                    <div className="font-meta flex shrink-0 items-center gap-3 text-[11px] text-muted">
+                      <span>{team.tasks.length} activas</span>
+                      {blockers > 0 && <span className="text-[var(--danger)]">{blockers} bloqueos</span>}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </Card>
 
         <div id="asignar">
@@ -127,17 +116,13 @@ async function AdminDashboard(ctx: Awaited<ReturnType<typeof requireAuth>>) {
   );
 }
 
-function Glance({ items }: { items: Array<{ n: number; label: string; tone?: 'warn' | 'danger' | 'info' }> }) {
-  const color = (t?: string) => (t ? `var(--${t})` : 'var(--fg)');
+function StatCard({ label, value, tone }: { label: string; value: number; tone?: 'warn' | 'danger' | 'info' }) {
+  const color = tone ? `var(--${tone})` : 'var(--fg)';
   return (
-    <p className="font-meta flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted">
-      {items.map((it, i) => (
-        <span key={it.label} className="inline-flex items-center gap-1.5">
-          {i > 0 && <span className="text-muted/40">·</span>}
-          <span style={{ color: color(it.tone) }}>{it.n}</span> {it.label}
-        </span>
-      ))}
-    </p>
+    <div className="rounded-2xl border border-border bg-surface/50 p-4">
+      <p className="font-meta text-[10px] uppercase tracking-[0.16em] text-muted">{label}</p>
+      <p className="font-display mt-2 text-3xl" style={{ color }}>{value}</p>
+    </div>
   );
 }
 
@@ -192,7 +177,7 @@ function DecisionInbox({
 }) {
   return (
     <div className="rounded-2xl border border-[var(--warn)]/30 bg-surface/50 p-4">
-      <p className="font-meta mb-3 text-[10px] uppercase tracking-[0.16em] text-muted">Decisiones que te esperan</p>
+      <p className="font-meta mb-3 text-[10px] uppercase tracking-[0.16em] text-muted">Decisiones que esperan</p>
       {decisions.length === 0 ? (
         <p className="text-sm text-muted/60">Nada para decidir.</p>
       ) : (
@@ -214,7 +199,7 @@ function DecisionInbox({
                     </form>
                     {d.task && (
                       <Link href={`/tasks/${d.task.id}`} className="font-meta text-[11px] uppercase tracking-wide text-muted transition hover:text-fg">
-                        Ver →
+                        Ver
                       </Link>
                     )}
                   </div>
@@ -228,53 +213,24 @@ function DecisionInbox({
   );
 }
 
-function OnboardingHero({ teamCount }: { teamCount: number }) {
-  const steps: Array<{ n: string; title: string; desc: string; href: string; cta: string }> = [
-    { n: '01', title: 'Armá tus equipos', desc: 'Agrupá el trabajo por área o proyecto.', href: '/teams', cta: 'Crear equipo' },
-    { n: '02', title: 'Sumá personas', desc: 'Invitá a tu equipo. Cada quien decide qué registra.', href: '/members', cta: 'Añadir miembro' },
-    { n: '03', title: 'Asigná la primera tarea', desc: 'Escribila o dejá que la IA la proponga; vos aprobás.', href: '/tasks#ia', cta: 'Asignar con IA' },
-  ];
-  return (
-    <section className="rounded-2xl border border-accent/25 bg-surface/60 p-6 sm:p-8">
-      <p className="font-meta mb-3 text-[11px] uppercase tracking-[0.22em] text-accent">Bienvenida a Pulso</p>
-      <h2 className="font-display text-3xl leading-tight sm:text-4xl">El pulso de tu equipo, en una lectura.</h2>
-      <p className="mt-3 max-w-xl text-muted">
-        Pulso convierte el trabajo de tu gente en un resumen que leés en 30 segundos. Sin vigilancia: cada persona elige qué registra, la IA propone y vos aprobás.
-        {teamCount > 0 ? ' Apenas tu equipo capture avances, vas a leer su pulso acá.' : ''}
-      </p>
-      <ol className="mt-7 grid gap-4 sm:grid-cols-3">
-        {steps.map((s) => (
-          <li key={s.n} className="rounded-2xl border border-border bg-bg/40 p-4">
-            <span className="font-meta text-[11px] text-accent">{s.n}</span>
-            <h3 className="font-display mt-1 text-lg">{s.title}</h3>
-            <p className="mt-1 text-sm text-muted">{s.desc}</p>
-            <Link href={s.href} className="font-meta mt-3 inline-block text-[11px] uppercase tracking-wide text-accent transition hover:text-fg">
-              {s.cta} →
-            </Link>
-          </li>
-        ))}
-      </ol>
-    </section>
-  );
-}
-
-// ===================== Vista de miembro =====================
-async function MemberDashboard(ctx: Awaited<ReturnType<typeof requireAuth>>) {
-  const { tasks, agenda, worklog, openBlockers, decisions } = await getMemberDashboard(ctx);
+async function MemberDashboard(ctx: Auth) {
+  const { tasks, worklog, openBlockers, decisions } = await getMemberDashboard(ctx);
   const firstName = ctx.user.name.split(' ')[0] ?? ctx.user.name;
+  const approvedWorklog = worklog.filter((w) => w.status === 'PUBLISHED');
+
   return (
     <main className="pulso-reveal mx-auto max-w-5xl px-6 py-10 sm:py-12">
       <PageHeader
-        kicker="Mi día"
+        kicker="Mi trabajo"
         title={`Hola, ${firstName}`}
-        subtitle="Tus avances, bloqueos y decisiones. Sin vigilancia."
+        subtitle="Web queda para leer y resolver lo justo. Para capturar avances sin cortar el flujo, usa Pulso Desktop."
         actions={<OpenWidgetButton />}
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card title="Mis tareas activas" className="lg:col-span-2">
+        <Card title="Mis tareas" className="lg:col-span-2">
           {tasks.length === 0 ? (
-            <EmptyState>No tenés tareas activas.</EmptyState>
+            <EmptyState>No tenes tareas activas.</EmptyState>
           ) : (
             <ul className="divide-y divide-border/60">
               {tasks.map((t) => (
@@ -300,33 +256,26 @@ async function MemberDashboard(ctx: Awaited<ReturnType<typeof requireAuth>>) {
           <Attention tone="danger" items={openBlockers.map((b) => `${b.task?.title ?? b.title}: ${b.description}`)} />
         </Card>
 
-        <Card title="Próximo en mi agenda">
-          <Attention tone="info" items={agenda.map((e) => `${e.title} · ${formatDate(e.startsAt)}`)} />
-        </Card>
-
-        <Card title="Decisiones pendientes">
+        <Card title="Mis decisiones pendientes">
           <Attention tone="warn" items={decisions.map((d) => `${d.team.name}: ${d.title}`)} />
         </Card>
 
-        <Card title="Bitácora reciente" className="lg:col-span-3">
-          {worklog.length === 0 ? (
-            <EmptyState>Sin entradas todavía.</EmptyState>
+        <Card title="Pulso Desktop">
+          <p className="mb-4 text-sm leading-relaxed text-muted">
+            El widget flotante, capturas manuales y aprobacion cotidiana viven en Desktop. La web es el panel de control.
+          </p>
+          <OpenWidgetButton />
+        </Card>
+
+        <Card title="Mis avances aprobados" className="lg:col-span-3">
+          {approvedWorklog.length === 0 ? (
+            <EmptyState>Sin avances aprobados todavia.</EmptyState>
           ) : (
             <ul className="space-y-2.5">
-              {worklog.map((w) => (
-                <li key={w.id} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="min-w-0 truncate">
-                    <span className="font-meta mr-2 text-[10px] uppercase tracking-wide text-muted">{WORKLOG_TYPE_LABEL[w.type]}</span>
-                    {w.title}
-                  </span>
-                  {w.status === 'DRAFT' ? (
-                    <form action={approveWorklogAction}>
-                      <input type="hidden" name="worklogId" value={w.id} />
-                      <button className="font-meta shrink-0 rounded-full border border-border px-3 py-1 text-[11px] transition hover:border-accent">Aprobar</button>
-                    </form>
-                  ) : (
-                    <span className="font-meta shrink-0 text-[11px] text-[var(--ok)]">aprobada</span>
-                  )}
+              {approvedWorklog.map((w) => (
+                <li key={w.id} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-bg/40 px-3 py-2 text-sm">
+                  <span className="min-w-0 truncate">{w.title}</span>
+                  <span className="font-meta shrink-0 text-[11px] text-[var(--ok)]">aprobada</span>
                 </li>
               ))}
             </ul>

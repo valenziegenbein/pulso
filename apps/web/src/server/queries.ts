@@ -149,6 +149,35 @@ export async function getAdminDashboard(ctx: AuthContext) {
   return { byStatus, teams, perPerson, openBlockers, unassigned, withoutDoD, overdue, decisions, recentWorklog };
 }
 
+export async function getOrganizationSettings(ctx: AuthContext) {
+  const [org, usedSeats, llm] = await Promise.all([
+    prisma.organization.findUnique({
+      where: { id: ctx.organizationId },
+      select: { planKey: true, seatLimit: true },
+    }),
+    prisma.orgMembership.count({ where: { organizationId: ctx.organizationId } }),
+    prisma.lLMProviderConfig.findFirst({
+      where: { organizationId: ctx.organizationId, isActive: true },
+      orderBy: { updatedAt: 'desc' },
+      select: { providerType: true, baseUrl: true, model: true, apiKeyEncrypted: true, updatedAt: true },
+    }),
+  ]);
+  return {
+    planKey: org?.planKey ?? 'FREE',
+    seatLimit: org?.seatLimit ?? 5,
+    usedSeats,
+    llm: llm
+      ? {
+          providerType: llm.providerType,
+          baseUrl: llm.baseUrl,
+          model: llm.model,
+          hasApiKey: Boolean(llm.apiKeyEncrypted),
+          updatedAt: llm.updatedAt,
+        }
+      : null,
+  };
+}
+
 export async function getTaskList(ctx: AuthContext) {
   const visibleTeamIds = await getVisibleTeamIds(ctx);
   return prisma.task.findMany({

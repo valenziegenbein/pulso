@@ -87,7 +87,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   };
 
   try {
-    const suggestion = await getTaskSuggestionService().suggest(suggestionInput);
+    const suggestion = await (await getTaskSuggestionService(ctx.organizationId)).suggest(suggestionInput);
     return NextResponse.json({ suggestion: taskSuggestionSchema.parse(suggestion), source: 'llm' });
   } catch {
     return NextResponse.json({ suggestion: taskSuggestionSchema.parse(fallbackTaskSuggestion(suggestionInput)), source: 'local' });

@@ -45,7 +45,7 @@ export async function assignTask(deps: AssignTaskDeps, input: AssignTaskInput): 
     return { status: 'overload_warning', overload };
   }
 
-  const task = await deps.tasks.update(input.taskId, { assigneeId: input.assigneeId });
+  const task = await deps.tasks.updateInOrganization(input.organizationId, input.taskId, { assigneeId: input.assigneeId });
   await deps.audit.record({
     organizationId: input.organizationId,
     actorId: input.actorId,

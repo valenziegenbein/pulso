@@ -2,10 +2,11 @@
 
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@pulso/database';
-import { approveWorklog, canApproveWorklog } from '@pulso/domain';
+import { canApproveWorklog, canCreateWorklogForTarget } from '@pulso/domain';
 import { saveWorklogSchema, type WorklogSource } from '@pulso/shared';
 import { requireAuth } from '@/lib/auth/context';
-import { auditLogger, worklogRepo } from '@/server/deps';
+import { assertAllowed, getAuthorizedUser, requireTaskInOrg, requireTeamInOrg, requireWorklogInOrg } from '@/server/authz';
+import { auditLogger } from '@/server/deps';
 
 /**
  * Guarda una entrada de bitácora como BORRADOR (estado DRAFT).
@@ -30,17 +31,23 @@ export async function saveWorklogDraftAction(input: {
     teamId: input.teamId,
     taskId: input.taskId,
   });
-  const task = data.taskId
-    ? await prisma.task.findFirst({ where: { id: data.taskId, organizationId: ctx.organizationId } })
-    : null;
+  const task = data.taskId ? await requireTaskInOrg(ctx, data.taskId) : null;
   const teamId = task?.teamId ?? data.teamId ?? null;
+  const [actor, team] = await Promise.all([
+    getAuthorizedUser(ctx),
+    teamId ? requireTeamInOrg(ctx, teamId) : Promise.resolve(null),
+  ]);
+  assertAllowed(
+    canCreateWorklogForTarget(actor, { teamId: team?.id ?? null, assigneeId: task?.assigneeId ?? null }),
+    'Sin permiso para registrar avances en esta tarea.',
+  );
 
   const entry = await prisma.worklogEntry.create({
     data: {
       organizationId: ctx.organizationId,
       authorId: ctx.user.id,
       teamId,
-      taskId: data.taskId ?? null,
+      taskId: task?.id ?? null,
       type: data.type,
       status: 'DRAFT',
       source: input.source ?? 'MANUAL',
@@ -59,14 +66,14 @@ export async function saveWorklogDraftAction(input: {
         url: url.slice(0, 2000),
         isManual: true,
         uploadedById: ctx.user.id,
-        taskId: data.taskId ?? null,
+        taskId: task?.id ?? null,
         worklogEntryId: entry.id,
       },
     });
   }
 
   revalidatePath('/');
-  if (data.taskId) revalidatePath(`/tasks/${data.taskId}`);
+  if (task) revalidatePath(`/tasks/${task.id}`);
   return { id: entry.id };
 }
 
@@ -87,19 +94,24 @@ export async function approveWorklogAction(formData: FormData): Promise<void> {
   if (!worklogId) throw new Error('Falta el id de la entrada.');
 
   // Solo el autor (o quien tenga worklog.approve) puede publicar.
-  const entry = await prisma.worklogEntry.findFirst({
-    where: { id: worklogId, organizationId: ctx.organizationId },
-  });
-  if (!entry) throw new Error('Entrada no encontrada.');
-  const teamIds = await prisma.teamMembership.findMany({ where: { userId: ctx.user.id }, select: { teamId: true } });
-  if (!canApproveWorklog({ ...ctx.user, role: ctx.role, permissions: ctx.permissions, teamIds: teamIds.map((t) => t.teamId) }, entry)) {
+  const entry = await requireWorklogInOrg(ctx, worklogId);
+  const actor = await getAuthorizedUser(ctx);
+  if (!canApproveWorklog(actor, entry)) {
     throw new Error('Sin permiso para aprobar esta bitacora.');
   }
 
-  await approveWorklog(
-    { worklog: worklogRepo, audit: auditLogger },
-    { actorId: ctx.user.id, organizationId: ctx.organizationId, worklogId },
-  );
+  const updated = await prisma.worklogEntry.updateMany({
+    where: { id: entry.id, organizationId: ctx.organizationId },
+    data: { status: 'PUBLISHED', approvedById: ctx.user.id, publishedAt: new Date() },
+  });
+  if (updated.count !== 1) throw new Error('No se pudo aprobar esta bitacora.');
+  await auditLogger.record({
+    organizationId: ctx.organizationId,
+    actorId: ctx.user.id,
+    action: 'WORKLOG_APPROVED',
+    entityType: 'WorklogEntry',
+    entityId: entry.id,
+  });
 
   revalidatePath('/');
   if (entry.taskId) revalidatePath(`/tasks/${entry.taskId}`);

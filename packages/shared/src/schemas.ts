@@ -4,6 +4,7 @@ import {
   BLOCKER_STATUS,
   DECISION_STATUS,
   LLM_PROVIDER_TYPE,
+  PLAN_KEY,
   TASK_PRIORITY,
   TASK_STATUS,
   WORKLOG_TYPE,
@@ -146,3 +147,12 @@ export const configureLLMSchema = z.object({
   apiKey: z.string().optional(),
 });
 export type ConfigureLLMInput = z.infer<typeof configureLLMSchema>;
+
+export const registerOrganizationSchema = z.object({
+  organizationName: z.string().min(2).max(120),
+  adminName: z.string().min(2).max(120),
+  adminEmail: z.string().email(),
+  adminPassword: z.string().min(8).max(200),
+  planKey: z.enum(PLAN_KEY).default('FREE'),
+});
+export type RegisterOrganizationInput = z.infer<typeof registerOrganizationSchema>;

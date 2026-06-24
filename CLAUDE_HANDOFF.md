@@ -1,5 +1,38 @@
 # Claude handoff - Pulso Teams MVP
 
+## Actualizacion Codex - 2026-06-24
+
+Rama nueva local: `codex/web-control-plane-hardening`, creada desde
+`c201f2d1836a76bc4bb82c6e3e2bd413ab85b260`.
+
+Objetivo de esta rama: endurecer ownership por accion y separar la web/server
+como panel de control de Pulso Desktop como superficie diaria de trabajo. No se
+toco `apps/desktop/**` ni releases.
+
+Cambios clave de esta rama:
+
+- Server actions de escritura validan entidad + `organizationId` y scope del
+  usuario antes de modificar equipos, miembros, tareas, bloqueos, decisiones y
+  bitacora.
+- `/register` crea organizacion, primer `ORG_ADMIN`, roles base, equipo inicial
+  y plan/seats.
+- `Organization` ahora tiene `planKey` y `seatLimit`; `invitePersonAction`
+  bloquea cuando no hay seats disponibles.
+- La IA del server se resuelve por organizacion usando `LLMProviderConfig` en DB.
+  No hay autodeteccion productiva de `localhost:1234`/`11434`; LM Studio se
+  configura explicitamente en Admin como provider OpenAI-compatible.
+- La web de miembro queda minima: tareas, avances aprobados, bloqueos,
+  decisiones y CTA a Desktop. El fallback web de avance rapido solo guarda un
+  borrador con texto/link/imagen manual.
+- `DEPLOY.md`, `.env.example`, `.env.docker.example` y README fueron alineados
+  con Web/Server + PostgreSQL + IA por organizacion.
+
+Deuda honesta:
+
+- Hay tests de dominio para ownership y test de cifrado de secretos, pero no hay
+  todavia integration tests con Postgres para los guards `require*InOrg`.
+- Billing sigue siendo plan/seats interno, sin cobro real.
+
 Fecha: 2026-06-23
 Rama: `codex/web`
 Commit principal: `685eb15 feat(teams): add MVP teams mode`

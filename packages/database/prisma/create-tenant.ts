@@ -15,7 +15,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { DEFAULT_ROLE_PERMISSIONS } from '@pulso/domain';
-import { ROLE_KEY, type RoleKey } from '@pulso/shared';
+import { PLAN_KEY, PLAN_SEAT_LIMIT, ROLE_KEY, type PlanKey, type RoleKey } from '@pulso/shared';
 import { hashPassword } from '../src/crypto';
 
 const prisma = new PrismaClient();
@@ -51,9 +51,15 @@ function slugify(s: string): string {
     .slice(0, 40);
 }
 
+function planKey(): PlanKey {
+  const raw = (opt('PLAN_KEY') ?? 'FREE').toUpperCase();
+  return (PLAN_KEY as readonly string[]).includes(raw) ? (raw as PlanKey) : 'FREE';
+}
+
 async function main() {
   const orgName = req('ORG_NAME');
   const orgSlug = slugify(opt('ORG_SLUG') ?? orgName);
+  const selectedPlan = planKey();
   const adminName = req('ADMIN_NAME');
   const adminEmail = req('ADMIN_EMAIL').toLowerCase();
   const adminPassword = req('ADMIN_PASSWORD');
@@ -69,8 +75,8 @@ async function main() {
   // 1) Organización
   const org = await prisma.organization.upsert({
     where: { slug: orgSlug },
-    update: { name: orgName },
-    create: { name: orgName, slug: orgSlug },
+    update: { name: orgName, planKey: selectedPlan, seatLimit: PLAN_SEAT_LIMIT[selectedPlan] },
+    create: { name: orgName, slug: orgSlug, planKey: selectedPlan, seatLimit: PLAN_SEAT_LIMIT[selectedPlan] },
   });
 
   // 2) Roles de sistema

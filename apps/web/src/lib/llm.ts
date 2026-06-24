@@ -1,7 +1,9 @@
-// SERVER-ONLY. No importar desde componentes cliente: la API key vive en el
-// servidor y nunca debe llegar al bundle del navegador.
+// SERVER-ONLY. No importar desde componentes cliente: API keys y base URLs de
+// organizacion viven solo en servidor.
+import { decryptSecret, prisma } from '@pulso/database';
 import {
   createLLMProvider,
+  MockProvider,
   TaskSuggestionService,
   WorklogSuggestionService,
   type LLMProvider,
@@ -9,43 +11,56 @@ import {
 } from '@pulso/llm';
 import type { LLMProviderType } from '@pulso/shared';
 
-function resolveConfigFromEnv(): LLMProviderResolved {
-  const type = (process.env.LLM_PROVIDER ?? 'MOCK') as LLMProviderType;
-  return {
-    type,
-    baseUrl: process.env.LLM_BASE_URL,
-    apiKey: process.env.LLM_API_KEY,
-    model: process.env.LLM_MODEL ?? 'mock-1',
+function fetchWithTimeout(ms: number): typeof fetch {
+  return async (input, init) => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), ms);
+    try {
+      return await fetch(input, { ...init, signal: ctrl.signal });
+    } finally {
+      clearTimeout(t);
+    }
   };
 }
 
-/**
- * Devuelve el servicio de sugerencias configurado.
- *
- * En producción, la configuración se carga por organización desde la base
- * (`LLMProviderConfig`) y la API key se descifra acá, en el servidor. Para el
- * MVP usamos variables de entorno (por defecto MOCK, sin red ni key).
- */
-export function getWorklogSuggestionService(): WorklogSuggestionService {
-  return new WorklogSuggestionService(createLLMProvider(resolveConfigFromEnv()));
+export interface OrganizationLLM {
+  provider: LLMProvider;
+  source: 'db' | 'mock';
+  config?: LLMProviderResolved;
 }
 
-export function getTaskSuggestionService(): TaskSuggestionService {
-  return new TaskSuggestionService(createLLMProvider(resolveConfigFromEnv()));
+export async function getOrganizationLLMProvider(
+  organizationId: string,
+  timeoutMs = 120_000,
+): Promise<OrganizationLLM> {
+  const row = await prisma.lLMProviderConfig.findFirst({
+    where: { organizationId, isActive: true },
+    orderBy: { updatedAt: 'desc' },
+  });
+  if (!row || row.providerType === 'MOCK') {
+    return { provider: new MockProvider(), source: 'mock' };
+  }
+
+  try {
+    const config: LLMProviderResolved = {
+      type: row.providerType as LLMProviderType,
+      baseUrl: row.baseUrl ?? undefined,
+      model: row.model,
+      apiKey: row.apiKeyEncrypted ? decryptSecret(row.apiKeyEncrypted) : undefined,
+      fetchImpl: fetchWithTimeout(timeoutMs),
+    };
+    return { provider: createLLMProvider(config), source: 'db', config };
+  } catch {
+    return { provider: new MockProvider(), source: 'mock' };
+  }
 }
 
-/**
- * Config del LLM desde el entorno. `isReal` indica si hay un proveedor de verdad
- * (no MOCK); cuando es falso, el caller puede auto-detectar un modelo local o
- * caer a su resumen heurístico.
- */
-export function getEnvLLMConfig(): { config: LLMProviderResolved; isReal: boolean } {
-  const config = resolveConfigFromEnv();
-  return { config, isReal: config.type !== 'MOCK' };
+export async function getWorklogSuggestionService(organizationId: string): Promise<WorklogSuggestionService> {
+  const { provider } = await getOrganizationLLMProvider(organizationId);
+  return new WorklogSuggestionService(provider);
 }
 
-/** Provider crudo (configurado por entorno). */
-export function getConfiguredProvider(): { provider: LLMProvider; isReal: boolean } {
-  const { config, isReal } = getEnvLLMConfig();
-  return { provider: createLLMProvider(config), isReal };
+export async function getTaskSuggestionService(organizationId: string): Promise<TaskSuggestionService> {
+  const { provider } = await getOrganizationLLMProvider(organizationId);
+  return new TaskSuggestionService(provider);
 }

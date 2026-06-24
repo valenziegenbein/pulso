@@ -1,5 +1,5 @@
-# Pulso — stack de producción (app + Postgres). Ver DEPLOY.md.
-# Variables sensibles en un .env junto a este archivo (ver .env.docker.example).
+# Pulso production stack: Next server + Postgres. See DEPLOY.md.
+# Sensitive values live in a local .env next to this file.
 
 services:
   db:
@@ -29,11 +29,6 @@ services:
       DATABASE_URL: postgresql://pulso:${POSTGRES_PASSWORD}@db:5432/pulso?schema=public
       AUTH_SECRET: ${AUTH_SECRET:?Falta AUTH_SECRET en .env}
       WORKLOG_ENCRYPTION_KEY: ${WORKLOG_ENCRYPTION_KEY:?Falta WORKLOG_ENCRYPTION_KEY en .env}
-      # IA opcional para el pulso/sugerencias. Sin esto: heurístico/mock (no rompe).
-      LLM_PROVIDER: ${LLM_PROVIDER:-MOCK}
-      LLM_BASE_URL: ${LLM_BASE_URL:-}
-      LLM_MODEL: ${LLM_MODEL:-}
-      LLM_API_KEY: ${LLM_API_KEY:-}
       NODE_ENV: production
       PORT: '3000'
     ports:

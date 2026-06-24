@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { DEFAULT_ROLE_PERMISSIONS } from '@pulso/domain';
-import { ROLE_KEY, type RoleKey } from '@pulso/shared';
+import { PLAN_SEAT_LIMIT, ROLE_KEY, type RoleKey } from '@pulso/shared';
 import { hashPassword } from '../src/crypto';
 
 const prisma = new PrismaClient();
@@ -19,8 +19,8 @@ const days = (n: number) => new Date(Date.now() + n * 24 * 60 * 60 * 1000);
 async function main() {
   const org = await prisma.organization.upsert({
     where: { slug: 'pulso-demo' },
-    update: { name: 'Pulso Demo' },
-    create: { name: 'Pulso Demo', slug: 'pulso-demo' },
+    update: { name: 'Pulso Demo', planKey: 'TEAM', seatLimit: PLAN_SEAT_LIMIT.TEAM },
+    create: { name: 'Pulso Demo', slug: 'pulso-demo', planKey: 'TEAM', seatLimit: PLAN_SEAT_LIMIT.TEAM },
   });
 
   const roleByKey = new Map<RoleKey, string>();

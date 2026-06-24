@@ -34,7 +34,7 @@ export async function GET(): Promise<NextResponse> {
     return NextResponse.json({ text: cached.text, source: cached.source, cached: true });
   }
 
-  const pulse = await buildTeamPulse(data);
+  const pulse = await buildTeamPulse(data, ctx.organizationId);
   cache.set(ctx.organizationId, { ...pulse, ts: Date.now(), hash });
   return NextResponse.json({ text: pulse.text, source: pulse.source, cached: false });
 }

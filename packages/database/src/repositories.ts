@@ -34,6 +34,19 @@ function toTaskRecord(row: Task): TaskRecord {
   };
 }
 
+function taskPatchData(patch: Partial<TaskRecord>) {
+  return {
+    title: patch.title,
+    description: patch.description,
+    expectedOutcome: patch.expectedOutcome,
+    assigneeId: patch.assigneeId,
+    priority: patch.priority,
+    status: patch.status,
+    dueDate: patch.dueDate,
+    definitionOfDone: patch.definitionOfDone,
+  };
+}
+
 export class PrismaTaskRepository implements TaskRepository {
   async findById(id: string): Promise<TaskRecord | null> {
     const row = await prisma.task.findUnique({ where: { id } });
@@ -68,17 +81,19 @@ export class PrismaTaskRepository implements TaskRepository {
   async update(id: string, patch: Partial<TaskRecord>): Promise<TaskRecord> {
     const row = await prisma.task.update({
       where: { id },
-      data: {
-        title: patch.title,
-        description: patch.description,
-        expectedOutcome: patch.expectedOutcome,
-        assigneeId: patch.assigneeId,
-        priority: patch.priority,
-        status: patch.status,
-        dueDate: patch.dueDate,
-        definitionOfDone: patch.definitionOfDone,
-      },
+      data: taskPatchData(patch),
     });
+    return toTaskRecord(row);
+  }
+
+  async updateInOrganization(organizationId: string, id: string, patch: Partial<TaskRecord>): Promise<TaskRecord> {
+    const updated = await prisma.task.updateMany({
+      where: { id, organizationId },
+      data: taskPatchData(patch),
+    });
+    if (updated.count !== 1) throw new Error('Task not found in organization.');
+    const row = await prisma.task.findFirst({ where: { id, organizationId } });
+    if (!row) throw new Error('Task not found in organization.');
     return toTaskRecord(row);
   }
 }

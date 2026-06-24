@@ -22,6 +22,8 @@ model Organization {
   id        String   @id @default(cuid())
   name      String
   slug      String   @unique
+  planKey   String   @default("FREE")
+  seatLimit Int      @default(5)
   createdAt DateTime @default(now())
 
   teams          Team[]

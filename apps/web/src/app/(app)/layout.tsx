@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Fraunces, Hanken_Grotesk, JetBrains_Mono } from 'next/font/google';
 import { PERMISSIONS } from '@pulso/domain';
@@ -40,7 +39,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         <aside className="flex w-60 shrink-0 flex-col justify-between border-r border-border/70 px-4 py-6">
           <div>
             <div className="mb-1 flex items-center gap-2 px-2 text-base font-semibold">
-              <span className="pulso-beat inline-block text-accent">✦</span> Pulso
+              <span className="pulso-beat inline-block text-accent">*</span> Pulso
             </div>
             <p className="font-meta mb-7 px-2 text-[10px] uppercase tracking-[0.2em] text-muted">
               {ctx.organizationName}
@@ -50,12 +49,6 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           </div>
 
           <div className="px-2">
-            <Link
-              href="/personal"
-              className="font-meta mb-5 inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.16em] text-muted transition hover:text-fg"
-            >
-              ↪ Modo personal
-            </Link>
             <div className="flex items-center gap-2.5 border-t border-border/60 pt-4">
               <span className="font-meta flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-[11px] text-accent">
                 {initials}

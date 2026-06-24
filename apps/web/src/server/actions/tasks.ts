@@ -3,9 +3,10 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma } from '@pulso/database';
-import { assignTask, PERMISSIONS } from '@pulso/domain';
+import { assignTask, canAssignTaskInScope, canCreateTaskForTeam, canManageTask, PERMISSIONS } from '@pulso/domain';
 import { TASK_STATUS_TRANSITIONS, addBlockerSchema, createTaskSchema, type TaskStatus } from '@pulso/shared';
 import { hasPermission, requireAuth } from '@/lib/auth/context';
+import { assertAllowed, getAuthorizedUser, requireTaskInOrg, requireTeamInOrg, requireUserInOrg } from '@/server/authz';
 import { auditLogger, taskRepo } from '@/server/deps';
 import type { AssignState } from '@/server/action-types';
 
@@ -29,6 +30,9 @@ export async function createTaskAction(formData: FormData): Promise<void> {
     dueDate: str(formData, 'dueDate'),
     definitionOfDone: str(formData, 'definitionOfDone'),
   });
+  const [actor, team] = await Promise.all([getAuthorizedUser(ctx), requireTeamInOrg(ctx, parsed.teamId)]);
+  assertAllowed(canCreateTaskForTeam(actor, team), 'Sin permiso para crear tareas en este equipo.');
+  if (parsed.assigneeId) await requireUserInOrg(ctx, parsed.assigneeId);
 
   const task = await taskRepo.create({
     organizationId: ctx.organizationId,
@@ -68,6 +72,8 @@ export async function assignTaskAction(_prev: AssignState, formData: FormData): 
   const assigneeId = str(formData, 'assigneeId');
   const acknowledge = formData.get('acknowledge') === 'true';
   if (!taskId || !assigneeId) return { status: 'error', message: 'Elegi una persona.' };
+  const [actor, task] = await Promise.all([getAuthorizedUser(ctx), requireTaskInOrg(ctx, taskId), requireUserInOrg(ctx, assigneeId)]);
+  assertAllowed(canAssignTaskInScope(actor, task), 'Sin permiso para asignar esta tarea.');
 
   const result = await assignTask(
     { tasks: taskRepo, audit: auditLogger },
@@ -96,20 +102,26 @@ export async function changeStatusAction(formData: FormData): Promise<void> {
   const next = str(formData, 'status') as TaskStatus | undefined;
   if (!taskId || !next) throw new Error('Datos incompletos.');
 
-  const current = await taskRepo.findById(taskId);
-  if (!current || current.organizationId !== ctx.organizationId) throw new Error('Tarea no encontrada.');
+  const current = await requireTaskInOrg(ctx, taskId);
+  const actor = await getAuthorizedUser(ctx);
+  assertAllowed(canManageTask(actor, current), 'Sin permiso para cambiar el estado de esta tarea.');
 
-  const allowed = TASK_STATUS_TRANSITIONS[current.status];
+  const currentStatus = current.status as TaskStatus;
+  const allowed = TASK_STATUS_TRANSITIONS[currentStatus];
   if (!allowed.includes(next)) throw new Error(`Transicion no permitida: ${current.status} -> ${next}.`);
 
-  await taskRepo.update(taskId, { status: next });
+  const updated = await prisma.task.updateMany({
+    where: { id: current.id, organizationId: ctx.organizationId },
+    data: { status: next },
+  });
+  if (updated.count !== 1) throw new Error('No se pudo actualizar la tarea.');
   await auditLogger.record({
     organizationId: ctx.organizationId,
     actorId: ctx.user.id,
     action: next === 'DONE' ? 'TASK_CLOSED' : 'TASK_STATUS_CHANGED',
     entityType: 'Task',
     entityId: taskId,
-    metadata: { from: current.status, to: next },
+    metadata: { from: currentStatus, to: next },
   });
 
   revalidatePath(`/tasks/${taskId}`);
@@ -129,10 +141,15 @@ export async function addBlockerAction(formData: FormData): Promise<void> {
   if (!parsed.taskId && !parsed.teamId) throw new Error('Falta tarea o equipo.');
 
   const task = parsed.taskId
-    ? await prisma.task.findFirst({ where: { id: parsed.taskId, organizationId: ctx.organizationId } })
+    ? await requireTaskInOrg(ctx, parsed.taskId)
     : null;
   const teamId = task?.teamId ?? parsed.teamId;
   if (!teamId) throw new Error('Equipo no encontrado.');
+  const [actor, team] = await Promise.all([getAuthorizedUser(ctx), requireTeamInOrg(ctx, teamId)]);
+  assertAllowed(
+    task ? canManageTask(actor, task) : canCreateTaskForTeam(actor, team),
+    'Sin permiso para reportar bloqueos en este equipo.',
+  );
 
   await prisma.blocker.create({
     data: {
@@ -145,7 +162,12 @@ export async function addBlockerAction(formData: FormData): Promise<void> {
       createdById: ctx.user.id,
     },
   });
-  if (task) await prisma.task.update({ where: { id: task.id }, data: { status: 'BLOCKED' } });
+  if (task) {
+    await prisma.task.updateMany({
+      where: { id: task.id, organizationId: ctx.organizationId },
+      data: { status: 'BLOCKED' },
+    });
+  }
 
   if (task) revalidatePath(`/tasks/${task.id}`);
   revalidatePath('/');
