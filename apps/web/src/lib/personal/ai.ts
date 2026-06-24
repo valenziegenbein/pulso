@@ -156,17 +156,19 @@ async function postSuggest(url: string, body: unknown): Promise<DraftSuggestion>
 export async function generateDraft(params: {
   note: string;
   task?: { title?: string };
+  projectContext?: string;
   attachmentsHint?: string[];
   images?: DraftImage[];
   ai: AiMode;
   config: AiConfig | null;
 }): Promise<DraftSuggestion> {
-  const { note, task, attachmentsHint, images, ai, config } = params;
+  const { note, task, projectContext, attachmentsHint, images, ai, config } = params;
   if (ai === 'none') return manualDraft(note);
   if (aiReady(ai, config) && config) {
     return postSuggest('/api/personal/suggest', {
       note,
       task,
+      projectContext,
       attachmentsHint,
       images,
       provider: config.provider,

@@ -12,10 +12,25 @@ export interface SuggestionInput {
   /** Micro-nota del usuario. Ej: "investigando intercom". */
   note: string;
   task?: TaskContext;
+  /** Contexto del proyecto en foco (modo personal). Se recorta a un presupuesto. */
+  projectContext?: string;
   attachmentsHint?: string[];
   /** Imagenes/capturas adjuntas manualmente para contexto visual del borrador. */
   images?: SuggestionImage[];
   locale?: string;
+}
+
+// Presupuesto de contexto (en caracteres ≈ 4 por token). Mantiene el prompt
+// dentro de la ventana del modelo aunque el proyecto o la nota crezcan.
+const BUDGET = {
+  note: 2000,
+  projectContext: 1200,
+  taskDescription: 800,
+} as const;
+
+function clamp(text: string, maxChars: number): string {
+  const t = text.trim();
+  return t.length <= maxChars ? t : `${t.slice(0, maxChars - 1).trimEnd()}…`;
 }
 
 export interface SuggestionImage {
@@ -55,13 +70,30 @@ export class WorklogSuggestionService {
   constructor(private readonly provider: LLMProvider) {}
 
   async suggest(input: SuggestionInput): Promise<WorklogSuggestion> {
+    try {
+      return await this.run(input);
+    } catch (err) {
+      // Degradación: si había imagen y la generación falló (modelo sin visión,
+      // payload muy grande, contexto excedido), reintentamos solo con texto.
+      // Preferimos un borrador útil a romper el flujo.
+      if (input.images?.length) {
+        return this.run({ ...input, images: undefined });
+      }
+      throw err;
+    }
+  }
+
+  private async run(input: SuggestionInput): Promise<WorklogSuggestion> {
     const { text } = await this.provider.complete({
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: buildUserContent(input) },
       ],
       temperature: 0.3,
-      maxTokens: 600,
+      // Generoso: los modelos de razonamiento (gemma-4, etc.) gastan tokens
+      // "pensando" antes del JSON; con poco presupuesto la salida se trunca y el
+      // JSON queda incompleto → caería al fallback. Es un máximo, no un forzado.
+      maxTokens: 1000,
     });
     return parseSuggestion(text, input);
   }
@@ -87,13 +119,16 @@ function buildUserContent(input: SuggestionInput): string | ChatContentPart[] {
 }
 
 function buildUserPrompt(input: SuggestionInput): string {
-  const lines = [`Nota: "${input.note}"`];
+  const lines = [`Nota: "${clamp(input.note, BUDGET.note)}"`];
   if (input.task) {
     const t = input.task;
     if (t.title) lines.push(`Tarea activa: ${t.title}`);
     if (t.status) lines.push(`Estado: ${t.status}`);
     if (t.teamName) lines.push(`Equipo: ${t.teamName}`);
-    if (t.description) lines.push(`Descripción de la tarea: ${t.description}`);
+    if (t.description) lines.push(`Descripción de la tarea: ${clamp(t.description, BUDGET.taskDescription)}`);
+  }
+  if (input.projectContext) {
+    lines.push(`Contexto del proyecto: ${clamp(input.projectContext, BUDGET.projectContext)}`);
   }
   if (input.attachmentsHint?.length) {
     lines.push(`Adjuntos/links de referencia: ${input.attachmentsHint.join(', ')}`);

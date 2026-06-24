@@ -73,4 +73,46 @@ describe('WorklogSuggestionService', () => {
       ]),
     );
   });
+
+  it('incluye el contexto del proyecto en el prompt', async () => {
+    let captured: CompletionRequest | undefined;
+    const capturing: LLMProvider = {
+      id: 'capturing',
+      async complete(request) {
+        captured = request;
+        return { text: '{"type":"PROGRESS","title":"x","content":"y"}', model: 'x' };
+      },
+    };
+    await new WorklogSuggestionService(capturing).suggest({
+      note: 'avancé con el endpoint',
+      projectContext: 'Pulso: organizador interno sin vigilancia.',
+    });
+    const userText = captured?.messages.find((m) => m.role === 'user')?.content;
+    expect(typeof userText).toBe('string');
+    expect(userText).toContain('Contexto del proyecto: Pulso: organizador interno sin vigilancia.');
+  });
+
+  it('degrada a texto si la generación con imagen falla (modelo sin visión)', async () => {
+    let calls = 0;
+    const hadImage: boolean[] = [];
+    const flaky: LLMProvider = {
+      id: 'flaky-vision',
+      async complete(request) {
+        calls += 1;
+        const user = request.messages.find((m) => m.role === 'user');
+        const isMultimodal = Array.isArray(user?.content);
+        hadImage.push(isMultimodal);
+        if (isMultimodal) throw new Error('este modelo no soporta imágenes');
+        return { text: '{"type":"NOTE","title":"sin imagen","content":"generado solo con texto"}', model: 'x' };
+      },
+    };
+    const suggestion = await new WorklogSuggestionService(flaky).suggest({
+      note: 'mirá esta captura',
+      images: [{ dataUrl: 'data:image/png;base64,zzz', mediaType: 'image/png' }],
+    });
+
+    expect(calls).toBe(2); // primer intento con imagen falla; reintento sin imagen
+    expect(hadImage).toEqual([true, false]);
+    expect(suggestion.content).toBe('generado solo con texto');
+  });
 });

@@ -135,6 +135,7 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
       const s = await generateDraft({
         note,
         task: { title: focusProject.name },
+        projectContext: focusProject.context,
         images: image ? [{ dataUrl: image }] : undefined,
         ai,
         config: aiConfig,

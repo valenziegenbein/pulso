@@ -36,6 +36,7 @@ export function CaptureCard({ projectId }: { projectId?: string } = {}) {
       const s = await generateDraft({
         note,
         task: project ? { title: project.name } : undefined,
+        projectContext: project?.context,
         attachmentsHint: attach ? [attach] : undefined,
         ai,
         config: aiConfig,

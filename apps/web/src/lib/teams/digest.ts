@@ -104,26 +104,39 @@ function joinNatural(items: string[]): string {
   return `${items.slice(0, -1).join('; ')} y ${items[items.length - 1]}`;
 }
 
+// Presupuesto de los "hechos" que van al prompt. Las queries ya topean los ítems
+// (take: 6/5/10); esto acota además el largo total y de cada línea, para que el
+// pulso no rompa la ventana del modelo aunque los títulos sean largos.
+// (Para escalas grandes, el paso siguiente es map-reduce: resumir por equipo y
+//  después combinar; con los topes actuales todavía no hace falta.)
+const FACTS_BUDGET = 3000;
+const LINE_BUDGET = 160;
+
+function fact(s: string): string {
+  const t = s.replace(/\s+/g, ' ').trim();
+  return t.length <= LINE_BUDGET ? t : `${t.slice(0, LINE_BUDGET - 1)}…`;
+}
+
 function buildFacts(input: PulseInput): string {
   const lines: string[] = [];
   if (input.recentWorklog.length) {
     lines.push('Avances publicados (más recientes primero):');
-    input.recentWorklog.slice(0, 6).forEach((w) => lines.push(`- [${w.type}] ${teamOf(w)}: ${w.title} (${w.author.name})`));
+    input.recentWorklog.slice(0, 6).forEach((w) => lines.push(fact(`- [${w.type}] ${teamOf(w)}: ${w.title} (${w.author.name})`)));
   }
   if (input.decisions.length) {
     lines.push('Decisiones pendientes:');
-    input.decisions.forEach((d) => lines.push(`- ${d.team.name}: ${d.title}`));
+    input.decisions.forEach((d) => lines.push(fact(`- ${d.team.name}: ${d.title}`)));
   }
   if (input.openBlockers.length) {
     lines.push('Bloqueos abiertos:');
-    input.openBlockers.slice(0, 5).forEach((b) => lines.push(`- ${b.task?.team?.name ?? b.team?.name ?? 'Equipo'}: ${b.title}`));
+    input.openBlockers.slice(0, 5).forEach((b) => lines.push(fact(`- ${b.task?.team?.name ?? b.team?.name ?? 'Equipo'}: ${b.title}`)));
   }
   const watch = peopleToWatch(input.perPerson);
   if (watch.length) {
     lines.push('Personas con carga a cuidar:');
-    watch.forEach((p) => lines.push(`- ${p.user.name}: ${p.active} activas`));
+    watch.forEach((p) => lines.push(fact(`- ${p.user.name}: ${p.active} activas`)));
   }
-  return lines.join('\n');
+  return lines.join('\n').slice(0, FACTS_BUDGET);
 }
 
 const SYSTEM_PROMPT = `Sos el asistente de un líder de equipo. Escribís el "pulso" del trabajo: una traducción en prosa de la actividad reciente, para que la persona se ponga al día en 30 segundos.
