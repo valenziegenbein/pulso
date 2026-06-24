@@ -4,6 +4,7 @@ import {
   createLLMProvider,
   TaskSuggestionService,
   WorklogSuggestionService,
+  type LLMProvider,
   type LLMProviderResolved,
 } from '@pulso/llm';
 import type { LLMProviderType } from '@pulso/shared';
@@ -31,4 +32,14 @@ export function getWorklogSuggestionService(): WorklogSuggestionService {
 
 export function getTaskSuggestionService(): TaskSuggestionService {
   return new TaskSuggestionService(createLLMProvider(resolveConfigFromEnv()));
+}
+
+/**
+ * Provider crudo para tareas de texto libre (p.ej. el "pulso" del equipo).
+ * `isReal` indica si hay un proveedor configurado de verdad (no MOCK): cuando es
+ * falso, el caller debe usar su propio resumen heurístico.
+ */
+export function getConfiguredProvider(): { provider: LLMProvider; isReal: boolean } {
+  const config = resolveConfigFromEnv();
+  return { provider: createLLMProvider(config), isReal: config.type !== 'MOCK' };
 }
