@@ -122,19 +122,28 @@ export async function getAdminDashboard(ctx: AuthContext) {
   ]);
 
   // Carga por persona (con nivel de sobrecarga).
-  const perPerson = await Promise.all(
-    members.map(async (m) => {
-      const personTasks = await prisma.task.findMany({
-        where: { organizationId: org, assigneeId: m.userId },
-        select: { status: true, priority: true, dueDate: true, definitionOfDone: true },
-      });
-      const overload = evaluateOverload(buildWorkloadSnapshot(personTasks.map(toTaskLike)));
-      const active = personTasks.filter((t) => t.status !== 'DONE' && t.status !== 'CANCELLED').length;
-      const high = personTasks.filter((t) => t.status !== 'DONE' && t.status !== 'CANCELLED' && t.priority === 'HIGH').length;
-      const blocked = personTasks.filter((t) => t.status === 'BLOCKED').length;
-      return { user: m.user, role: m.role.key, active, high, blocked, level: overload.level, teams: m.user.teamMemberships.map((tm) => tm.team) };
-    }),
-  );
+  // Antes: una query por miembro (N+1, mortal con cientos de personas).
+  // Ahora: UNA query con todas las tareas asignadas de la org y agrupamos en memoria.
+  type PersonTask = { status: string; priority: string; dueDate: Date | null; definitionOfDone: string | null };
+  const assignedTasks = await prisma.task.findMany({
+    where: { organizationId: org, assigneeId: { not: null } },
+    select: { assigneeId: true, status: true, priority: true, dueDate: true, definitionOfDone: true },
+  });
+  const tasksByAssignee = new Map<string, PersonTask[]>();
+  for (const t of assignedTasks) {
+    if (!t.assigneeId) continue;
+    const arr = tasksByAssignee.get(t.assigneeId);
+    if (arr) arr.push(t);
+    else tasksByAssignee.set(t.assigneeId, [t]);
+  }
+  const perPerson = members.map((m) => {
+    const personTasks = tasksByAssignee.get(m.userId) ?? [];
+    const overload = evaluateOverload(buildWorkloadSnapshot(personTasks.map(toTaskLike)));
+    const active = personTasks.filter((t) => t.status !== 'DONE' && t.status !== 'CANCELLED').length;
+    const high = personTasks.filter((t) => t.status !== 'DONE' && t.status !== 'CANCELLED' && t.priority === 'HIGH').length;
+    const blocked = personTasks.filter((t) => t.status === 'BLOCKED').length;
+    return { user: m.user, role: m.role.key, active, high, blocked, level: overload.level, teams: m.user.teamMemberships.map((tm) => tm.team) };
+  });
 
   const byStatus = Object.fromEntries(byStatusRaw.map((r) => [r.status, r._count])) as Record<TaskStatus, number>;
   return { byStatus, teams, perPerson, openBlockers, unassigned, withoutDoD, overdue, decisions, recentWorklog };
@@ -150,6 +159,8 @@ export async function getTaskList(ctx: AuthContext) {
       worklogEntries: { where: { status: 'PUBLISHED' }, orderBy: { createdAt: 'desc' }, take: 1 },
     },
     orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
+    // Guard de volumen: a esta escala el usuario filtra por equipo/estado.
+    take: 1000,
   });
 }
 

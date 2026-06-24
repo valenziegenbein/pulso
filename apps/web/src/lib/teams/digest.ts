@@ -30,12 +30,19 @@ interface PersonLike {
   blocked: number;
 }
 
+interface TeamLike {
+  name: string;
+  /** Tareas activas del equipo (ya filtradas por la query). */
+  tasks: Array<{ blockers: unknown[]; worklogEntries: Array<{ title: string }> }>;
+  blockers: unknown[];
+}
+
 export interface PulseInput {
   recentWorklog: WorklogLike[];
   openBlockers: BlockerLike[];
   decisions: DecisionLike[];
   perPerson: PersonLike[];
-  teams: Array<{ name: string }>;
+  teams: TeamLike[];
 }
 
 export interface TeamPulse {
@@ -117,10 +124,33 @@ function fact(s: string): string {
   return t.length <= LINE_BUDGET ? t : `${t.slice(0, LINE_BUDGET - 1)}…`;
 }
 
+// MAP: rollup por equipo. Cubre toda la organización (no solo los últimos 6
+// avances) en tamaño acotado, con UNA sola llamada al LLM (el reduce de buildFacts).
+function teamRollupLines(teams: TeamLike[]): string[] {
+  const rollup = teams
+    .map((t) => ({
+      name: t.name,
+      active: t.tasks.length,
+      blockers: t.blockers.length + t.tasks.reduce((s, x) => s + x.blockers.length, 0),
+      last: t.tasks.flatMap((x) => x.worklogEntries)[0]?.title,
+    }))
+    .filter((t) => t.active > 0 || t.blockers > 0)
+    .sort((a, b) => b.blockers - a.blockers || b.active - a.active);
+  if (rollup.length === 0) return [];
+
+  const TOP = 10;
+  const lines = ['Estado por equipo:'];
+  rollup.slice(0, TOP).forEach((t) =>
+    lines.push(fact(`- ${t.name}: ${t.active} activas, ${t.blockers} bloqueos${t.last ? `, último: ${t.last}` : ''}`)),
+  );
+  if (rollup.length > TOP) lines.push(`- y ${rollup.length - TOP} equipos más`);
+  return lines;
+}
+
 function buildFacts(input: PulseInput): string {
-  const lines: string[] = [];
+  const lines: string[] = [...teamRollupLines(input.teams)];
   if (input.recentWorklog.length) {
-    lines.push('Avances publicados (más recientes primero):');
+    lines.push('Avances recientes destacados:');
     input.recentWorklog.slice(0, 6).forEach((w) => lines.push(fact(`- [${w.type}] ${teamOf(w)}: ${w.title} (${w.author.name})`)));
   }
   if (input.decisions.length) {
@@ -144,6 +174,7 @@ const SYSTEM_PROMPT = `Sos el asistente de un líder de equipo. Escribís el "pu
 Reglas estrictas:
 - 2 a 4 frases, español neutro, cálido y concreto. Texto plano, sin viñetas ni JSON.
 - Primero contá los avances; después lo que necesita atención (decisiones, luego bloqueos, luego carga a cuidar).
+- Si hay muchos equipos, sintetizá los patrones (qué áreas avanzan, dónde se traba), no enumeres equipo por equipo.
 - NUNCA inventes datos que no estén en los hechos. Si algo no está, no lo menciones.
 - Esto NO es vigilancia: describí el trabajo y su intención, nunca el comportamiento ni la productividad de las personas.
 - Hablale al líder de vos.`;

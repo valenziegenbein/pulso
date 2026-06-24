@@ -79,6 +79,34 @@ function databaseHasTeamsSchema(dbPath) {
   }
 }
 
+// Red de seguridad para datos reales: una copia por día, conservando las 3
+// últimas. Barato (solo si no existe la del día) y recuperable ante cualquier
+// problema durante uso intensivo.
+function backupDatabaseDaily(dbPath) {
+  try {
+    const dir = app.getPath('userData');
+    const day = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const todayBackup = path.join(dir, `pulso.daily-${day}.db`);
+    if (!fs.existsSync(todayBackup)) {
+      fs.copyFileSync(dbPath, todayBackup);
+      logDesktop(`daily backup created: ${todayBackup}`);
+    }
+    const backups = fs
+      .readdirSync(dir)
+      .filter((f) => f.startsWith('pulso.daily-') && f.endsWith('.db'))
+      .sort();
+    for (const old of backups.slice(0, Math.max(0, backups.length - 3))) {
+      try {
+        fs.unlinkSync(path.join(dir, old));
+      } catch {
+        /* no critico */
+      }
+    }
+  } catch (err) {
+    logDesktop(`daily backup failed: ${err == null ? '' : err.message || err}`);
+  }
+}
+
 function ensureDatabase() {
   const dbPath = path.join(app.getPath('userData'), 'pulso.db');
   const template = path.join(process.resourcesPath, 'db-template', 'pulso.db');
@@ -97,6 +125,9 @@ function ensureDatabase() {
     } catch (err) {
       logDesktop(`database refresh failed: ${err == null ? '' : err.message || err}`);
     }
+  } else {
+    // DB con el schema actual y datos del usuario: la conservamos + backup diario.
+    backupDatabaseDaily(dbPath);
   }
   return dbPath;
 }

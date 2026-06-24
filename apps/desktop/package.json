@@ -1,6 +1,6 @@
 {
   "name": "@pulso/desktop",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "private": true,
   "description": "Shell de escritorio de Pulso (Electron): panel principal + widget flotante always-on-top. Empaqueta el server Next standalone.",
   "author": "Pulso",
