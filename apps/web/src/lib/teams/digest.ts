@@ -3,7 +3,9 @@
 //
 // Si hay un proveedor LLM real configurado, lo usa; si no (MOCK por defecto),
 // cae a un resumen heurístico que igual se lee como un brief humano.
-import { getConfiguredProvider } from '@/lib/llm';
+import { createLLMProvider, type LLMProvider } from '@pulso/llm';
+import { getEnvLLMConfig } from '@/lib/llm';
+import { fetchWithTimeout } from '@/lib/personal/ai-endpoint';
 
 interface WorklogLike {
   type: string;
@@ -66,7 +68,7 @@ export function peopleToWatch(perPerson: PersonLike[]): PersonLike[] {
 }
 
 /** Resumen heurístico: siempre legible, sin red ni IA. */
-function heuristicPulse(input: PulseInput): string {
+export function heuristicPulse(input: PulseInput): string {
   const parts: string[] = [];
   const { recentWorklog, decisions, openBlockers } = input;
 
@@ -133,11 +135,47 @@ Reglas estrictas:
 - Esto NO es vigilancia: describí el trabajo y su intención, nunca el comportamiento ni la productividad de las personas.
 - Hablale al líder de vos.`;
 
-/** Genera el pulso: LLM real si está configurado, si no heurístico. */
+/** Servidores LLM locales OpenAI-compatible que probamos por defecto. */
+const LOCAL_LLM_PORTS = [1234, 11434]; // LM Studio · Ollama
+
+/**
+ * Resuelve un provider para el pulso:
+ * 1) si hay uno configurado por entorno (no MOCK), ese;
+ * 2) si no, auto-detecta un modelo local en loopback (LM Studio / Ollama);
+ * 3) si no hay nada, null → el caller usa el heurístico.
+ */
+// Los modelos locales (sobre todo los de razonamiento) son lentos: damos aire.
+const COMPLETION_TIMEOUT_MS = 120_000;
+
+async function resolveTeamsProvider(): Promise<LLMProvider | null> {
+  const { config, isReal } = getEnvLLMConfig();
+  if (isReal) {
+    return createLLMProvider({ ...config, fetchImpl: fetchWithTimeout(COMPLETION_TIMEOUT_MS) });
+  }
+  for (const port of LOCAL_LLM_PORTS) {
+    const baseUrl = `http://localhost:${port}/v1`;
+    try {
+      const res = await fetchWithTimeout(1500)(`${baseUrl}/models`);
+      if (!res.ok) continue;
+      const data = (await res.json()) as { data?: Array<{ id?: string }> };
+      const ids = (data.data ?? []).map((m) => m.id).filter((id): id is string => Boolean(id));
+      // Evitamos modelos de embeddings; preferimos el más liviano si lo distinguimos.
+      const model = ids.find((id) => !/embed/i.test(id)) ?? ids[0];
+      if (model) {
+        return createLLMProvider({ type: 'OPENAI_COMPATIBLE', baseUrl, model, fetchImpl: fetchWithTimeout(COMPLETION_TIMEOUT_MS) });
+      }
+    } catch {
+      /* probamos el siguiente */
+    }
+  }
+  return null;
+}
+
+/** Genera el pulso: LLM (configurado o local auto-detectado) si hay; si no, heurístico. */
 export async function buildTeamPulse(input: PulseInput): Promise<TeamPulse> {
   const heuristic = heuristicPulse(input);
-  const { provider, isReal } = getConfiguredProvider();
-  if (!isReal) return { text: heuristic, source: 'heuristic' };
+  const provider = await resolveTeamsProvider();
+  if (!provider) return { text: heuristic, source: 'heuristic' };
 
   try {
     const { text } = await provider.complete({
@@ -146,7 +184,9 @@ export async function buildTeamPulse(input: PulseInput): Promise<TeamPulse> {
         { role: 'user', content: buildFacts(input) || 'Sin actividad reciente.' },
       ],
       temperature: 0.4,
-      maxTokens: 320,
+      // Generoso: los modelos de razonamiento gastan tokens "pensando" antes de
+      // escribir la respuesta; con poco presupuesto devuelven content vacío.
+      maxTokens: 900,
     });
     const clean = text.trim();
     return clean.length > 40 ? { text: clean, source: 'ai' } : { text: heuristic, source: 'heuristic' };

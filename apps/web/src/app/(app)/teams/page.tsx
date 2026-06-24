@@ -23,34 +23,37 @@ export default async function TeamsPage() {
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card title="Lista de equipos" className="lg:col-span-2">
+        <div className="lg:col-span-2">
           {teams.length === 0 ? (
             <EmptyState>Todavía no hay equipos.</EmptyState>
           ) : (
-            <ul className="divide-y divide-border/60">
+            <div className="grid gap-4 sm:grid-cols-2">
               {teams.map((team) => {
                 const activeTasks = team.tasks.filter((task) => task.status !== 'DONE' && task.status !== 'CANCELLED');
                 const blockers = team.blockers.length + team.tasks.reduce((sum, task) => sum + task.blockers.length, 0);
                 const last = team.worklogEntries[0] ?? team.tasks.flatMap((task) => task.worklogEntries)[0];
                 return (
-                  <li key={team.id} className="flex items-center justify-between gap-4 py-3.5 first:pt-0 last:pb-0">
-                    <div className="min-w-0">
-                      <Link href={`/teams/${team.id}`} className="font-display text-lg transition hover:text-accent">{team.name}</Link>
-                      <p className="truncate text-sm text-muted">{team.focus ?? team.description ?? 'Sin foco definido'}</p>
-                      <p className="mt-0.5 truncate text-xs text-muted/80">Último avance: {last?.title ?? 'sin bitácora reciente'}</p>
-                    </div>
-                    <div className="font-meta flex shrink-0 items-center gap-3 text-[11px] text-muted">
+                  <Link
+                    key={team.id}
+                    href={`/teams/${team.id}`}
+                    className="group flex flex-col rounded-2xl border border-border bg-surface/60 p-5 transition hover:-translate-y-0.5 hover:border-accent/50"
+                  >
+                    <h2 className="font-display text-xl transition group-hover:text-accent">{team.name}</h2>
+                    <p className="mt-1 line-clamp-2 text-sm text-muted">{team.focus ?? team.description ?? 'Sin foco definido'}</p>
+                    <p className="mt-3 flex-1 truncate text-xs text-muted/80">Último avance: {last?.title ?? 'sin bitácora reciente'}</p>
+                    <div className="font-meta mt-4 flex items-center gap-3 border-t border-border/50 pt-3 text-[11px] text-muted">
                       <span>{activeTasks.length} activas</span>
+                      <span>·</span>
                       <span className={blockers ? 'text-[var(--danger)]' : ''}>{blockers} bloqueos</span>
                     </div>
-                  </li>
+                  </Link>
                 );
               })}
-            </ul>
+            </div>
           )}
-        </Card>
+        </div>
 
-        <Card id="nuevo" title="Añadir equipo">
+        <Card id="nuevo" title="Añadir equipo" className="self-start">
           <form action={createTeamAction} className="space-y-2.5">
             <input name="name" required placeholder="Nombre del equipo" className={inputCls} />
             <input name="focus" placeholder="Foco actual" className={inputCls} />

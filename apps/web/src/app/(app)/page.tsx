@@ -3,11 +3,13 @@ import { PERMISSIONS } from '@pulso/domain';
 import { hasPermission, requireAuth } from '@/lib/auth/context';
 import { getAdminDashboard, getAssignablePeople, getMemberDashboard } from '@/server/queries';
 import { approveWorklogAction } from '@/server/actions/worklog';
-import { buildTeamPulse, peopleToWatch } from '@/lib/teams/digest';
+import { resolveDecisionAction } from '@/server/actions/decisions';
+import { heuristicPulse, peopleToWatch } from '@/lib/teams/digest';
 import { QuickWorklogWidget } from '@/components/quick-worklog-widget';
 import { OpenWidgetButton } from '@/components/open-widget-button';
 import { TaskSuggestionPanel } from '@/components/teams/task-suggestion-panel';
 import { LastVisitBadge } from '@/components/teams/last-visit-badge';
+import { PulseText } from '@/components/teams/pulse-text';
 import { Card, EmptyState, PageHeader, PriorityBadge, StatusBadge, btnGhost, btnPrimary } from '@/components/teams/ui';
 import { WORKLOG_TYPE_LABEL, formatDate } from '@/lib/labels';
 
@@ -23,8 +25,7 @@ export default async function DashboardPage() {
 async function AdminDashboard(ctx: Awaited<ReturnType<typeof requireAuth>>) {
   const [data, people] = await Promise.all([getAdminDashboard(ctx), getAssignablePeople(ctx)]);
   const firstName = ctx.user.name.split(' ')[0] ?? ctx.user.name;
-  const hasPulse = data.recentWorklog.length > 0;
-  const pulse = hasPulse ? await buildTeamPulse(data) : null;
+  const pulseText = data.recentWorklog.length > 0 ? heuristicPulse(data) : null;
   const watch = peopleToWatch(data.perPerson);
 
   const activity = [
@@ -50,15 +51,10 @@ async function AdminDashboard(ctx: Awaited<ReturnType<typeof requireAuth>>) {
       />
 
       {/* 1 · PARA LEER — el pulso */}
-      {pulse ? (
+      {pulseText ? (
         <section className="rounded-2xl border border-accent/25 bg-surface/60 p-6 sm:p-8">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <p className="font-meta text-[11px] uppercase tracking-[0.22em] text-accent">El pulso · esta semana</p>
-            <span className="font-meta text-[10px] uppercase tracking-[0.16em] text-muted/70">
-              {pulse.source === 'ai' ? '✦ traducido por IA' : '✦ resumen automático'}
-            </span>
-          </div>
-          <p className="text-xl leading-relaxed text-fg/95 sm:text-[1.4rem] sm:leading-[1.7]">{pulse.text}</p>
+          <p className="font-meta mb-4 text-[11px] uppercase tracking-[0.22em] text-accent">El pulso · esta semana</p>
+          <PulseText initial={pulseText} />
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-4">
             <LastVisitBadge activity={activity} />
             <Glance
@@ -80,16 +76,7 @@ async function AdminDashboard(ctx: Awaited<ReturnType<typeof requireAuth>>) {
         <section className="mt-6">
           <h2 className="font-meta mb-4 text-[11px] uppercase tracking-[0.2em] text-muted">Necesita tu atención</h2>
           <div className="grid gap-4 md:grid-cols-3">
-            <AttentionCol
-              title="Decisiones que te esperan"
-              tone="warn"
-              empty="Nada para decidir."
-              items={data.decisions.map((d) => ({
-                label: `${d.title}`,
-                meta: d.team.name,
-                href: d.task ? `/tasks/${d.task.id}` : `/teams/${d.team.id}`,
-              }))}
-            />
+            <DecisionInbox decisions={data.decisions} />
             <AttentionCol
               title="Bloqueos abiertos"
               tone="danger"
@@ -192,6 +179,49 @@ function AttentionCol({
               </li>
             );
           })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function DecisionInbox({
+  decisions,
+}: {
+  decisions: Array<{ id: string; title: string; context: string; team: { id: string; name: string }; task: { id: string } | null }>;
+}) {
+  return (
+    <div className="rounded-2xl border border-[var(--warn)]/30 bg-surface/50 p-4">
+      <p className="font-meta mb-3 text-[10px] uppercase tracking-[0.16em] text-muted">Decisiones que te esperan</p>
+      {decisions.length === 0 ? (
+        <p className="text-sm text-muted/60">Nada para decidir.</p>
+      ) : (
+        <ul className="space-y-3">
+          {decisions.slice(0, 4).map((d) => (
+            <li key={d.id} className="border-b border-border/40 pb-3 last:border-0 last:pb-0">
+              <div className="flex gap-2">
+                <span className="mt-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: 'var(--warn)' }} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm leading-snug">{d.title}</p>
+                  <p className="font-meta text-[10px] uppercase tracking-wide text-muted/70">{d.team.name}</p>
+                  {d.context && <p className="mt-1 line-clamp-2 text-xs text-muted">{d.context}</p>}
+                  <div className="mt-2 flex items-center gap-3">
+                    <form action={resolveDecisionAction}>
+                      <input type="hidden" name="decisionId" value={d.id} />
+                      <button className="font-meta rounded-full bg-accent px-3 py-1 text-[11px] font-medium text-bg transition hover:brightness-110">
+                        Marcar resuelta
+                      </button>
+                    </form>
+                    {d.task && (
+                      <Link href={`/tasks/${d.task.id}`} className="font-meta text-[11px] uppercase tracking-wide text-muted transition hover:text-fg">
+                        Ver →
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </li>
+          ))}
         </ul>
       )}
     </div>
