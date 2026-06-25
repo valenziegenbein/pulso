@@ -1,4 +1,4 @@
-# Pulso production stack: Next server + Postgres. See DEPLOY.md.
+# Pulso production stack: Caddy (HTTPS) + Next server + Postgres. See DEPLOY.md.
 # Sensitive values live in a local .env next to this file.
 
 services:
@@ -31,8 +31,29 @@ services:
       WORKLOG_ENCRYPTION_KEY: ${WORKLOG_ENCRYPTION_KEY:?Falta WORKLOG_ENCRYPTION_KEY en .env}
       NODE_ENV: production
       PORT: '3000'
+    # Sin puerto al host: sólo Caddy queda expuesto. Si traés tu propio reverse
+    # proxy, comentá el servicio `caddy` y descomentá:
+    # ports:
+    #   - '${APP_PORT:-3000}:3000'
+
+  # Reverse proxy + HTTPS automático (Let's Encrypt). Servís en https://${DOMAIN}.
+  caddy:
+    image: caddy:2
+    container_name: pulso-caddy
+    restart: unless-stopped
+    depends_on:
+      - app
     ports:
-      - '${APP_PORT:-3000}:3000'
+      - '80:80'
+      - '443:443'
+    environment:
+      DOMAIN: "${DOMAIN:?Falta DOMAIN en .env, ej 2-25-184-183.nip.io o tu dominio}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
 
 volumes:
   pulso-db-data:
+  caddy-data:
+  caddy-config:

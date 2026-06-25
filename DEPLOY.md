@@ -7,17 +7,21 @@ tareas, resumen, administracion, planes/seats y lectura/gestion de bitacora.
 Pulso Desktop sigue siendo la superficie diaria de trabajo: onboarding, widget,
 capturas manuales, avances, exportaciones y flujo cotidiano.
 
+El stack incluye **HTTPS automatico** (Caddy + Let's Encrypt): no hace falta
+configurar un proxy aparte.
+
 ## 1. Requisitos
 
 - VPS o servidor con Docker y Docker Compose v2.
-- Dominio apuntando al servidor.
-- Reverse proxy con TLS delante del puerto de la app (Caddy, Nginx o Traefik).
-
-Pulso escucha HTTP dentro del host; TLS termina en el proxy.
+- Puertos **80 y 443 abiertos** en el firewall (Caddy los usa para el certificado
+  y para servir).
+- Un dominio que resuelva a la IP del servidor. Si no tenes dominio propio, usa
+  **nip.io**: para la IP `2.25.184.183` el dominio es `2-25-184-183.nip.io`.
 
 ## 2. Configurar entorno
 
 ```bash
+ssh root@2.25.184.183
 git clone <repo> pulso && cd pulso
 cp .env.docker.example .env
 ```
@@ -35,7 +39,7 @@ Variables principales:
 - `POSTGRES_PASSWORD`: password fuerte para Postgres.
 - `AUTH_SECRET`: secreto de sesion/auth, 64 caracteres hex.
 - `WORKLOG_ENCRYPTION_KEY`: clave AES para secretos LLM, 64 caracteres hex.
-- `APP_PORT`: puerto host que expones detras del proxy.
+- `DOMAIN`: dominio para el certificado (ej: `2-25-184-183.nip.io` o el tuyo).
 
 No configures `LLM_*` para el server. En produccion la IA se configura por
 organizacion desde **Admin -> IA de la organizacion**.
@@ -47,8 +51,16 @@ docker compose up -d --build
 docker compose logs -f app
 ```
 
-El contenedor `app` ejecuta `prisma migrate deploy` antes de arrancar Next.
-Los datos persisten en el volumen `pulso-db-data`.
+El contenedor `app` ejecuta `prisma migrate deploy` antes de arrancar Next, y
+`caddy` obtiene el certificado TLS solo. En ~1 minuto:
+
+```text
+https://2-25-184-183.nip.io
+```
+
+Los datos persisten en el volumen `pulso-db-data`. (Si preferis tu propio reverse
+proxy, comenta el servicio `caddy` y descomenta `ports` + `APP_PORT` en
+`docker-compose.yml`.)
 
 ## 4. Crear organizaciones
 
