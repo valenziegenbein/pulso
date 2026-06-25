@@ -29,10 +29,13 @@ export async function createTaskAction(formData: FormData): Promise<void> {
     priority: str(formData, 'priority') ?? 'MEDIUM',
     dueDate: str(formData, 'dueDate'),
     definitionOfDone: str(formData, 'definitionOfDone'),
+    parentTaskId: str(formData, 'parentTaskId'),
   });
   const [actor, team] = await Promise.all([getAuthorizedUser(ctx), requireTeamInOrg(ctx, parsed.teamId)]);
   assertAllowed(canCreateTaskForTeam(actor, team), 'Sin permiso para crear tareas en este equipo.');
   if (parsed.assigneeId) await requireUserInOrg(ctx, parsed.assigneeId);
+  // Subtarea: el proyecto padre debe ser de la misma org (anti cross-tenant).
+  if (parsed.parentTaskId) await requireTaskInOrg(ctx, parsed.parentTaskId);
 
   const task = await taskRepo.create({
     organizationId: ctx.organizationId,

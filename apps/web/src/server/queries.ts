@@ -193,6 +193,37 @@ export async function getTaskList(ctx: AuthContext) {
   });
 }
 
+/**
+ * Tablero de Tareas: proyectos (tareas de nivel superior, con sus sub-tareas) +
+ * las sub-tareas activas (el trabajo granular en curso). Una tarea con subtareas
+ * se comporta como un proyecto.
+ */
+export async function getTasksBoard(ctx: AuthContext) {
+  const visibleTeamIds = await getVisibleTeamIds(ctx);
+  const scope = { organizationId: ctx.organizationId, ...(visibleTeamIds ? { teamId: { in: visibleTeamIds } } : {}) };
+  const [projects, activeTasks] = await Promise.all([
+    prisma.task.findMany({
+      where: { ...scope, parentTaskId: null },
+      include: {
+        team: true,
+        assignee: { select: { id: true, name: true } },
+        subtasks: { select: { id: true, status: true, assignee: { select: { id: true, name: true } } } },
+        blockers: { where: { status: 'OPEN' }, select: { id: true } },
+        worklogEntries: { where: { status: 'PUBLISHED' }, orderBy: { createdAt: 'desc' }, take: 1, select: { title: true } },
+      },
+      orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
+      take: 200,
+    }),
+    prisma.task.findMany({
+      where: { ...scope, parentTaskId: { not: null }, status: ACTIVE_STATUSES },
+      include: { assignee: { select: { name: true } }, parent: { select: { id: true, title: true } } },
+      orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
+      take: 200,
+    }),
+  ]);
+  return { projects, activeTasks };
+}
+
 export async function getTaskDetail(ctx: AuthContext, id: string) {
   const task = await prisma.task.findFirst({
     where: { id, organizationId: ctx.organizationId },
@@ -203,7 +234,7 @@ export async function getTaskDetail(ctx: AuthContext, id: string) {
       decisions: { include: { requestedBy: true }, orderBy: { createdAt: 'desc' } },
       comments: { include: { author: true }, orderBy: { createdAt: 'asc' } },
       worklogEntries: { include: { author: true }, orderBy: { createdAt: 'desc' } },
-      subtasks: true,
+      subtasks: { include: { assignee: { select: { name: true } } }, orderBy: { createdAt: 'asc' } },
     },
   });
   if (!task) return null;

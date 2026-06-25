@@ -1,8 +1,9 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { TASK_STATUS_TRANSITIONS, WORKLOG_TYPE, type TaskStatus } from '@pulso/shared';
 import { requireAuth } from '@/lib/auth/context';
 import { getTaskDetail } from '@/server/queries';
-import { addBlockerAction, changeStatusAction } from '@/server/actions/tasks';
+import { addBlockerAction, changeStatusAction, createTaskAction } from '@/server/actions/tasks';
 import { requestDecisionAction } from '@/server/actions/decisions';
 import { approveWorklogAction, createWorklogFormAction } from '@/server/actions/worklog';
 import { AssignTaskForm } from '@/components/assign-task-form';
@@ -43,6 +44,36 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
         <div className="space-y-6 lg:col-span-2">
           <Card title="Descripción">
             <p className="text-sm leading-relaxed text-fg/90">{task.description ?? 'Sin descripción.'}</p>
+          </Card>
+
+          <Card title={`Subtareas · ${task.subtasks.length}`}>
+            {task.subtasks.length === 0 ? (
+              <p className="mb-4 text-sm text-muted/70">Sin subtareas todavía. Dividí el proyecto en pasos concretos.</p>
+            ) : (
+              <ul className="mb-4 divide-y divide-border/60">
+                {task.subtasks.map((s) => (
+                  <li key={s.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                    <Link href={`/tasks/${s.id}`} className="min-w-0 truncate text-sm transition hover:text-accent">{s.title}</Link>
+                    <span className="flex shrink-0 items-center gap-3">
+                      <span className="font-meta text-[11px] text-muted">{s.assignee?.name ?? 'Sin responsable'}</span>
+                      <StatusBadge status={s.status} />
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <form action={createTaskAction} className="flex flex-wrap gap-2">
+              <input type="hidden" name="teamId" value={task.teamId} />
+              <input type="hidden" name="parentTaskId" value={task.id} />
+              <input name="title" required placeholder="Nueva subtarea" className={`${inputCls} min-w-[12rem] flex-1`} />
+              <select name="assigneeId" defaultValue={ctx.user.id} className={`${selectCls} sm:max-w-[12rem]`}>
+                <option value="">Sin responsable</option>
+                {people.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}{p.id === ctx.user.id ? ' (yo)' : ''}</option>
+                ))}
+              </select>
+              <button className="shrink-0 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-bg transition hover:brightness-110">Agregar</button>
+            </form>
           </Card>
 
           <Card title="Resultado y terminado">

@@ -9,12 +9,15 @@ import { PRIORITY_LABEL, STATUS_LABEL } from '@/lib/labels';
  */
 
 // --- Estilos de formulario reutilizables ---------------------------------
+// Fondo SÓLIDO + texto explícito a propósito: el modificador de opacidad
+// (bg-bg/50) sobre una var CSS plana genera un valor inválido y el input cae al
+// blanco por defecto del navegador → texto cream ilegible. Sólido lo evita.
 export const inputCls =
-  'w-full rounded-xl border border-border bg-bg/50 px-3 py-2 text-sm outline-none transition placeholder:text-muted/50 focus:border-accent';
+  'w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-fg outline-none transition placeholder:text-muted focus:border-accent';
 export const selectCls =
-  'w-full rounded-xl border border-border bg-bg/50 px-3 py-2 text-sm outline-none transition focus:border-accent';
+  'w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-fg outline-none transition focus:border-accent';
 export const textareaCls =
-  'w-full resize-none rounded-xl border border-border bg-bg/50 px-3 py-2 text-sm leading-relaxed outline-none transition placeholder:text-muted/50 focus:border-accent';
+  'w-full resize-none rounded-xl border border-border bg-surface px-3 py-2 text-sm leading-relaxed text-fg outline-none transition placeholder:text-muted focus:border-accent';
 export const btnPrimary =
   'rounded-full bg-accent px-5 py-2 text-sm font-medium text-bg transition hover:brightness-110 disabled:opacity-40';
 export const btnGhost =
