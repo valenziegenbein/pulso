@@ -17,8 +17,8 @@ export function LoginForm() {
           name="email"
           type="email"
           required
-          defaultValue="admin@pulso.local"
-          className="w-full rounded-xl border border-border bg-bg/50 px-3 py-2 text-sm outline-none transition focus:border-accent"
+          defaultValue={process.env.NODE_ENV === 'production' ? '' : 'admin@pulso.local'}
+          className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-fg outline-none transition focus:border-accent"
         />
       </div>
       <div>
@@ -27,7 +27,7 @@ export function LoginForm() {
           name="password"
           type="password"
           required
-          className="w-full rounded-xl border border-border bg-bg/50 px-3 py-2 text-sm outline-none transition focus:border-accent"
+          className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-fg outline-none transition focus:border-accent"
         />
       </div>
       {state.error && <p className="text-xs text-[var(--danger)]">{state.error}</p>}
