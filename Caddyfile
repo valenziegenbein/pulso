@@ -1,0 +1,8 @@
+# Pulso — reverse proxy con HTTPS automático.
+# {$DOMAIN} se toma del entorno (ver .env / docker-compose). Caddy obtiene y
+# renueva el certificado de Let's Encrypt solo, siempre que el dominio resuelva
+# a este servidor y los puertos 80/443 estén abiertos.
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:3000
+}

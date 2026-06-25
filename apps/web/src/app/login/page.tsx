@@ -26,9 +26,11 @@ export default async function LoginPage() {
           <div className="rounded-2xl border border-border bg-surface/70 p-6 backdrop-blur-sm">
             <LoginForm />
           </div>
-          <p className="mt-5 text-center text-[11px] leading-relaxed text-muted/80">
-            Demo: admin@pulso.local, luis@pulso.local, ana@pulso.local / pulso1234
-          </p>
+          {process.env.NODE_ENV !== 'production' && (
+            <p className="mt-5 text-center text-[11px] leading-relaxed text-muted/80">
+              Demo: admin@pulso.local, luis@pulso.local, ana@pulso.local / pulso1234
+            </p>
+          )}
           <p className="mt-3 text-center text-xs text-muted">
             Nueva organizacion?{' '}
             <Link href="/register" className="text-accent transition hover:text-fg">
