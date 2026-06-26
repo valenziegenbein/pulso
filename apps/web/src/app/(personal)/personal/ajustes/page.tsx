@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { usePersonal, type AiMode, type StorageTarget } from '@/lib/personal/store';
 import { LocalAiSetup } from '@/components/personal/local-ai-setup';
 import { CloudAiSetup } from '@/components/personal/cloud-ai-setup';
+import { TeamsConnect } from '@/components/personal/teams-connect';
 
 export default function AjustesPage() {
   const router = useRouter();
@@ -39,6 +40,8 @@ export default function AjustesPage() {
           </div>
         )}
       </Section>
+
+      <TeamsConnect />
 
       <Section title="Datos" hint="Todo se guarda localmente en este equipo.">
         <button

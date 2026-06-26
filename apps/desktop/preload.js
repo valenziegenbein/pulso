@@ -30,4 +30,14 @@ contextBridge.exposeInMainWorld('pulso', {
   // el widget (señal confiable: las navegaciones de Next son client-side "soft").
   personalReady: () => ipcRenderer.send('pulso:personal-ready'),
   authState: (state) => ipcRenderer.send('pulso:auth', state),
+  // Pulso Teams (web): el desktop abre el server remoto en su propia ventana.
+  getTeamsUrl: () => ipcRenderer.invoke('pulso:get-teams-url'),
+  setTeamsUrl: (url) => ipcRenderer.send('pulso:set-teams-url', url),
+  openTeams: () => ipcRenderer.send('pulso:open-teams'),
+  // El panel escucha si falta configurar la URL del server Teams.
+  onNeedTeamsUrl: (handler) => {
+    const listener = () => handler();
+    ipcRenderer.on('pulso:need-teams-url', listener);
+    return () => ipcRenderer.removeListener('pulso:need-teams-url', listener);
+  },
 });

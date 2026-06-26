@@ -21,12 +21,15 @@ let BASE_URL = process.env.PULSO_URL || 'http://localhost:3000';
 
 let mainWindow = null;
 let widgetWindow = null;
+let teamsWindow = null;
 let tray = null;
 let serverProcess = null;
 let programmaticMove = false;
 let widgetOpened = false;
 let widgetMode = 'personal';
 let widgetView = 'full';
+// URL del server de Pulso Teams (web). Personal es local; Teams vive en el server.
+let TEAMS_URL = null;
 
 // --- Configuración del usuario (secretos + DB), persistida en userData ---
 function loadConfig() {
@@ -57,7 +60,36 @@ function loadConfig() {
   return { cfg };
 }
 
-// SQLite embebido (lo usa el modo Teams). Personal es local-first en el cliente.
+// --- URL del server Teams (web), persistida en pulso.config.json ---
+function configPath() {
+  return path.join(app.getPath('userData'), 'pulso.config.json');
+}
+function readTeamsUrl() {
+  try {
+    const cfg = JSON.parse(fs.readFileSync(configPath(), 'utf8'));
+    return typeof cfg.teamsUrl === 'string' && cfg.teamsUrl.length > 0 ? cfg.teamsUrl.replace(/\/$/, '') : null;
+  } catch {
+    return null;
+  }
+}
+function writeTeamsUrl(url) {
+  const clean = typeof url === 'string' ? url.trim().replace(/\/$/, '') : '';
+  let cfg = {};
+  try {
+    cfg = JSON.parse(fs.readFileSync(configPath(), 'utf8'));
+  } catch {
+    /* primera vez */
+  }
+  cfg.teamsUrl = clean;
+  try {
+    fs.writeFileSync(configPath(), JSON.stringify(cfg, null, 2));
+  } catch {
+    /* no crítico */
+  }
+  TEAMS_URL = clean.length > 0 ? clean : null;
+  return TEAMS_URL;
+}
+
 function logDesktop(msg) {
   try {
     fs.appendFileSync(path.join(app.getPath('userData'), 'desktop.log'), `[${new Date().toISOString()}] ${msg}\n`);
@@ -135,11 +167,13 @@ function ensureDatabase() {
 // --- Server Next standalone embebido (solo cuando está empaquetado) ---
 function startEmbeddedServer() {
   const { cfg } = loadConfig();
-  const dbPath = ensureDatabase();
+  // El server embebido sirve SOLO el modo Personal (local-first, sin DB). Teams
+  // vive en el server remoto (ver openTeams). Una DATABASE_URL válida en formato
+  // alcanza: Prisma init es lazy y las rutas Personal no consultan la base.
   const databaseUrl =
-    typeof cfg.DATABASE_URL === 'string' && cfg.DATABASE_URL.startsWith('file:')
+    typeof cfg.DATABASE_URL === 'string' && cfg.DATABASE_URL.startsWith('postgresql://')
       ? cfg.DATABASE_URL
-      : `file:${dbPath.replace(/\\/g, '/')}`;
+      : 'postgresql://pulso:pulso@127.0.0.1:5432/pulso?schema=public';
   const serverJs = path.join(process.resourcesPath, 'server', 'apps', 'web', 'server.js');
   const out = fs.openSync(path.join(app.getPath('userData'), 'server.log'), 'a');
   serverProcess = spawn(process.execPath, [serverJs], {
@@ -190,8 +224,53 @@ function normalizeWidgetView(view) {
 }
 
 function widgetUrl() {
-  if (widgetMode === 'teams') return `${BASE_URL}/widget?view=${widgetView}`;
+  // Teams vive en el server remoto; Personal es local (embebido).
+  if (widgetMode === 'teams') return `${TEAMS_URL ?? BASE_URL}/widget?view=${widgetView}`;
   return `${BASE_URL}/captura`;
+}
+
+/** Ventana de Pulso Teams: carga el server web remoto (mismo dato que la web, en
+ *  vivo). Si no hay URL configurada, avisa al panel para que la pida. */
+function openTeams() {
+  if (!TEAMS_URL) {
+    createMainWindow();
+    mainWindow.webContents.send('pulso:need-teams-url');
+    return;
+  }
+  if (teamsWindow && !teamsWindow.isDestroyed()) {
+    teamsWindow.show();
+    teamsWindow.focus();
+    return;
+  }
+  teamsWindow = new BrowserWindow({
+    width: 1280,
+    height: 840,
+    minWidth: 900,
+    minHeight: 600,
+    title: 'Pulso Teams',
+    backgroundColor: '#15110c',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      additionalArguments: [`--pulso-version=${app.getVersion()}`],
+    },
+  });
+  teamsWindow.loadURL(TEAMS_URL);
+  teamsWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.includes('/widget')) {
+      showWidget('teams');
+      return { action: 'deny' };
+    }
+    // Links externos (fuera de tu server) → navegador del sistema.
+    if (/^https?:\/\//.test(url) && TEAMS_URL && !url.startsWith(TEAMS_URL)) {
+      shell.openExternal(url);
+      return { action: 'deny' };
+    }
+    return { action: 'allow' };
+  });
+  teamsWindow.on('closed', () => {
+    teamsWindow = null;
+  });
 }
 
 function waitForServer(url, timeoutMs = 60000) {
@@ -443,6 +522,7 @@ function createTray() {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Abrir panel', click: createMainWindow },
+      { label: 'Abrir Pulso Teams', click: openTeams },
       { label: 'Mostrar / ocultar widget', click: toggleWidget },
       { type: 'separator' },
       { label: 'Buscar actualizaciones', click: () => checkForUpdates(true) },
@@ -499,6 +579,7 @@ function checkForUpdates(interactive = false) {
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
   loadState();
+  TEAMS_URL = readTeamsUrl();
   if (app.isPackaged) {
     startEmbeddedServer();
     BASE_URL = `http://127.0.0.1:${SERVER_PORT}`;
@@ -525,6 +606,11 @@ ipcMain.on('pulso:personal-ready', () => openWidgetCollapsed('personal'));
 ipcMain.on('pulso:auth', (_e, s) => {
   if (s === 'authed') openWidgetCollapsed('teams');
 });
+
+// Pulso Teams (web): configurar la URL del server y abrir la ventana remota.
+ipcMain.handle('pulso:get-teams-url', () => TEAMS_URL);
+ipcMain.on('pulso:set-teams-url', (_e, url) => writeTeamsUrl(url));
+ipcMain.on('pulso:open-teams', () => openTeams());
 
 // Captura rápida de pantalla. Oculta el widget un instante para no salir en la foto.
 ipcMain.handle('pulso:screenshot', async () => {
