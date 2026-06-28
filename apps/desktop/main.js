@@ -64,13 +64,25 @@ function loadConfig() {
 function configPath() {
   return path.join(app.getPath('userData'), 'pulso.config.json');
 }
-function readTeamsUrl() {
+// Default horneado al build: la organización distribuye su desktop con su URL ya
+// puesta (pulso.defaults.json) → el trabajador NO tipea nada, solo inicia sesión.
+function bundledDefaultTeamsUrl() {
   try {
-    const cfg = JSON.parse(fs.readFileSync(configPath(), 'utf8'));
-    return typeof cfg.teamsUrl === 'string' && cfg.teamsUrl.length > 0 ? cfg.teamsUrl.replace(/\/$/, '') : null;
+    const d = JSON.parse(fs.readFileSync(path.join(__dirname, 'pulso.defaults.json'), 'utf8'));
+    return typeof d.teamsUrl === 'string' && d.teamsUrl.length > 0 ? d.teamsUrl.replace(/\/$/, '') : null;
   } catch {
     return null;
   }
+}
+function readTeamsUrl() {
+  // Prioridad: lo que guardó el usuario > el default del build.
+  try {
+    const cfg = JSON.parse(fs.readFileSync(configPath(), 'utf8'));
+    if (typeof cfg.teamsUrl === 'string' && cfg.teamsUrl.length > 0) return cfg.teamsUrl.replace(/\/$/, '');
+  } catch {
+    /* primera vez */
+  }
+  return bundledDefaultTeamsUrl();
 }
 function writeTeamsUrl(url) {
   const clean = typeof url === 'string' ? url.trim().replace(/\/$/, '') : '';
