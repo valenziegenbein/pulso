@@ -45,6 +45,13 @@ export interface LLMProvider {
    * caller degrada a `complete()`.
    */
   completeStream?(request: CompletionRequest, onDelta: (text: string) => void): Promise<CompletionResult>;
+  /**
+   * Embeddings opcionales: vectoriza cada texto (mismo orden de entrada/salida).
+   * Solo lo implementan los adapters con endpoint de embeddings (OpenAI-compatible).
+   * Anthropic no ofrece embeddings, así que su adapter no define este método —
+   * el caller debe tratar la ausencia como "no soportado", no como error.
+   */
+  embed?(texts: string[]): Promise<number[][]>;
 }
 
 /**

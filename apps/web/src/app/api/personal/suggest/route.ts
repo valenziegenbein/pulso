@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createLLMProvider, WorklogSuggestionService, type LLMProviderResolved } from '@pulso/llm';
-import { CLOUD_HOSTS, assertLocalBaseUrl, fetchWithTimeout, LocalUrlError } from '@/lib/personal/ai-endpoint';
+import { LocalUrlError, resolveProvider } from '@/lib/personal/resolve-provider';
 import { rateLimit } from '@/lib/rate-limit';
 
 const LIMIT = Number(process.env.WORKLOG_RATE_LIMIT ?? 20);
@@ -31,32 +31,6 @@ interface SuggestBody {
 interface SuggestImage {
   dataUrl: string;
   mediaType: string;
-}
-
-/**
- * Resuelve el provider del LLM según lo que mandó el cliente.
- *
- * - Cloud (openai/anthropic): el baseUrl lo FUERZA el server (host hardcodeado).
- *   Aunque viaje una API key, no puede filtrarse a un host arbitrario (no SSRF).
- *   Requiere apiKey.
- * - Local (lmstudio/ollama/custom/otros): baseUrl del cliente, validado a loopback.
- */
-function resolveProvider(
-  providerName: string,
-  rawUrl: string,
-  model: string,
-  apiKey: string,
-): LLMProviderResolved {
-  const fetchImpl = fetchWithTimeout(120_000);
-  if (providerName === 'openai') {
-    if (!apiKey) throw new LocalUrlError('bad_url');
-    return { type: 'OPENAI_COMPATIBLE', baseUrl: `https://${CLOUD_HOSTS.openai}/v1`, model, apiKey, fetchImpl };
-  }
-  if (providerName === 'anthropic') {
-    if (!apiKey) throw new LocalUrlError('bad_url');
-    return { type: 'ANTHROPIC', baseUrl: `https://${CLOUD_HOSTS.anthropic}`, model, apiKey, fetchImpl };
-  }
-  return { type: 'OPENAI_COMPATIBLE', baseUrl: assertLocalBaseUrl(rawUrl), model, fetchImpl };
 }
 
 /**

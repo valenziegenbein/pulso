@@ -83,6 +83,47 @@ export function aiReady(ai: AiMode, config: AiConfig | null): boolean {
   return true;
 }
 
+/** OpenAI: modelo de embeddings fijo (no hace falta elegirlo, es el estándar). */
+export const OPENAI_EMBEDDINGS_MODEL = 'text-embedding-3-small';
+
+/**
+ * ¿Hay proveedor+modelo para embeddings? Anthropic no ofrece embeddings — el
+ * asistente de notas cae a búsqueda léxica (BM25) con ese proveedor. OpenAI
+ * siempre puede (modelo fijo); local necesita que el usuario haya elegido uno.
+ */
+export function embeddingsReady(ai: AiMode, config: AiConfig | null): boolean {
+  if (!aiReady(ai, config) || !config) return false;
+  if (config.provider === 'anthropic') return false;
+  if (config.provider === 'openai') return true;
+  return Boolean(config.embeddingsModel?.trim());
+}
+
+/** El modelo de embeddings efectivo según el proveedor (fijo en OpenAI). */
+export function embeddingsModelFor(config: AiConfig): string | undefined {
+  return config.provider === 'openai' ? OPENAI_EMBEDDINGS_MODEL : config.embeddingsModel;
+}
+
+/** Vectoriza textos vía el proxy server-side (mismo modelo de confianza que
+ *  generateDraft: la config viaja del cliente, el server nunca la persiste). */
+export async function embedTexts(texts: string[], config: AiConfig): Promise<number[][]> {
+  const model = embeddingsModelFor(config);
+  if (!model || texts.length === 0) return [];
+  let res: Response;
+  try {
+    res = await fetch('/api/personal/embeddings', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ texts, provider: config.provider, baseUrl: config.baseUrl, model, apiKey: config.apiKey }),
+    });
+  } catch {
+    throw new AiError('network');
+  }
+  if (res.status === 429) throw new AiError('rate_limited');
+  if (!res.ok) throw new AiError('unavailable');
+  const data = (await res.json()) as { vectors?: number[][] };
+  return data.vectors ?? [];
+}
+
 /** Lista los modelos cargados en el servidor local (vía proxy server-side). */
 export async function listModels(baseUrl: string): Promise<string[]> {
   let res: Response;

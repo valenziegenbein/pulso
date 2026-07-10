@@ -74,6 +74,30 @@ export class OpenAICompatibleProvider implements LLMProvider {
     return { text, model };
   }
 
+  /** POST /embeddings. Devuelve un vector por texto, en el mismo orden de entrada
+   *  (el server puede responder fuera de orden; se reordena por `index`). */
+  async embed(texts: string[]): Promise<number[][]> {
+    let res: Response;
+    try {
+      res = await this.fetchImpl(`${this.opts.baseUrl.replace(/\/$/, '')}/embeddings`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(this.opts.apiKey ? { authorization: `Bearer ${this.opts.apiKey}` } : {}),
+        },
+        body: JSON.stringify({ model: this.opts.model, input: texts }),
+      });
+    } catch (cause) {
+      throw new LLMRequestError(`No se pudo contactar al proveedor de embeddings: ${String(cause)}`, undefined, this.id);
+    }
+    if (!res.ok) {
+      throw new LLMRequestError(`Proveedor de embeddings respondió ${res.status}`, res.status, this.id);
+    }
+    const data = (await res.json()) as { data?: Array<{ embedding: number[]; index?: number }> };
+    const items = data.data ?? [];
+    return [...items].sort((a, b) => (a.index ?? 0) - (b.index ?? 0)).map((d) => d.embedding);
+  }
+
   private async post(request: CompletionRequest, stream: boolean): Promise<Response> {
     let res: Response;
     try {

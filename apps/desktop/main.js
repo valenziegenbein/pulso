@@ -119,6 +119,28 @@ async function chooseFolder(win) {
 // y notes-index.js (módulos sin Electron, verificables con node puro).
 const { exportMarkdown } = require('./markdown');
 const { retrieveNotesContext } = require('./notes-index');
+const embeddingsIndex = require('./embeddings-index');
+
+// Cache de vectores del asistente de notas: SIEMPRE en userData, nunca en la
+// carpeta del usuario — es un dato derivado de la app, no algo que le
+// corresponda a su bóveda.
+function embeddingsCacheDir() {
+  return path.join(app.getPath('userData'), 'embeddings-cache');
+}
+
+/** Formatea chunks (BM25 o híbridos) al mismo formato de prompt que retrieveNotesContext. */
+function chunksToContext(chunks, budget) {
+  const parts = [];
+  let total = 0;
+  for (const c of chunks) {
+    if (total >= budget) break;
+    const text = c.text.slice(0, budget - total);
+    const where = c.heading ? `${c.file} › ${c.heading}` : c.file;
+    parts.push(`— ${where} —\n${text}`);
+    total += text.length;
+  }
+  return parts.length > 0 ? parts.join('\n\n') : null;
+}
 
 function logDesktop(msg) {
   try {
@@ -655,8 +677,37 @@ ipcMain.handle('pulso:export-markdown', (_e, payload) =>
     logDesktop(`export-markdown falló: ${err.message}`),
   ),
 );
-ipcMain.handle('pulso:read-notes-context', (_e, payload) =>
-  retrieveNotesContext(payload?.dir, payload?.query, payload?.maxChars),
+ipcMain.handle('pulso:read-notes-context', (_e, payload) => {
+  const dir = payload?.dir;
+  const query = typeof payload?.query === 'string' ? payload.query.trim() : '';
+  const budget = Math.min(Math.max(Number(payload?.maxChars) || 3000, 500), 8000);
+  const queryVector = Array.isArray(payload?.queryVector) ? payload.queryVector : null;
+
+  // Híbrido (BM25 + embeddings vía RRF) solo si hay query Y un vector de esa
+  // query. Sin vector (embeddings apagados o proveedor sin soporte), o sin
+  // query, se comporta exactamente igual que antes (BM25 puro / recientes).
+  if (typeof dir === 'string' && dir.length > 0 && query.length > 0 && queryVector) {
+    try {
+      const chunks = embeddingsIndex.hybridSearch(dir, query, queryVector, 12, embeddingsCacheDir());
+      const out = chunksToContext(chunks, budget);
+      if (out) return out;
+    } catch {
+      /* si el híbrido falla por lo que sea, cae a BM25/recientes abajo */
+    }
+  }
+  return retrieveNotesContext(dir, query, budget);
+});
+
+// Asistente de notas — embeddings (etapa 2b): qué falta vectorizar, guardar
+// vectores recién calculados, y un status liviano para la UI de indexado.
+ipcMain.handle('pulso:embeddings-pending', (_e, payload) =>
+  embeddingsIndex.pendingChunks(payload?.dir, payload?.model, embeddingsCacheDir()),
+);
+ipcMain.handle('pulso:embeddings-save', (_e, payload) =>
+  embeddingsIndex.saveEmbeddings(payload?.dir, payload?.model, payload?.entries, embeddingsCacheDir()),
+);
+ipcMain.handle('pulso:embeddings-status', (_e, payload) =>
+  embeddingsIndex.status(payload?.dir, payload?.model, embeddingsCacheDir()),
 );
 
 // Captura rápida de pantalla. Oculta el widget un instante para no salir en la foto.

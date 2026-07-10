@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type ReactNode } from 'react';
 import { TASK_PRIORITY_ORDER, usePersonal, type EntryType } from '@/lib/personal/store';
-import { AiError, aiReady, generateDraft } from '@/lib/personal/ai';
+import { AiError, aiReady, embedTexts, embeddingsReady, generateDraft } from '@/lib/personal/ai';
 import { ProjectChooser } from './project-chooser';
 
 type Bridge = {
@@ -11,7 +11,7 @@ type Bridge = {
   collapse?: () => void;
   expand?: () => void;
   screenshot?: () => Promise<string | null>;
-  readNotesContext?: (payload: { dir: string; query?: string; maxChars?: number }) => Promise<string | null>;
+  readNotesContext?: (payload: { dir: string; query?: string; queryVector?: number[]; maxChars?: number }) => Promise<string | null>;
 };
 function bridge(): Bridge | undefined {
   return typeof window !== 'undefined' ? (window as unknown as { pulso?: Bridge }).pulso : undefined;
@@ -77,7 +77,7 @@ function useWindowWidth(): number {
 export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}) {
   const elapsed = useElapsed();
   const width = useWindowWidth();
-  const { focusProject, addEntry, tasks, toggleTask, ai, aiConfig, storage, storageDir } = usePersonal();
+  const { focusProject, addEntry, tasks, toggleTask, ai, aiConfig, storage, storageDir, embeddingsEnabled } = usePersonal();
   const [isDesktop, setIsDesktop] = useState(false);
   useEffect(() => setIsDesktop(Boolean(bridge()?.isDesktop)), []);
 
@@ -139,14 +139,27 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
     // proveedor lo soporta; si no, el server degrada solo).
     const streamable = ai !== 'none' && aiReady(ai, aiConfig);
     // Asistente de notas (opt-in por proyecto): extractos de la carpeta del
-    // proyecto como contexto. La micro-nota hace de query (BM25); sin nota
-    // (captura sola), el shell cae a las notas más recientes.
+    // proyecto como contexto. La micro-nota hace de query — BM25 siempre, y si
+    // hay búsqueda semántica activada, además un embedding de esa query para
+    // retrieval híbrido (RRF). Sin nota (captura sola), el shell cae a las
+    // notas más recientes. Nunca bloquea por indexado grueso: solo se embede
+    // la query (una llamada chica), la bóveda se indexa aparte (Archivos).
     let notesContext: string | undefined;
     const notesDir = focusProject.markdownDir ?? (storage === 'markdown' ? storageDir : null);
     if (focusProject.useNotesContext && notesDir && streamable) {
+      let queryVector: number[] | undefined;
+      const noteQuery = note.trim();
+      if (noteQuery && embeddingsEnabled && aiConfig && embeddingsReady(ai, aiConfig)) {
+        try {
+          const [vec] = await embedTexts([noteQuery], aiConfig);
+          queryVector = vec;
+        } catch {
+          /* sin vector: el híbrido degrada solo a BM25 */
+        }
+      }
       try {
         notesContext =
-          (await bridge()?.readNotesContext?.({ dir: notesDir, query: note.trim() || undefined, maxChars: 3000 })) ??
+          (await bridge()?.readNotesContext?.({ dir: notesDir, query: noteQuery || undefined, queryVector, maxChars: 3000 })) ??
           undefined;
       } catch {
         /* sin notas: el borrador sale igual */

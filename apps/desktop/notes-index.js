@@ -86,12 +86,14 @@ function indexFile(dir, absPath) {
   }
   if (raw.length > MAX_FILE_BYTES) raw = raw.slice(0, MAX_FILE_BYTES);
   const rel = path.relative(dir, absPath);
-  return chunkMarkdown(raw).map((c) => {
+  return chunkMarkdown(raw).map((c, idx) => {
     // El heading y el nombre del archivo también cuentan como texto buscable.
     const tokens = tokenize(`${rel} ${c.heading} ${c.text}`);
     const tf = new Map();
     for (const t of tokens) tf.set(t, (tf.get(t) ?? 0) + 1);
-    return { file: rel, heading: c.heading, text: c.text, tf, len: tokens.length };
+    // Id estable mientras el archivo no cambie: si cambia (mtime), TODOS sus
+    // chunks se re-derivan (y, en el índice de embeddings, se re-vectorizan).
+    return { id: `${rel}#${idx}`, file: rel, heading: c.heading, text: c.text, tf, len: tokens.length };
   });
 }
 
@@ -114,6 +116,21 @@ function refreshIndex(dir) {
   }
   CACHE.set(dir, state);
   return [...state.byFile.values()].flat();
+}
+
+/** Chunks actuales de la carpeta (id, file, heading, text, mtime del archivo
+ *  dueño), para que el índice de embeddings sepa qué vectorizar. Reusa el
+ *  mismo caché/mtime que BM25 — misma identidad de chunk en ambos rankers. */
+function getChunks(dir) {
+  const files = listMarkdownFiles(dir).slice(0, MAX_FILES);
+  const mtimeByRel = new Map(files.map((f) => [path.relative(dir, f.p), f.mtime]));
+  return refreshIndex(dir).map((c) => ({
+    id: c.id,
+    file: c.file,
+    heading: c.heading,
+    text: c.text,
+    mtime: mtimeByRel.get(c.file) ?? 0,
+  }));
 }
 
 // --- BM25 ---
@@ -178,4 +195,4 @@ function retrieveNotesContext(dir, query, maxChars) {
   return parts.length > 0 ? parts.join('\n\n') : readNotesContext(dir, budget);
 }
 
-module.exports = { retrieveNotesContext, tokenize, chunkMarkdown, bm25Search };
+module.exports = { retrieveNotesContext, tokenize, chunkMarkdown, bm25Search, refreshIndex, getChunks };

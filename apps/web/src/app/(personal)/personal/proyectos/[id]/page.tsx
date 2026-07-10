@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { CaptureCard } from '@/components/personal/capture-card';
 import { ProjectTasks } from '@/components/personal/project-tasks';
+import { NotesIndexPanel } from '@/components/personal/notes-index-panel';
+import { embeddingsReady } from '@/lib/personal/ai';
 import { ENTRY_LABEL, usePersonal, type EntryType } from '@/lib/personal/store';
 
 type ShellBridge = { isDesktop?: boolean; chooseFolder?: () => Promise<string | null> };
@@ -34,7 +36,7 @@ function fmt(ts: number): string {
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { ready, projects, entries, tasks, storage, storageDir, aiConfig, updateProjectContext, setProjectMarkdownDir, setProjectNotesContext } = usePersonal();
+  const { ready, projects, entries, tasks, storage, storageDir, ai, aiConfig, embeddingsEnabled, updateProjectContext, setProjectMarkdownDir, setProjectNotesContext } = usePersonal();
   const project = projects.find((p) => p.id === id);
 
   const [tab, setTab] = useState<Tab>('resumen');
@@ -285,6 +287,17 @@ export default function ProjectDetailPage() {
                   </label>
                 </div>
               )}
+
+              {/* Búsqueda semántica (etapa 2b): solo si está activada en Ajustes,
+                  el proveedor la soporta, y este proyecto lee sus notas. */}
+              {isDesktop &&
+                project.useNotesContext &&
+                embeddingsEnabled &&
+                aiConfig &&
+                embeddingsReady(ai, aiConfig) &&
+                (project.markdownDir ?? (storage === 'markdown' ? storageDir : null)) && (
+                  <NotesIndexPanel dir={(project.markdownDir ?? storageDir)!} aiConfig={aiConfig} />
+                )}
             </section>
             <section className="rounded-2xl border border-border bg-surface/50 p-5">
               <h2 className="font-display text-xl">Exportar</h2>

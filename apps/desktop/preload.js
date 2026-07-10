@@ -39,9 +39,13 @@ contextBridge.exposeInMainWorld('pulso', {
   // Carpeta Markdown (Personal): elegir carpeta destino y agregar entradas .md.
   chooseFolder: () => ipcRenderer.invoke('pulso:choose-folder'),
   exportMarkdown: (payload) => ipcRenderer.invoke('pulso:export-markdown', payload),
-  // Asistente de notas: extractos relevantes (BM25 con query) o recientes de una
-  // carpeta (solo lectura).
+  // Asistente de notas: extractos relevantes (BM25 y, si se pasa queryVector,
+  // híbrido con embeddings) o recientes de una carpeta (solo lectura).
   readNotesContext: (payload) => ipcRenderer.invoke('pulso:read-notes-context', payload),
+  // Asistente de notas — embeddings (etapa 2b, opt-in): indexado explícito.
+  embeddingsPending: (payload) => ipcRenderer.invoke('pulso:embeddings-pending', payload),
+  embeddingsSave: (payload) => ipcRenderer.invoke('pulso:embeddings-save', payload),
+  embeddingsStatus: (payload) => ipcRenderer.invoke('pulso:embeddings-status', payload),
   // El panel escucha si falta configurar la URL del server Teams.
   onNeedTeamsUrl: (handler) => {
     const listener = () => handler();

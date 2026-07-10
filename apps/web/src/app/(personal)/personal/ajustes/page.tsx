@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { usePersonal, type AiMode, type StorageTarget } from '@/lib/personal/store';
 import { LocalAiSetup } from '@/components/personal/local-ai-setup';
 import { CloudAiSetup } from '@/components/personal/cloud-ai-setup';
+import { SemanticSearchSetup } from '@/components/personal/semantic-search-setup';
 import { TeamsConnect } from '@/components/personal/teams-connect';
 
 type ShellBridge = { isDesktop?: boolean; chooseFolder?: () => Promise<string | null> };
@@ -80,6 +81,7 @@ export default function AjustesPage() {
             <CloudAiSetup />
           </div>
         )}
+        {(ai === 'local' || ai === 'byok') && <SemanticSearchSetup />}
       </Section>
 
       <TeamsConnect />

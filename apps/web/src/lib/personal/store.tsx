@@ -21,6 +21,9 @@ export interface AiConfig {
   model: string;
   /** Solo cloud (BYOK). Vive solo en este equipo; nunca vuelve del server. */
   apiKey?: string;
+  /** Solo local: modelo de embeddings (distinto al de chat), para búsqueda
+   *  semántica en la bóveda. OpenAI usa un modelo fijo; Anthropic no ofrece. */
+  embeddingsModel?: string;
 }
 
 export interface Project {
@@ -69,6 +72,9 @@ export interface PersonalState {
   storageDir: string | null;
   ai: AiMode;
   aiConfig: AiConfig | null;
+  /** Búsqueda semántica en la bóveda (etapa 2b, opt-in explícito). Requiere un
+   *  proveedor con embeddings (no Anthropic) y, si es local, embeddingsModel. */
+  embeddingsEnabled: boolean;
 }
 
 const STORAGE_KEY = 'pulso.personal.v1';
@@ -83,6 +89,7 @@ const DEFAULT_STATE: PersonalState = {
   storageDir: null,
   ai: null,
   aiConfig: null,
+  embeddingsEnabled: false,
 };
 
 interface PersonalContextValue extends PersonalState {
@@ -99,6 +106,7 @@ interface PersonalContextValue extends PersonalState {
   setStorageDir: (dir: string | null) => void;
   setProjectMarkdownDir: (id: string, dir: string | null) => void;
   setProjectNotesContext: (id: string, on: boolean) => void;
+  setEmbeddingsEnabled: (on: boolean) => void;
   setAi: (mode: AiMode) => void;
   setAiConfig: (config: AiConfig | null) => void;
   completeOnboarding: () => void;
@@ -206,6 +214,7 @@ export function PersonalProvider({ children }: { children: ReactNode }) {
   const setStorageDir = useCallback((storageDir: string | null) => setState((s) => ({ ...s, storageDir })), []);
   const setAi = useCallback((ai: AiMode) => setState((s) => ({ ...s, ai })), []);
   const setAiConfig = useCallback((aiConfig: AiConfig | null) => setState((s) => ({ ...s, aiConfig })), []);
+  const setEmbeddingsEnabled = useCallback((embeddingsEnabled: boolean) => setState((s) => ({ ...s, embeddingsEnabled })), []);
   const completeOnboarding = useCallback(() => setState((s) => ({ ...s, onboarded: true })), []);
   const reset = useCallback(() => setState(DEFAULT_STATE), []);
   const setFocusProject = useCallback((focusProjectId: string) => setState((s) => ({ ...s, focusProjectId })), []);
@@ -304,10 +313,11 @@ export function PersonalProvider({ children }: { children: ReactNode }) {
       setProjectNotesContext,
       setAi,
       setAiConfig,
+      setEmbeddingsEnabled,
       completeOnboarding,
       reset,
     }),
-    [state, ready, focusProject, setName, addProject, updateProjectContext, addEntry, addTask, toggleTask, setFocusProject, setStorage, setStorageDir, setProjectMarkdownDir, setProjectNotesContext, setAi, setAiConfig, completeOnboarding, reset],
+    [state, ready, focusProject, setName, addProject, updateProjectContext, addEntry, addTask, toggleTask, setFocusProject, setStorage, setStorageDir, setProjectMarkdownDir, setProjectNotesContext, setAi, setAiConfig, setEmbeddingsEnabled, completeOnboarding, reset],
   );
 
   return <PersonalContext.Provider value={value}>{children}</PersonalContext.Provider>;
