@@ -60,6 +60,8 @@ export interface PersonalState {
   tasks: Task[];
   focusProjectId: string | null;
   storage: StorageTarget;
+  /** Carpeta destino cuando storage === 'markdown' (solo desktop). */
+  storageDir: string | null;
   ai: AiMode;
   aiConfig: AiConfig | null;
 }
@@ -73,6 +75,7 @@ const DEFAULT_STATE: PersonalState = {
   tasks: [],
   focusProjectId: null,
   storage: null,
+  storageDir: null,
   ai: null,
   aiConfig: null,
 };
@@ -88,6 +91,7 @@ interface PersonalContextValue extends PersonalState {
   toggleTask: (id: string) => void;
   setFocusProject: (id: string) => void;
   setStorage: (target: StorageTarget) => void;
+  setStorageDir: (dir: string | null) => void;
   setAi: (mode: AiMode) => void;
   setAiConfig: (config: AiConfig | null) => void;
   completeOnboarding: () => void;
@@ -98,6 +102,33 @@ const PersonalContext = createContext<PersonalContextValue | null>(null);
 
 function newId(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+}
+
+// --- Export a carpeta Markdown (desktop) -----------------------------------
+type ShellBridge = {
+  isDesktop?: boolean;
+  exportMarkdown?: (payload: { dir: string; fileName: string; text: string }) => Promise<boolean>;
+};
+function shellBridge(): ShellBridge | undefined {
+  return typeof window !== 'undefined' ? (window as unknown as { pulso?: ShellBridge }).pulso : undefined;
+}
+
+/** Bloque .md de una entrada aprobada (Obsidian/Logseq/Git-friendly). */
+function entryToMarkdown(entry: Entry): string {
+  const when = new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(entry.createdAt);
+  const lines = [`## ${entry.title}`, '', `> ${ENTRY_LABEL[entry.type]} · ${when}`, ''];
+  if (entry.content.trim()) lines.push(entry.content.trim(), '');
+  if (entry.image) lines.push('_(con captura adjunta en Pulso)_', '');
+  return `${lines.join('\n')}\n`;
+}
+
+/** Fire-and-forget: agrega la entrada al .md de su proyecto en la carpeta elegida. */
+function exportEntryToFolder(entry: Entry, projectName: string | undefined, dir: string): void {
+  const b = shellBridge();
+  if (!b?.isDesktop || !b.exportMarkdown) return;
+  void b.exportMarkdown({ dir, fileName: projectName ?? 'bitacora', text: entryToMarkdown(entry) }).catch(() => {
+    /* export voluntario: si falla, la entrada sigue guardada en Pulso */
+  });
 }
 
 export function PersonalProvider({ children }: { children: ReactNode }) {
@@ -142,6 +173,7 @@ export function PersonalProvider({ children }: { children: ReactNode }) {
 
   const setName = useCallback((name: string) => setState((s) => ({ ...s, name })), []);
   const setStorage = useCallback((storage: StorageTarget) => setState((s) => ({ ...s, storage })), []);
+  const setStorageDir = useCallback((storageDir: string | null) => setState((s) => ({ ...s, storageDir })), []);
   const setAi = useCallback((ai: AiMode) => setState((s) => ({ ...s, ai })), []);
   const setAiConfig = useCallback((aiConfig: AiConfig | null) => setState((s) => ({ ...s, aiConfig })), []);
   const completeOnboarding = useCallback(() => setState((s) => ({ ...s, onboarded: true })), []);
@@ -174,9 +206,15 @@ export function PersonalProvider({ children }: { children: ReactNode }) {
         createdAt: Date.now(),
       };
       setState((s) => ({ ...s, entries: [entry, ...s.entries] }));
+      // Export voluntario: si la persona eligió una carpeta Markdown, la entrada
+      // aprobada también se agrega al .md de su proyecto (no bloquea el guardado).
+      if (state.storage === 'markdown' && state.storageDir) {
+        const projectName = state.projects.find((p) => p.id === entry.projectId)?.name;
+        exportEntryToFolder(entry, projectName, state.storageDir);
+      }
       return entry;
     },
-    [],
+    [state.storage, state.storageDir, state.projects],
   );
 
   const addTask = useCallback(
@@ -223,12 +261,13 @@ export function PersonalProvider({ children }: { children: ReactNode }) {
       toggleTask,
       setFocusProject,
       setStorage,
+      setStorageDir,
       setAi,
       setAiConfig,
       completeOnboarding,
       reset,
     }),
-    [state, ready, focusProject, setName, addProject, updateProjectContext, addEntry, addTask, toggleTask, setFocusProject, setStorage, setAi, setAiConfig, completeOnboarding, reset],
+    [state, ready, focusProject, setName, addProject, updateProjectContext, addEntry, addTask, toggleTask, setFocusProject, setStorage, setStorageDir, setAi, setAiConfig, completeOnboarding, reset],
   );
 
   return <PersonalContext.Provider value={value}>{children}</PersonalContext.Provider>;

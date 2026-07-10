@@ -16,6 +16,7 @@ type ShellBridge = {
   openTeams?: () => void;
   getTeamsUrl?: () => Promise<string | null>;
   setTeamsUrl?: (url: string) => void;
+  chooseFolder?: () => Promise<string | null>;
 };
 function shell(): ShellBridge | undefined {
   return typeof window !== 'undefined' ? (window as unknown as { pulso?: ShellBridge }).pulso : undefined;
@@ -23,13 +24,14 @@ function shell(): ShellBridge | undefined {
 
 export function Onboarding() {
   const router = useRouter();
-  const { setName, addProject, setStorage, setAi, completeOnboarding, entries, focusProject } = usePersonal();
+  const { setName, addProject, setStorage, setStorageDir, setAi, completeOnboarding, entries, focusProject } = usePersonal();
 
   const [i, setI] = useState(0);
   const [name, setNameLocal] = useState('');
   const [projName, setProjName] = useState('');
   const [projCtx, setProjCtx] = useState('');
   const [storage, setStorageLocal] = useState<StorageTarget>(null);
+  const [storageDir, setStorageDirLocal] = useState<string | null>(null);
   const [ai, setAiLocal] = useState<AiMode>(null);
   const [committed, setCommitted] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
@@ -78,8 +80,18 @@ export function Onboarding() {
     return () => clearTimeout(t);
   }, [i]);
 
+  // "Carpeta Markdown": en desktop abre el diálogo del sistema para elegirla.
+  async function chooseMarkdown() {
+    setStorageLocal('markdown');
+    const b = shell();
+    if (!b?.isDesktop || !b.chooseFolder) return;
+    const dir = await b.chooseFolder();
+    if (dir) setStorageDirLocal(dir);
+  }
+
   function finish() {
     setStorage(storage);
+    setStorageDir(storage === 'markdown' ? storageDir : null);
     setAi(ai);
     completeOnboarding();
     router.push('/personal');
@@ -231,9 +243,27 @@ export function Onboarding() {
             <p className="mt-3 text-muted">Pulso captura. Tu sistema favorito guarda.</p>
             <div className="mt-8 grid gap-3 sm:grid-cols-3">
               <OptionCard small title="En Pulso" desc="Base local simple." selected={storage === 'pulso'} onClick={() => setStorageLocal('pulso')} />
-              <OptionCard small title="Carpeta Markdown" desc="Obsidian, Logseq, Git." selected={storage === 'markdown'} onClick={() => setStorageLocal('markdown')} />
+              <OptionCard small title="Carpeta Markdown" desc="Obsidian, Logseq, Git." selected={storage === 'markdown'} onClick={chooseMarkdown} />
               <OptionCard small title="Notion" desc="A una base de Notion." selected={storage === 'notion'} onClick={() => setStorageLocal('notion')} />
             </div>
+            {storage === 'markdown' && (
+              <p className="pulso-reveal mt-4 text-sm text-muted">
+                {storageDir ? (
+                  <>
+                    Cada entrada aprobada se agrega a un .md por proyecto en{' '}
+                    <button onClick={chooseMarkdown} className="font-meta text-accent underline-offset-2 transition hover:underline" title="Cambiar carpeta">
+                      {storageDir}
+                    </button>
+                  </>
+                ) : isDesktop ? (
+                  <button onClick={chooseMarkdown} className="text-accent underline-offset-2 transition hover:underline">
+                    Elegí la carpeta destino…
+                  </button>
+                ) : (
+                  'La carpeta se elige en la app de escritorio. Acá queda anotada tu preferencia.'
+                )}
+              </p>
+            )}
             <StepNav onBack={() => go(-1)} onNext={() => go(1)} nextLabel={storage ? 'Continuar' : 'Configurar después'} />
           </div>
         )}

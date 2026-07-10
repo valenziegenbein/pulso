@@ -1,5 +1,5 @@
 import { WORKLOG_TYPE, type WorklogType } from '@pulso/shared';
-import type { ChatContentPart, LLMProvider } from './provider';
+import type { ChatContentPart, CompletionRequest, LLMProvider } from './provider';
 
 export interface TaskContext {
   title?: string;
@@ -75,16 +75,42 @@ export class WorklogSuggestionService {
     } catch (err) {
       // Degradación: si había imagen y la generación falló (modelo sin visión,
       // payload muy grande, contexto excedido), reintentamos solo con texto.
-      // Preferimos un borrador útil a romper el flujo.
-      if (input.images?.length) {
+      // Preferimos un borrador útil a romper el flujo. Sin nota no hay retry:
+      // el modelo no tendría nada que convertir.
+      if (input.images?.length && input.note.trim().length > 0) {
         return this.run({ ...input, images: undefined });
       }
       throw err;
     }
   }
 
+  /**
+   * Variante con streaming: `onContentDelta` recibe el texto de la bitácora a
+   * medida que el modelo lo escribe (solo el campo "content" del JSON), para
+   * que la UI muestre el borrador en vivo. Resuelve con la sugerencia completa.
+   * Si el provider no soporta streaming o falla, degrada a `suggest()`.
+   */
+  async suggestStream(input: SuggestionInput, onContentDelta: (text: string) => void): Promise<WorklogSuggestion> {
+    if (!this.provider.completeStream) return this.suggest(input);
+    try {
+      const extractor = new ContentFieldExtractor();
+      const { text } = await this.provider.completeStream(this.buildRequest(input), (chunk) =>
+        extractor.feed(chunk, onContentDelta),
+      );
+      return parseSuggestion(text, input);
+    } catch {
+      // Sin stream (incluye el retry sin imagen de suggest()).
+      return this.suggest(input);
+    }
+  }
+
   private async run(input: SuggestionInput): Promise<WorklogSuggestion> {
-    const { text } = await this.provider.complete({
+    const { text } = await this.provider.complete(this.buildRequest(input));
+    return parseSuggestion(text, input);
+  }
+
+  private buildRequest(input: SuggestionInput): CompletionRequest {
+    return {
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: buildUserContent(input) },
@@ -94,8 +120,73 @@ export class WorklogSuggestionService {
       // "pensando" antes del JSON; con poco presupuesto la salida se trunca y el
       // JSON queda incompleto → caería al fallback. Es un máximo, no un forzado.
       maxTokens: 1000,
-    });
-    return parseSuggestion(text, input);
+    };
+  }
+}
+
+/**
+ * Extrae incrementalmente el VALOR del campo `"content"` del JSON que el modelo
+ * va emitiendo, des-escapando la string JSON sobre la marcha. Permite mostrar
+ * la entrada de bitácora en vivo sin esperar el JSON completo (y sin exponer
+ * llaves/comillas crudas en la UI).
+ */
+class ContentFieldExtractor {
+  private buf = '';
+  private state: 'searching' | 'inString' | 'done' = 'searching';
+  private escape = false;
+  private unicode = '';
+
+  feed(chunk: string, emit: (text: string) => void): void {
+    if (this.state === 'done') return;
+    if (this.state === 'searching') {
+      this.buf += chunk;
+      const m = this.buf.match(/"content"\s*:\s*"/);
+      if (!m) {
+        // Mantiene el buffer acotado; el patrón es corto, con la cola alcanza.
+        if (this.buf.length > 8000) this.buf = this.buf.slice(-100);
+        return;
+      }
+      const rest = this.buf.slice((m.index ?? 0) + m[0].length);
+      this.buf = '';
+      this.state = 'inString';
+      this.consume(rest, emit);
+      return;
+    }
+    this.consume(chunk, emit);
+  }
+
+  private consume(text: string, emit: (t: string) => void): void {
+    let out = '';
+    for (const ch of text) {
+      if (this.unicode.length > 0) {
+        this.unicode += ch;
+        if (this.unicode.length === 5) {
+          const code = Number.parseInt(this.unicode.slice(1), 16);
+          if (!Number.isNaN(code)) out += String.fromCharCode(code);
+          this.unicode = '';
+        }
+        continue;
+      }
+      if (this.escape) {
+        this.escape = false;
+        if (ch === 'n') out += '\n';
+        else if (ch === 't') out += '\t';
+        else if (ch === 'r') out += '\r';
+        else if (ch === 'u') this.unicode = 'u';
+        else out += ch; // \" \\ \/ y desconocidos → literal
+        continue;
+      }
+      if (ch === '\\') {
+        this.escape = true;
+        continue;
+      }
+      if (ch === '"') {
+        this.state = 'done';
+        break;
+      }
+      out += ch;
+    }
+    if (out) emit(out);
   }
 }
 
@@ -119,7 +210,13 @@ function buildUserContent(input: SuggestionInput): string | ChatContentPart[] {
 }
 
 function buildUserPrompt(input: SuggestionInput): string {
-  const lines = [`Nota: "${clamp(input.note, BUDGET.note)}"`];
+  const note = input.note.trim();
+  // Captura sola (sin nota): la entrada se arma desde la imagen. Sin inventar.
+  const lines = [
+    note.length > 0
+      ? `Nota: "${clamp(note, BUDGET.note)}"`
+      : 'Nota: (la persona no escribió nota; describí el trabajo visible en la captura adjunta, de forma general y sin inventar detalles)',
+  ];
   if (input.task) {
     const t = input.task;
     if (t.title) lines.push(`Tarea activa: ${t.title}`);
@@ -143,10 +240,11 @@ const VALID_TYPES = new Set<string>(WORKLOG_TYPE);
 
 /** Parser tolerante: si el modelo no devuelve JSON limpio, degrada con seguridad. */
 function parseSuggestion(text: string, input: SuggestionInput): WorklogSuggestion {
+  const noteFallback = input.note.trim() || 'Captura de pantalla';
   const fallback: WorklogSuggestion = {
     type: 'NOTE',
-    title: input.note.slice(0, 80),
-    content: text.trim() || input.note,
+    title: noteFallback.slice(0, 80),
+    content: text.trim() || noteFallback,
   };
 
   const raw = text.match(/\{[\s\S]*\}/)?.[0];
@@ -159,7 +257,7 @@ function parseSuggestion(text: string, input: SuggestionInput): WorklogSuggestio
       : 'NOTE';
     return {
       type,
-      title: (parsed.title ?? input.note).toString().slice(0, 200),
+      title: (parsed.title ?? noteFallback).toString().slice(0, 200),
       content: (parsed.content ?? text).toString().slice(0, 5000),
     };
   } catch {

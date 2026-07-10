@@ -1,26 +1,64 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePersonal, type AiMode, type StorageTarget } from '@/lib/personal/store';
 import { LocalAiSetup } from '@/components/personal/local-ai-setup';
 import { CloudAiSetup } from '@/components/personal/cloud-ai-setup';
 import { TeamsConnect } from '@/components/personal/teams-connect';
 
+type ShellBridge = { isDesktop?: boolean; chooseFolder?: () => Promise<string | null> };
+function shell(): ShellBridge | undefined {
+  return typeof window !== 'undefined' ? (window as unknown as { pulso?: ShellBridge }).pulso : undefined;
+}
+
 export default function AjustesPage() {
   const router = useRouter();
-  const { storage, ai, setStorage, setAi, reset } = usePersonal();
+  const { storage, storageDir, ai, setStorage, setStorageDir, setAi, reset } = usePersonal();
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => setIsDesktop(Boolean(shell()?.isDesktop)), []);
+
+  async function pickFolder() {
+    const dir = await shell()?.chooseFolder?.();
+    if (dir) setStorageDir(dir);
+  }
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-12 sm:py-16">
       <h1 className="font-display mb-8 text-4xl sm:text-5xl">Ajustes</h1>
 
       <Section title="Dónde guardar" hint="Pulso captura. Tu sistema favorito guarda.">
-        <Choice<StorageTarget> value={storage} onChange={setStorage} options={[
+        <Choice<StorageTarget>
+          value={storage}
+          onChange={(v) => {
+            setStorage(v);
+            if (v === 'markdown' && isDesktop && !storageDir) void pickFolder();
+          }}
+          options={[
           ['pulso', 'En Pulso', 'Base local simple.'],
           ['markdown', 'Carpeta Markdown', 'Obsidian, Logseq, Git.'],
           ['notion', 'Notion', 'A una base de Notion.'],
         ]} />
+        {storage === 'markdown' && (
+          <p className="mt-3 text-sm text-muted">
+            {storageDir ? (
+              <>
+                Carpeta destino: <span className="font-meta text-fg">{storageDir}</span>{' '}
+                {isDesktop && (
+                  <button onClick={pickFolder} className="ml-2 text-accent underline-offset-2 transition hover:underline">
+                    Cambiar…
+                  </button>
+                )}
+              </>
+            ) : isDesktop ? (
+              <button onClick={pickFolder} className="text-accent underline-offset-2 transition hover:underline">
+                Elegí la carpeta destino…
+              </button>
+            ) : (
+              'La carpeta se elige en la app de escritorio.'
+            )}
+          </p>
+        )}
       </Section>
 
       <Section title="Inteligencia artificial" hint="La IA propone la bitácora. Vos siempre aprobás.">

@@ -102,6 +102,33 @@ function writeTeamsUrl(url) {
   return TEAMS_URL;
 }
 
+// --- Export a carpeta Markdown (modo Personal) ---
+// La persona elige una carpeta (Obsidian, Logseq, un repo…) y cada entrada de
+// bitácora aprobada se agrega a un .md por proyecto. Local y voluntario.
+async function chooseFolder(win) {
+  const res = await dialog.showOpenDialog(win ?? undefined, {
+    title: 'Elegí la carpeta para tu bitácora Markdown',
+    buttonLabel: 'Usar esta carpeta',
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (res.canceled || res.filePaths.length === 0) return null;
+  return res.filePaths[0];
+}
+
+function exportMarkdown(dir, fileName, text) {
+  if (typeof dir !== 'string' || typeof fileName !== 'string' || typeof text !== 'string') return false;
+  if (dir.length === 0 || text.length === 0) return false;
+  // Nombre saneado: sin separadores ni traversal — siempre queda DENTRO de dir.
+  const safeName = fileName.replace(/[\\/:*?"<>|]/g, '-').replace(/^\.+|\.+$/g, '').trim().slice(0, 120) || 'bitacora';
+  try {
+    fs.appendFileSync(path.join(dir, `${safeName}.md`), text, 'utf8');
+    return true;
+  } catch (err) {
+    logDesktop(`export-markdown falló: ${err.message}`);
+    return false;
+  }
+}
+
 function logDesktop(msg) {
   try {
     fs.appendFileSync(path.join(app.getPath('userData'), 'desktop.log'), `[${new Date().toISOString()}] ${msg}\n`);
@@ -623,6 +650,18 @@ ipcMain.on('pulso:auth', (_e, s) => {
 ipcMain.handle('pulso:get-teams-url', () => TEAMS_URL);
 ipcMain.on('pulso:set-teams-url', (_e, url) => writeTeamsUrl(url));
 ipcMain.on('pulso:open-teams', () => openTeams());
+// "Ir a Personal" desde la ventana Teams (login o sesión): cierra Teams y
+// vuelve al espacio Personal sin tocar ninguna configuración.
+ipcMain.on('pulso:back-to-personal', () => {
+  if (teamsWindow && !teamsWindow.isDestroyed()) teamsWindow.close();
+  createMainWindow();
+});
+
+// Carpeta Markdown (modo Personal): elegir carpeta y agregar entradas aprobadas.
+ipcMain.handle('pulso:choose-folder', async (e) => chooseFolder(BrowserWindow.fromWebContents(e.sender)));
+ipcMain.handle('pulso:export-markdown', (_e, payload) =>
+  exportMarkdown(payload?.dir, payload?.fileName, payload?.text),
+);
 
 // Captura rápida de pantalla. Oculta el widget un instante para no salir en la foto.
 ipcMain.handle('pulso:screenshot', async () => {

@@ -34,6 +34,11 @@ contextBridge.exposeInMainWorld('pulso', {
   getTeamsUrl: () => ipcRenderer.invoke('pulso:get-teams-url'),
   setTeamsUrl: (url) => ipcRenderer.send('pulso:set-teams-url', url),
   openTeams: () => ipcRenderer.send('pulso:open-teams'),
+  // "Ir a Personal": cierra la ventana Teams y vuelve al espacio Personal.
+  backToPersonal: () => ipcRenderer.send('pulso:back-to-personal'),
+  // Carpeta Markdown (Personal): elegir carpeta destino y agregar entradas .md.
+  chooseFolder: () => ipcRenderer.invoke('pulso:choose-folder'),
+  exportMarkdown: (payload) => ipcRenderer.invoke('pulso:export-markdown', payload),
   // El panel escucha si falta configurar la URL del server Teams.
   onNeedTeamsUrl: (handler) => {
     const listener = () => handler();

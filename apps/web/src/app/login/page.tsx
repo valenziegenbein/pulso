@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { Fraunces, Hanken_Grotesk, JetBrains_Mono } from 'next/font/google';
 import { getAuthContext } from '@/lib/auth/context';
 import { LoginForm } from '@/components/login-form';
+import { DesktopPersonalLink } from '@/components/desktop-personal-link';
 
 const display = Fraunces({ subsets: ['latin'], variable: '--font-display', display: 'swap' });
 const body = Hanken_Grotesk({ subsets: ['latin'], variable: '--font-body', display: 'swap' });
@@ -37,6 +38,10 @@ export default async function LoginPage() {
               Crear cuenta
             </Link>
           </p>
+          {/* Solo en el desktop: salir del login de Teams y volver a Personal. */}
+          <div className="mt-4 text-center">
+            <DesktopPersonalLink label="← Volver a Personal" className="text-xs text-muted transition hover:text-fg" />
+          </div>
         </div>
       </main>
     </div>

@@ -23,6 +23,7 @@ interface SuggestBody {
   baseUrl?: unknown;
   model?: unknown;
   apiKey?: unknown;
+  stream?: unknown;
 }
 
 interface SuggestImage {
@@ -79,7 +80,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const providerName = typeof body?.provider === 'string' ? body.provider : '';
   const rawUrl = typeof body?.baseUrl === 'string' ? body.baseUrl : '';
   const apiKey = typeof body?.apiKey === 'string' ? body.apiKey : '';
-  if (!note || note.length > 500 || !model) {
+  let images: SuggestImage[] | undefined;
+  try {
+    images = parseImages(body?.images ?? body?.image);
+  } catch {
+    return NextResponse.json({ error: 'invalid_image' }, { status: 400 });
+  }
+  // La nota es opcional cuando hay captura: la imagen sola alcanza como contexto.
+  if ((!note && !images?.length) || note.length > 500 || !model) {
     return NextResponse.json({ error: 'invalid_input' }, { status: 400 });
   }
   const title = typeof body?.task?.title === 'string' ? body.task.title : undefined;
@@ -87,12 +95,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const attachmentsHint = Array.isArray(body?.attachmentsHint)
     ? body.attachmentsHint.filter((a): a is string => typeof a === 'string').slice(0, 5)
     : undefined;
-  let images: SuggestImage[] | undefined;
-  try {
-    images = parseImages(body?.images ?? body?.image);
-  } catch {
-    return NextResponse.json({ error: 'invalid_image' }, { status: 400 });
-  }
 
   let resolved: LLMProviderResolved;
   try {
@@ -101,14 +103,44 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: e instanceof LocalUrlError ? e.code : 'bad_url' }, { status: 400 });
   }
 
-  try {
-    const suggestion = await new WorklogSuggestionService(createLLMProvider(resolved)).suggest({
-      note,
-      task: title ? { title } : undefined,
-      projectContext,
-      attachmentsHint,
-      images,
+  const service = new WorklogSuggestionService(createLLMProvider(resolved));
+  const input = {
+    note,
+    task: title ? { title } : undefined,
+    projectContext,
+    attachmentsHint,
+    images,
+  };
+
+  // Streaming (SSE): el borrador aparece a medida que el modelo lo escribe.
+  // Eventos: {delta} … {done, suggestion} | {error}. Si el proveedor no
+  // soporta stream, el service degrada solo y llega directo el `done`.
+  if (body?.stream === true) {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const send = (obj: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+        try {
+          const suggestion = await service.suggestStream(input, (delta) => send({ delta }));
+          send({ done: true, suggestion });
+        } catch {
+          send({ error: 'llm_unavailable' });
+        }
+        controller.close();
+      },
     });
+    return new NextResponse(stream, {
+      headers: {
+        'content-type': 'text/event-stream; charset=utf-8',
+        'cache-control': 'no-cache, no-transform',
+        connection: 'keep-alive',
+        'x-accel-buffering': 'no',
+      },
+    });
+  }
+
+  try {
+    const suggestion = await service.suggest(input);
     return NextResponse.json({ status: 'DRAFT', suggestion });
   } catch {
     return NextResponse.json({ error: 'llm_unavailable' }, { status: 502 });

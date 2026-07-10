@@ -115,4 +115,88 @@ describe('WorklogSuggestionService', () => {
     expect(hadImage).toEqual([true, false]);
     expect(suggestion.content).toBe('generado solo con texto');
   });
+
+  it('captura sola (sin nota): adapta el prompt y no reintenta sin imagen', async () => {
+    let calls = 0;
+    const capturing: LLMProvider = {
+      id: 'capturing',
+      async complete(request) {
+        calls += 1;
+        const user = request.messages.find((m) => m.role === 'user');
+        const text = Array.isArray(user?.content)
+          ? user.content.filter((p) => p.type === 'text').map((p) => (p.type === 'text' ? p.text : '')).join('\n')
+          : (user?.content ?? '');
+        expect(text).toContain('no escribió nota');
+        return { text: '{"type":"PROGRESS","title":"Pantalla de checkout","content":"Trabajando en el checkout."}', model: 'x' };
+      },
+    };
+    const suggestion = await new WorklogSuggestionService(capturing).suggest({
+      note: '',
+      images: [{ dataUrl: 'data:image/jpeg;base64,abc', mediaType: 'image/jpeg' }],
+    });
+    expect(calls).toBe(1);
+    expect(suggestion.title).toBe('Pantalla de checkout');
+  });
+
+  describe('suggestStream', () => {
+    /** Provider fake que emite el texto en chunks arbitrarios. */
+    function streamingProvider(chunks: string[]): LLMProvider {
+      return {
+        id: 'fake-stream',
+        async complete() {
+          return { text: chunks.join(''), model: 'x' };
+        },
+        async completeStream(_request, onDelta) {
+          for (const c of chunks) onDelta(c);
+          return { text: chunks.join(''), model: 'x' };
+        },
+      };
+    }
+
+    it('emite solo el valor de "content" (des-escapado) y resuelve la sugerencia', async () => {
+      // El campo se corta en pedazos crueles: clave partida, escapes partidos.
+      const chunks = [
+        '{"type": "PROGRESS", "title": "Avance", "con',
+        'tent": "Hola',
+        ' \\"mundo\\"',
+        ' con\\nsalto y tilde: caf\\u00e9"',
+        '}',
+      ];
+      const deltas: string[] = [];
+      const suggestion = await new WorklogSuggestionService(streamingProvider(chunks)).suggestStream(
+        { note: 'probando' },
+        (d) => deltas.push(d),
+      );
+      expect(deltas.join('')).toBe('Hola "mundo" con\nsalto y tilde: café');
+      expect(suggestion.type).toBe('PROGRESS');
+      expect(suggestion.content).toBe('Hola "mundo" con\nsalto y tilde: café');
+    });
+
+    it('sin completeStream degrada a suggest() sin deltas', async () => {
+      const plain: LLMProvider = {
+        id: 'plain',
+        async complete() {
+          return { text: '{"type":"NOTE","title":"t","content":"c"}', model: 'x' };
+        },
+      };
+      const deltas: string[] = [];
+      const suggestion = await new WorklogSuggestionService(plain).suggestStream({ note: 'x' }, (d) => deltas.push(d));
+      expect(deltas).toEqual([]);
+      expect(suggestion.content).toBe('c');
+    });
+
+    it('si el stream falla, degrada a suggest()', async () => {
+      const flaky: LLMProvider = {
+        id: 'flaky-stream',
+        async complete() {
+          return { text: '{"type":"NOTE","title":"t","content":"recuperado"}', model: 'x' };
+        },
+        async completeStream() {
+          throw new Error('conexión cortada');
+        },
+      };
+      const suggestion = await new WorklogSuggestionService(flaky).suggestStream({ note: 'x' }, () => {});
+      expect(suggestion.content).toBe('recuperado');
+    });
+  });
 });
