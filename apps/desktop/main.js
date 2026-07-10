@@ -115,9 +115,10 @@ async function chooseFolder(win) {
   return res.filePaths[0];
 }
 
-// Escritura del diario .md y lectura de notas como contexto: ver markdown.js
-// (módulo sin Electron, verificable con node puro).
-const { exportMarkdown, readNotesContext } = require('./markdown');
+// Escritura del diario .md y retrieval de notas como contexto: ver markdown.js
+// y notes-index.js (módulos sin Electron, verificables con node puro).
+const { exportMarkdown } = require('./markdown');
+const { retrieveNotesContext } = require('./notes-index');
 
 function logDesktop(msg) {
   try {
@@ -654,7 +655,9 @@ ipcMain.handle('pulso:export-markdown', (_e, payload) =>
     logDesktop(`export-markdown falló: ${err.message}`),
   ),
 );
-ipcMain.handle('pulso:read-notes-context', (_e, payload) => readNotesContext(payload?.dir, payload?.maxChars));
+ipcMain.handle('pulso:read-notes-context', (_e, payload) =>
+  retrieveNotesContext(payload?.dir, payload?.query, payload?.maxChars),
+);
 
 // Captura rápida de pantalla. Oculta el widget un instante para no salir en la foto.
 ipcMain.handle('pulso:screenshot', async () => {

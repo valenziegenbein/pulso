@@ -1,6 +1,6 @@
 {
   "name": "@pulso/desktop",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "private": true,
   "description": "Shell de escritorio de Pulso (Electron): panel principal + widget flotante always-on-top. Empaqueta el server Next standalone.",
   "author": "Pulso",
@@ -17,7 +17,7 @@
     "productName": "Pulso",
     "electronVersion": "33.4.11",
     "directories": { "output": "dist" },
-    "files": ["main.js", "preload.js", "markdown.js", "package.json", "pulso.defaults.json"],
+    "files": ["main.js", "preload.js", "markdown.js", "notes-index.js", "package.json", "pulso.defaults.json"],
     "extraResources": [
       { "from": "../../apps/web/.next/standalone", "to": "server" },
       { "from": "db-template", "to": "db-template" }

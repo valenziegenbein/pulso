@@ -39,7 +39,8 @@ contextBridge.exposeInMainWorld('pulso', {
   // Carpeta Markdown (Personal): elegir carpeta destino y agregar entradas .md.
   chooseFolder: () => ipcRenderer.invoke('pulso:choose-folder'),
   exportMarkdown: (payload) => ipcRenderer.invoke('pulso:export-markdown', payload),
-  // Asistente de notas: extractos de las notas recientes de una carpeta (solo lectura).
+  // Asistente de notas: extractos relevantes (BM25 con query) o recientes de una
+  // carpeta (solo lectura).
   readNotesContext: (payload) => ipcRenderer.invoke('pulso:read-notes-context', payload),
   // El panel escucha si falta configurar la URL del server Teams.
   onNeedTeamsUrl: (handler) => {

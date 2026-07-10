@@ -11,7 +11,7 @@ type Bridge = {
   collapse?: () => void;
   expand?: () => void;
   screenshot?: () => Promise<string | null>;
-  readNotesContext?: (payload: { dir: string; maxChars?: number }) => Promise<string | null>;
+  readNotesContext?: (payload: { dir: string; query?: string; maxChars?: number }) => Promise<string | null>;
 };
 function bridge(): Bridge | undefined {
   return typeof window !== 'undefined' ? (window as unknown as { pulso?: Bridge }).pulso : undefined;
@@ -138,13 +138,16 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
     // Streaming: el borrador aparece mientras el modelo escribe (si el
     // proveedor lo soporta; si no, el server degrada solo).
     const streamable = ai !== 'none' && aiReady(ai, aiConfig);
-    // Asistente de notas (opt-in por proyecto): extractos de las notas
-    // recientes de la carpeta del proyecto como contexto del borrador.
+    // Asistente de notas (opt-in por proyecto): extractos de la carpeta del
+    // proyecto como contexto. La micro-nota hace de query (BM25); sin nota
+    // (captura sola), el shell cae a las notas más recientes.
     let notesContext: string | undefined;
     const notesDir = focusProject.markdownDir ?? (storage === 'markdown' ? storageDir : null);
     if (focusProject.useNotesContext && notesDir && streamable) {
       try {
-        notesContext = (await bridge()?.readNotesContext?.({ dir: notesDir, maxChars: 3000 })) ?? undefined;
+        notesContext =
+          (await bridge()?.readNotesContext?.({ dir: notesDir, query: note.trim() || undefined, maxChars: 3000 })) ??
+          undefined;
       } catch {
         /* sin notas: el borrador sale igual */
       }

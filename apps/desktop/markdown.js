@@ -40,15 +40,10 @@ function exportMarkdown(dir, fileName, text, subdir, header, onError) {
 }
 
 /**
- * Extractos de las notas .md modificadas más recientemente en la carpeta del
- * proyecto (p. ej. su bóveda Obsidian). SOLO lectura, solo esa carpeta, con
- * presupuesto acotado. El renderer los usa como contexto al generar borradores.
+ * Lista los .md de la carpeta (recursivo, poca profundidad), ordenados por
+ * modificación descendente. Ignora carpetas de metadatos (.obsidian, .git…).
  */
-function readNotesContext(dir, maxChars) {
-  if (typeof dir !== 'string' || dir.length === 0) return null;
-  const MAX_FILES = 6;
-  const PER_FILE = 1200;
-  const budget = Math.min(Math.max(Number(maxChars) || 3000, 500), 8000);
+function listMarkdownFiles(dir) {
   const SKIP = new Set(['node_modules', '.git', '.obsidian', '.trash', '.logseq']);
   const files = [];
   const walk = (d, depth) => {
@@ -74,6 +69,20 @@ function readNotesContext(dir, maxChars) {
   };
   walk(dir, 0);
   files.sort((a, b) => b.mtime - a.mtime);
+  return files;
+}
+
+/**
+ * Extractos de las notas .md modificadas más recientemente en la carpeta del
+ * proyecto (p. ej. su bóveda Obsidian). SOLO lectura, solo esa carpeta, con
+ * presupuesto acotado. El renderer los usa como contexto al generar borradores.
+ */
+function readNotesContext(dir, maxChars) {
+  if (typeof dir !== 'string' || dir.length === 0) return null;
+  const MAX_FILES = 6;
+  const PER_FILE = 1200;
+  const budget = Math.min(Math.max(Number(maxChars) || 3000, 500), 8000);
+  const files = listMarkdownFiles(dir);
 
   const parts = [];
   let total = 0;
@@ -92,4 +101,4 @@ function readNotesContext(dir, maxChars) {
   return parts.length > 0 ? parts.join('\n\n') : null;
 }
 
-module.exports = { exportMarkdown, readNotesContext, safePathPart };
+module.exports = { exportMarkdown, listMarkdownFiles, readNotesContext, safePathPart };
