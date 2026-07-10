@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { ENTRY_LABEL, type Entry, type EntryType, type Project } from '@/lib/personal/store';
+import { Pagination } from './pagination';
 
-const PAGE_SIZE = 6;
+const PAGE_SIZE = 10;
 const SEARCH_LIMIT = 30;
 const TABS: Array<{ key: string; label: string; types: EntryType[] | null }> = [
   { key: 'all', label: 'Todo', types: null },
@@ -70,7 +71,7 @@ export function EntryHistory({
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between gap-3">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap gap-2">
           {TABS.map((item) => (
             <button
@@ -84,12 +85,15 @@ export function EntryHistory({
             </button>
           ))}
         </div>
-        <button
-          onClick={() => setSearchOpen(true)}
-          className="shrink-0 rounded-full border border-border px-3.5 py-1.5 text-xs text-muted transition hover:border-accent hover:text-fg"
-        >
-          Buscar
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Pagination variant="compact" page={page} pageCount={pageCount} onChange={setPage} />
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="shrink-0 rounded-full border border-border px-3.5 py-1.5 text-xs text-muted transition hover:border-accent hover:text-fg"
+          >
+            Buscar
+          </button>
+        </div>
       </div>
 
       {shown.length === 0 ? (
@@ -98,25 +102,9 @@ export function EntryHistory({
         <EntryList entries={shown} projectName={projectName} />
       )}
 
-      {filtered.length > PAGE_SIZE && (
-        <div className="mt-7 flex items-center justify-between border-t border-border/60 pt-4">
-          <button
-            onClick={() => setPage((value) => Math.max(0, value - 1))}
-            disabled={page === 0}
-            className="text-xs text-muted transition hover:text-fg disabled:opacity-30"
-          >
-            Anterior
-          </button>
-          <span className="font-meta text-[10px] uppercase tracking-[0.16em] text-muted">
-            Página {page + 1} de {pageCount}
-          </span>
-          <button
-            onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}
-            disabled={page >= pageCount - 1}
-            className="text-xs text-muted transition hover:text-fg disabled:opacity-30"
-          >
-            Siguiente
-          </button>
+      {pageCount > 1 && (
+        <div className="mt-7 flex justify-center border-t border-border/60 pt-5">
+          <Pagination variant="expanded" page={page} pageCount={pageCount} onChange={setPage} />
         </div>
       )}
 

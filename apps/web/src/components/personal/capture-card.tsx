@@ -78,7 +78,7 @@ export function CaptureCard({ projectId }: { projectId?: string } = {}) {
         value={note}
         onChange={(e) => setNote(e.target.value)}
         rows={2}
-        placeholder="Investigando Intercom para centralizar tickets…"
+        placeholder="Revisando el sistema de tickets internos…"
         className="mt-3 w-full resize-none border-b border-border bg-transparent pb-3 font-display text-2xl leading-snug outline-none transition placeholder:text-muted/40 focus:border-accent sm:text-3xl"
       />
 

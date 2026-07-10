@@ -280,7 +280,7 @@ export function PulsoWidget({ focus }: { focus: FocusItem[] }) {
         value={note}
         onChange={(e) => setNote(e.target.value)}
         rows={2}
-        placeholder="Ej: investigando Intercom para tickets internos"
+        placeholder="Ej: revisando el sistema de tickets internos"
         className="w-full resize-none rounded-lg border border-border bg-bg/60 p-2 text-sm outline-none focus:border-accent"
       />
 

@@ -96,6 +96,10 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [autoSave, setAutoSave] = useState(false);
+  // Aviso en el pill minimizado: "tu bitácora ya está lista para revisar".
+  // Distinto del badge de Teams (dorado/accent, cuenta tareas nuevas) —
+  // este es un punto único, en el color "info" del tema, para no confundirlos.
+  const [readyUnseen, setReadyUnseen] = useState(false);
 
   useEffect(() => {
     try {
@@ -106,6 +110,11 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
   }, []);
 
   const collapsed = isDesktop && !embedded && width < 240;
+
+  // Al expandir (el usuario volvió a mirar), el aviso ya cumplió su función.
+  useEffect(() => {
+    if (!collapsed) setReadyUnseen(false);
+  }, [collapsed]);
 
   const pending = focusProject
     ? tasks
@@ -184,6 +193,7 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
     setLoading(true);
     setError(null);
     setSaved(false);
+    setReadyUnseen(false);
     // Streaming: el borrador aparece mientras el modelo escribe (si el
     // proveedor lo soporta; si no, el server degrada solo).
     const streamable = ai !== 'none' && aiReady(ai, aiConfig);
@@ -199,6 +209,7 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
         const next: Draft = suggestion;
         setDraft(next);
         if (autoSave) commitDraft(next);
+        else setReadyUnseen(true);
       } catch (e) {
         setDraft(null);
         setError(
@@ -260,6 +271,7 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
       const next: Draft = { type: intent ?? s.type, title: s.title, content: s.content };
       setDraft(next);
       if (autoSave) commitDraft(next);
+      else setReadyUnseen(true);
     } catch (e) {
       setDraft(null);
       setError(
@@ -279,6 +291,7 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
     setImage(null);
     setIntent(null);
     setSaved(false);
+    setReadyUnseen(false);
   }
 
   function save() {
@@ -292,6 +305,13 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
       <div className="pulso-widget-glass drag-region flex w-[160px] items-center gap-2 rounded-full border border-border px-3 py-2">
         <span className="pulso-beat inline-block text-accent">✦</span>
         <span className="text-sm font-semibold">Pulso</span>
+        {readyUnseen && (
+          <span
+            className="pulso-beat h-2 w-2 shrink-0 rounded-full"
+            style={{ backgroundColor: 'var(--info)' }}
+            title="Tu bitácora está lista para revisar"
+          />
+        )}
         <button onClick={() => bridge()?.expand?.()} className="font-meta no-drag ml-auto rounded-full bg-accent px-3 py-1 text-[11px] font-medium text-bg transition hover:brightness-110">
           Anotar
         </button>
@@ -330,7 +350,7 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
           onChange={(e) => setNote(e.target.value)}
           onPaste={handlePaste}
           rows={2}
-          placeholder="Investigando Intercom…  (pegá una captura con Ctrl+V)"
+          placeholder="Revisando el sistema de tickets internos…  (pegá una captura con Ctrl+V)"
           className="mt-2 w-full resize-none border-b border-border bg-transparent pb-2 font-display text-lg leading-snug outline-none placeholder:text-muted/40 focus:border-accent"
         />
 
