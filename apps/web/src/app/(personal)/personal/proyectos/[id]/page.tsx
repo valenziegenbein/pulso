@@ -8,12 +8,24 @@ import { EntryHistory } from '@/components/personal/entry-history';
 import { ProjectTasks } from '@/components/personal/project-tasks';
 import { NotesIndexPanel } from '@/components/personal/notes-index-panel';
 import { embeddingsReady } from '@/lib/personal/ai';
-import { ENTRY_LABEL, usePersonal } from '@/lib/personal/store';
+import { ENTRY_LABEL, usePersonal, type EntryType } from '@/lib/personal/store';
 
-type ShellBridge = { isDesktop?: boolean; chooseFolder?: () => Promise<string | null> };
+type ImportedDaily = { typeLabel: string; title: string; content: string; createdAt: number };
+type ImportedGeneric = { file: string; title: string; content: string; mtime: number };
+type ShellBridge = {
+  isDesktop?: boolean;
+  chooseFolder?: () => Promise<string | null>;
+  importMarkdown?: (payload: { dir: string }) => Promise<{ dailyEntries: ImportedDaily[]; genericNotes: ImportedGeneric[] }>;
+};
 function shell(): ShellBridge | undefined {
   return typeof window !== 'undefined' ? (window as unknown as { pulso?: ShellBridge }).pulso : undefined;
 }
+
+// Reverso de ENTRY_LABEL: la etiqueta humana que quedó escrita en el .md
+// ("Avance", "Decisión"...) vuelve a su EntryType. Sin match → Nota.
+const LABEL_TO_TYPE: Record<string, EntryType> = Object.fromEntries(
+  Object.entries(ENTRY_LABEL).map(([type, label]) => [label, type as EntryType]),
+);
 
 type Tab = 'resumen' | 'tareas' | 'bitacora' | 'archivos';
 const TABS: Array<[Tab, string]> = [
@@ -29,19 +41,52 @@ function fmt(ts: number): string {
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { ready, projects, entries, tasks, storage, storageDir, ai, aiConfig, embeddingsEnabled, updateProjectContext, setProjectMarkdownDir, setProjectNotesContext } = usePersonal();
+  const { ready, projects, entries, tasks, storage, storageDir, ai, aiConfig, embeddingsEnabled, updateProjectContext, setProjectMarkdownDir, setProjectNotesContext, importEntries } = usePersonal();
   const project = projects.find((p) => p.id === id);
 
   const [tab, setTab] = useState<Tab>('resumen');
   const [editingCtx, setEditingCtx] = useState(false);
   const [ctxDraft, setCtxDraft] = useState('');
   const [isDesktop, setIsDesktop] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ added: number; skipped: number } | null>(null);
   useEffect(() => setIsDesktop(Boolean(shell()?.isDesktop)), []);
 
   async function pickProjectFolder() {
     if (!project) return;
     const dir = await shell()?.chooseFolder?.();
     if (dir) setProjectMarkdownDir(project.id, dir);
+  }
+
+  async function runImport() {
+    if (!project) return;
+    const dir = await shell()?.chooseFolder?.();
+    if (!dir) return;
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const { dailyEntries, genericNotes } = (await shell()?.importMarkdown?.({ dir })) ?? { dailyEntries: [], genericNotes: [] };
+      const inputs = [
+        ...dailyEntries.map((e) => ({
+          projectId: project.id,
+          type: LABEL_TO_TYPE[e.typeLabel] ?? ('NOTE' as EntryType),
+          title: e.title,
+          content: e.content,
+          createdAt: e.createdAt,
+        })),
+        ...genericNotes.map((n) => ({
+          projectId: project.id,
+          type: 'NOTE' as EntryType,
+          title: n.title,
+          content: n.content,
+          createdAt: n.mtime,
+        })),
+      ];
+      const added = importEntries(inputs);
+      setImportResult({ added, skipped: inputs.length - added });
+    } finally {
+      setImporting(false);
+    }
   }
 
   if (ready && !project) {
@@ -260,9 +305,33 @@ export default function ProjectDetailPage() {
                 ↓ Exportar a Markdown
               </button>
             </section>
-            <section className="rounded-2xl border border-dashed border-border p-5">
-              <h2 className="font-display text-xl text-muted">Importar</h2>
-              <p className="mt-1 text-sm text-muted">Desde carpeta Markdown / Obsidian, Notion o GitHub. Próximamente.</p>
+            <section className="rounded-2xl border border-border bg-surface/50 p-5">
+              <h2 className="font-display text-xl">Importar</h2>
+              <p className="mt-1 text-sm text-muted">
+                Desde una carpeta Markdown / Obsidian. Si son archivos diarios que Pulso ya exportó, reconstruye las
+                entradas originales (tipo, hora, contenido); cualquier otra nota se agrega como nota suelta. Nunca
+                duplica lo que ya está importado, y nunca modifica los archivos.
+              </p>
+              {isDesktop ? (
+                <button
+                  onClick={runImport}
+                  disabled={importing}
+                  className="mt-4 rounded-full border border-border px-5 py-2 text-sm text-fg transition hover:border-accent disabled:opacity-40"
+                >
+                  {importing ? 'Importando…' : '↑ Elegir carpeta e importar'}
+                </button>
+              ) : (
+                <p className="mt-3 text-sm text-muted">Importar se hace desde la app de escritorio.</p>
+              )}
+              {importResult && (
+                <p className="mt-3 text-sm text-accent">
+                  {importResult.added > 0
+                    ? `Se agregaron ${importResult.added} entrada${importResult.added === 1 ? '' : 's'}.`
+                    : 'No había nada nuevo para agregar.'}
+                  {importResult.skipped > 0 ? ` (${importResult.skipped} ya estaban importadas.)` : ''}
+                </p>
+              )}
+              <p className="mt-4 text-xs text-muted/70">Notion y GitHub: próximamente.</p>
             </section>
           </div>
         )}

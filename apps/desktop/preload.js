@@ -47,6 +47,9 @@ contextBridge.exposeInMainWorld('pulso', {
   // Carpeta Markdown (Personal): elegir carpeta destino y agregar entradas .md.
   chooseFolder: () => ipcRenderer.invoke('pulso:choose-folder'),
   exportMarkdown: (payload) => ipcRenderer.invoke('pulso:export-markdown', payload),
+  // Importar desde una carpeta Markdown / Obsidian: reconstruye entradas
+  // propias de Pulso o las trae como notas genéricas.
+  importMarkdown: (payload) => ipcRenderer.invoke('pulso:import-markdown', payload),
   // Asistente de notas: extractos relevantes (BM25 y, si se pasa queryVector,
   // híbrido con embeddings) o recientes de una carpeta (solo lectura).
   readNotesContext: (payload) => ipcRenderer.invoke('pulso:read-notes-context', payload),

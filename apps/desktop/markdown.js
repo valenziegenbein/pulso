@@ -101,4 +101,83 @@ function readNotesContext(dir, maxChars) {
   return parts.length > 0 ? parts.join('\n\n') : null;
 }
 
-module.exports = { exportMarkdown, listMarkdownFiles, readNotesContext, safePathPart };
+// --- Importar desde carpeta Markdown / Obsidian --------------------------
+// Red de seguridad y punto de entrada: si la carpeta tiene los archivos
+// diarios que Pulso mismo escribió (Bitácora/YYYY-MM-DD.md, frontmatter
+// `fuente: pulso`), se reconstruyen las entradas originales (tipo, título,
+// hora, contenido). Cualquier otra nota .md de la carpeta (una bóveda
+// existente, por ejemplo) se importa como una nota genérica de una sola
+// entrada. SOLO lectura — nunca modifica nada de la carpeta.
+
+const DAILY_HEADING_RE = /^##\s+(\d{2}:\d{2})\s+·\s+([^—]+)—\s*(.*)$/;
+const DAILY_FILENAME_RE = /^(\d{4}-\d{2}-\d{2})$/;
+
+function parseDailyFile(text, dateStamp) {
+  const entries = [];
+  let current = null;
+  const flush = () => {
+    if (!current) return;
+    const content = current.content
+      .join('\n')
+      .replace(/\*\(captura adjunta en Pulso\)\*/, '')
+      .trim();
+    entries.push({ time: current.time, typeLabel: current.typeLabel, title: current.title, content });
+  };
+  for (const line of text.split(/\r?\n/)) {
+    const m = line.match(DAILY_HEADING_RE);
+    if (m) {
+      flush();
+      current = { time: m[1], typeLabel: m[2].trim(), title: m[3].trim(), content: [] };
+    } else if (current) {
+      current.content.push(line);
+    }
+  }
+  flush();
+
+  return entries.map((e) => {
+    const [hh, mm] = e.time.split(':').map(Number);
+    const d = new Date(`${dateStamp}T00:00:00`);
+    if (!Number.isNaN(hh) && !Number.isNaN(mm)) d.setHours(hh, mm, 0, 0);
+    return { typeLabel: e.typeLabel, title: e.title || '(sin título)', content: e.content, createdAt: d.getTime() };
+  });
+}
+
+/**
+ * Importa una carpeta: separa los archivos diarios propios de Pulso
+ * (reconstruye entradas con tipo/hora originales) de cualquier otra nota .md
+ * (se importa como nota genérica de una sola entrada, título = primer
+ * encabezado o nombre de archivo).
+ */
+function importFromFolder(dir) {
+  if (typeof dir !== 'string' || dir.length === 0) return { dailyEntries: [], genericNotes: [] };
+  const dailyEntries = [];
+  const genericNotes = [];
+
+  for (const f of listMarkdownFiles(dir)) {
+    let raw;
+    try {
+      raw = fs.readFileSync(f.p, 'utf8');
+    } catch {
+      continue;
+    }
+    const rel = path.relative(dir, f.p);
+    const inBitacora = /(^|[\\/])Bitácora([\\/]|$)/.test(rel);
+    const dateMatch = path.basename(f.p, '.md').match(DAILY_FILENAME_RE);
+    const looksLikePulsoDaily = inBitacora && dateMatch && raw.startsWith('---') && raw.includes('fuente: pulso');
+
+    if (looksLikePulsoDaily) {
+      for (const entry of parseDailyFile(raw, dateMatch[1])) dailyEntries.push(entry);
+      continue;
+    }
+
+    const withoutFrontmatter = raw.replace(/^---[\s\S]*?---\s*/, '').trim();
+    if (withoutFrontmatter.length === 0) continue;
+    const heading = withoutFrontmatter.match(/^#{1,2}\s+(.+)$/m);
+    const title = (heading ? heading[1] : path.basename(f.p, '.md')).trim().slice(0, 200);
+    genericNotes.push({ file: rel, title, content: withoutFrontmatter.slice(0, 5000), mtime: f.mtime });
+  }
+
+  return { dailyEntries, genericNotes };
+}
+
+module.exports = { exportMarkdown, listMarkdownFiles, readNotesContext, importFromFolder, safePathPart };

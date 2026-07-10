@@ -224,7 +224,7 @@ async function chooseFolder(win) {
 
 // Escritura del diario .md y retrieval de notas como contexto: ver markdown.js
 // y notes-index.js (módulos sin Electron, verificables con node puro).
-const { exportMarkdown } = require('./markdown');
+const { exportMarkdown, importFromFolder } = require('./markdown');
 const { retrieveNotesContext } = require('./notes-index');
 const embeddingsIndex = require('./embeddings-index');
 
@@ -1055,6 +1055,10 @@ ipcMain.handle('pulso:export-markdown', (e, payload) => {
   return exportMarkdown(payload?.dir, payload?.fileName, payload?.text, payload?.subdir, payload?.header, (err) =>
     logDesktop(`export-markdown falló: ${err.message}`),
   );
+});
+ipcMain.handle('pulso:import-markdown', (e, payload) => {
+  requireLocalRenderer(e);
+  return importFromFolder(payload?.dir);
 });
 ipcMain.handle('pulso:read-notes-context', (e, payload) => {
   requireLocalRenderer(e);

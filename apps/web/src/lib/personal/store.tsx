@@ -99,6 +99,7 @@ interface PersonalContextValue extends PersonalState {
   addProject: (input: { name: string; context?: string }) => Project;
   updateProjectContext: (id: string, context: string) => void;
   addEntry: (input: { projectId?: string | null; type: EntryType; title: string; content: string; image?: string }) => Entry;
+  importEntries: (inputs: Array<{ projectId: string; type: EntryType; title: string; content: string; createdAt: number }>) => number;
   addTask: (input: { projectId: string; title: string; note?: string; priority?: TaskPriority }) => Task;
   toggleTask: (id: string) => void;
   setFocusProject: (id: string) => void;
@@ -281,6 +282,31 @@ export function PersonalProvider({ children }: { children: ReactNode }) {
     [state.storage, state.storageDir, state.projects],
   );
 
+  // Importar desde carpeta Markdown/Obsidian: inserta SIN re-exportar (el
+  // contenido ya vive en esos archivos — reexportar los duplicaría) y sin
+  // repetir entradas ya importadas antes (misma clave: proyecto+tipo+título+
+  // minuto). Devuelve cuántas se agregaron de verdad.
+  const importEntries = useCallback(
+    (inputs: Array<{ projectId: string; type: EntryType; title: string; content: string; createdAt: number }>): number => {
+      const keyOf = (e: { projectId: string; type: string; title: string; createdAt: number }) =>
+        `${e.projectId}|${e.type}|${e.title}|${Math.floor(e.createdAt / 60000)}`;
+      const existing = new Set(
+        state.entries.filter((e) => e.projectId).map((e) => keyOf({ projectId: e.projectId!, type: e.type, title: e.title, createdAt: e.createdAt })),
+      );
+      const seen = new Set<string>();
+      const fresh: Entry[] = [];
+      for (const input of inputs) {
+        const key = keyOf(input);
+        if (existing.has(key) || seen.has(key)) continue;
+        seen.add(key);
+        fresh.push({ id: newId(), projectId: input.projectId, type: input.type, title: input.title, content: input.content, createdAt: input.createdAt });
+      }
+      if (fresh.length > 0) setState((s) => ({ ...s, entries: [...fresh, ...s.entries] }));
+      return fresh.length;
+    },
+    [state.entries],
+  );
+
   const addTask = useCallback(
     (input: { projectId: string; title: string; note?: string; priority?: TaskPriority }) => {
       const task: Task = {
@@ -321,6 +347,7 @@ export function PersonalProvider({ children }: { children: ReactNode }) {
       addProject,
       updateProjectContext,
       addEntry,
+      importEntries,
       addTask,
       toggleTask,
       setFocusProject,
@@ -334,7 +361,7 @@ export function PersonalProvider({ children }: { children: ReactNode }) {
       completeOnboarding,
       reset,
     }),
-    [state, ready, focusProject, setName, addProject, updateProjectContext, addEntry, addTask, toggleTask, setFocusProject, setStorage, setStorageDir, setProjectMarkdownDir, setProjectNotesContext, setAi, setAiConfig, setEmbeddingsEnabled, completeOnboarding, reset],
+    [state, ready, focusProject, setName, addProject, updateProjectContext, addEntry, importEntries, addTask, toggleTask, setFocusProject, setStorage, setStorageDir, setProjectMarkdownDir, setProjectNotesContext, setAi, setAiConfig, setEmbeddingsEnabled, completeOnboarding, reset],
   );
 
   return <PersonalContext.Provider value={value}>{children}</PersonalContext.Provider>;
