@@ -83,6 +83,47 @@ export function aiReady(ai: AiMode, config: AiConfig | null): boolean {
   return true;
 }
 
+/** OpenAI: modelo de embeddings fijo (no hace falta elegirlo, es el estándar). */
+export const OPENAI_EMBEDDINGS_MODEL = 'text-embedding-3-small';
+
+/**
+ * ¿Hay proveedor+modelo para embeddings? Anthropic no ofrece embeddings — el
+ * asistente de notas cae a búsqueda léxica (BM25) con ese proveedor. OpenAI
+ * siempre puede (modelo fijo); local necesita que el usuario haya elegido uno.
+ */
+export function embeddingsReady(ai: AiMode, config: AiConfig | null): boolean {
+  if (!aiReady(ai, config) || !config) return false;
+  if (config.provider === 'anthropic') return false;
+  if (config.provider === 'openai') return true;
+  return Boolean(config.embeddingsModel?.trim());
+}
+
+/** El modelo de embeddings efectivo según el proveedor (fijo en OpenAI). */
+export function embeddingsModelFor(config: AiConfig): string | undefined {
+  return config.provider === 'openai' ? OPENAI_EMBEDDINGS_MODEL : config.embeddingsModel;
+}
+
+/** Vectoriza textos vía el proxy server-side (mismo modelo de confianza que
+ *  generateDraft: la config viaja del cliente, el server nunca la persiste). */
+export async function embedTexts(texts: string[], config: AiConfig): Promise<number[][]> {
+  const model = embeddingsModelFor(config);
+  if (!model || texts.length === 0) return [];
+  let res: Response;
+  try {
+    res = await fetch('/api/personal/embeddings', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ texts, provider: config.provider, baseUrl: config.baseUrl, model, apiKey: config.apiKey }),
+    });
+  } catch {
+    throw new AiError('network');
+  }
+  if (res.status === 429) throw new AiError('rate_limited');
+  if (!res.ok) throw new AiError('unavailable');
+  const data = (await res.json()) as { vectors?: number[][] };
+  return data.vectors ?? [];
+}
+
 /** Lista los modelos cargados en el servidor local (vía proxy server-side). */
 export async function listModels(baseUrl: string): Promise<string[]> {
   let res: Response;
@@ -124,10 +165,13 @@ function coerceType(value: unknown): EntryType {
   return typeof value === 'string' && ENTRY_TYPES.includes(value as EntryType) ? (value as EntryType) : 'NOTE';
 }
 
-/** Borrador manual: sin red, la persona escribe y aprueba. */
+/** Borrador manual: sin red, la persona escribe y aprueba. Con captura sola,
+ *  la imagen es la entrada y el título es genérico. */
 function manualDraft(note: string): DraftSuggestion {
-  const firstLine = note.trim().split('\n')[0] ?? note;
-  return { type: 'NOTE', title: firstLine.slice(0, 80), content: note.trim() };
+  const trimmed = note.trim();
+  if (trimmed.length === 0) return { type: 'NOTE', title: 'Captura de pantalla', content: '' };
+  const firstLine = trimmed.split('\n')[0] ?? trimmed;
+  return { type: 'NOTE', title: firstLine.slice(0, 80), content: trimmed };
 }
 
 async function postSuggest(url: string, body: unknown): Promise<DraftSuggestion> {
@@ -147,6 +191,61 @@ async function postSuggest(url: string, body: unknown): Promise<DraftSuggestion>
   return { type: coerceType(data.suggestion.type), title: data.suggestion.title, content: data.suggestion.content };
 }
 
+/** Variante streaming (SSE): va entregando el contenido en vivo vía onDelta y
+ *  resuelve con la sugerencia final. */
+async function streamSuggest(url: string, body: Record<string, unknown>, onDelta: (text: string) => void): Promise<DraftSuggestion> {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...body, stream: true }),
+    });
+  } catch {
+    throw new AiError('network');
+  }
+  if (res.status === 429) throw new AiError('rate_limited');
+  if (!res.ok || !res.body) throw new AiError('unavailable');
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let suggestion: DraftSuggestion | null = null;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop() ?? '';
+    for (const line of lines) {
+      const t = line.trim();
+      if (!t.startsWith('data:')) continue;
+      try {
+        const evt = JSON.parse(t.slice(5).trim()) as {
+          delta?: string;
+          done?: boolean;
+          suggestion?: { type: string; title: string; content: string };
+          error?: string;
+        };
+        if (typeof evt.delta === 'string') onDelta(evt.delta);
+        if (evt.error) throw new AiError('unavailable');
+        if (evt.done && evt.suggestion) {
+          suggestion = {
+            type: coerceType(evt.suggestion.type),
+            title: evt.suggestion.title,
+            content: evt.suggestion.content,
+          };
+        }
+      } catch (e) {
+        if (e instanceof AiError) throw e;
+        /* línea parcial: ignorar */
+      }
+    }
+  }
+  if (!suggestion) throw new AiError('unavailable');
+  return suggestion;
+}
+
 /**
  * Genera un borrador de bitácora según la config del usuario:
  * - `ai === 'none'`  → borrador manual, sin red.
@@ -157,25 +256,42 @@ export async function generateDraft(params: {
   note: string;
   task?: { title?: string };
   projectContext?: string;
+  /** Extractos de las notas recientes del proyecto (bóveda, opt-in, solo desktop). */
+  notesContext?: string;
   attachmentsHint?: string[];
   images?: DraftImage[];
   ai: AiMode;
   config: AiConfig | null;
+  /** Si se pasa y el proveedor lo soporta, el contenido llega en vivo (streaming). */
+  onDelta?: (text: string) => void;
 }): Promise<DraftSuggestion> {
-  const { note, task, projectContext, attachmentsHint, images, ai, config } = params;
+  const { note, task, projectContext, notesContext, attachmentsHint, images, ai, config, onDelta } = params;
   if (ai === 'none') return manualDraft(note);
   if (aiReady(ai, config) && config) {
-    return postSuggest('/api/personal/suggest', {
+    const body = {
       note,
       task,
       projectContext,
+      notesContext,
       attachmentsHint,
       images,
       provider: config.provider,
       baseUrl: config.baseUrl,
       model: config.model,
       apiKey: config.apiKey,
-    });
+    };
+    if (onDelta) {
+      try {
+        return await streamSuggest('/api/personal/suggest', body, onDelta);
+      } catch (e) {
+        if (e instanceof AiError && e.code === 'rate_limited') throw e;
+        // Streaming falló a mitad de camino: reintento sin stream.
+        return postSuggest('/api/personal/suggest', body);
+      }
+    }
+    return postSuggest('/api/personal/suggest', body);
   }
+  // Sin IA configurada no hay quien "lea" la captura: borrador manual.
+  if (note.trim().length === 0) return manualDraft(note);
   return postSuggest('/api/worklog/suggest', { note, task, attachmentsHint });
 }

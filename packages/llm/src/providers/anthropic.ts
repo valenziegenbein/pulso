@@ -4,6 +4,7 @@ import {
   type CompletionResult,
   type LLMProvider,
   LLMRequestError,
+  forEachSseData,
 } from '../provider';
 
 export interface AnthropicOptions {
@@ -34,6 +35,43 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async complete(request: CompletionRequest): Promise<CompletionResult> {
+    const res = await this.post(request, false);
+    const data = (await res.json()) as {
+      model?: string;
+      content?: Array<{ type: string; text?: string }>;
+    };
+    const text = (data.content ?? [])
+      .filter((b) => b.type === 'text')
+      .map((b) => b.text ?? '')
+      .join('');
+    return { text, model: data.model ?? this.opts.model };
+  }
+
+  /** Streaming SSE de la API de mensajes: emite los `text_delta`. */
+  async completeStream(request: CompletionRequest, onDelta: (text: string) => void): Promise<CompletionResult> {
+    const res = await this.post(request, true);
+    let text = '';
+    let model = this.opts.model;
+    await forEachSseData(res, (data) => {
+      try {
+        const obj = JSON.parse(data) as {
+          type?: string;
+          message?: { model?: string };
+          delta?: { type?: string; text?: string };
+        };
+        if (obj.type === 'message_start' && obj.message?.model) model = obj.message.model;
+        if (obj.type === 'content_block_delta' && obj.delta?.type === 'text_delta' && typeof obj.delta.text === 'string') {
+          text += obj.delta.text;
+          onDelta(obj.delta.text);
+        }
+      } catch {
+        /* eventos no-JSON (ping): ignorar */
+      }
+    });
+    return { text, model };
+  }
+
+  private async post(request: CompletionRequest, stream: boolean): Promise<Response> {
     // Anthropic separa el `system` del resto de los mensajes.
     const system = request.messages
       .filter((m) => m.role === 'system')
@@ -58,25 +96,16 @@ export class AnthropicProvider implements LLMProvider {
           messages,
           max_tokens: request.maxTokens ?? 600,
           temperature: request.temperature ?? 0.3,
+          ...(stream ? { stream: true } : {}),
         }),
       });
     } catch (cause) {
       throw new LLMRequestError(`No se pudo contactar a Anthropic: ${String(cause)}`, undefined, this.id);
     }
-
     if (!res.ok) {
       throw new LLMRequestError(`Anthropic respondió ${res.status}`, res.status, this.id);
     }
-
-    const data = (await res.json()) as {
-      model?: string;
-      content?: Array<{ type: string; text?: string }>;
-    };
-    const text = (data.content ?? [])
-      .filter((b) => b.type === 'text')
-      .map((b) => b.text ?? '')
-      .join('');
-    return { text, model: data.model ?? this.opts.model };
+    return res;
   }
 }
 

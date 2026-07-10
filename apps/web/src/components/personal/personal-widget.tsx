@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type ReactNode } from 'react';
 import { TASK_PRIORITY_ORDER, usePersonal, type EntryType } from '@/lib/personal/store';
-import { AiError, generateDraft } from '@/lib/personal/ai';
+import { AiError, aiReady, embedTexts, embeddingsReady, generateDraft } from '@/lib/personal/ai';
 import { ProjectChooser } from './project-chooser';
 
 type Bridge = {
@@ -11,6 +11,7 @@ type Bridge = {
   collapse?: () => void;
   expand?: () => void;
   screenshot?: () => Promise<string | null>;
+  readNotesContext?: (payload: { dir: string; query?: string; queryVector?: number[]; maxChars?: number }) => Promise<string | null>;
 };
 function bridge(): Bridge | undefined {
   return typeof window !== 'undefined' ? (window as unknown as { pulso?: Bridge }).pulso : undefined;
@@ -20,6 +21,8 @@ interface Draft {
   type: EntryType;
   title: string;
   content: string;
+  /** true mientras el modelo sigue escribiendo (streaming). */
+  streaming?: boolean;
 }
 
 /** Reduce una imagen (blob o data URL) a un data URL JPEG manejable para localStorage. */
@@ -74,7 +77,7 @@ function useWindowWidth(): number {
 export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}) {
   const elapsed = useElapsed();
   const width = useWindowWidth();
-  const { focusProject, addEntry, tasks, toggleTask, ai, aiConfig } = usePersonal();
+  const { focusProject, addEntry, tasks, toggleTask, ai, aiConfig, storage, storageDir, embeddingsEnabled } = usePersonal();
   const [isDesktop, setIsDesktop] = useState(false);
   useEffect(() => setIsDesktop(Boolean(bridge()?.isDesktop)), []);
 
@@ -127,21 +130,63 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
   }
 
   async function generate() {
-    if (note.trim().length === 0 || !focusProject) return;
+    // Captura sola alcanza: la nota es opcional si hay imagen adjunta.
+    if ((note.trim().length === 0 && !image) || !focusProject) return;
     setLoading(true);
     setError(null);
     setSaved(false);
+    // Streaming: el borrador aparece mientras el modelo escribe (si el
+    // proveedor lo soporta; si no, el server degrada solo).
+    const streamable = ai !== 'none' && aiReady(ai, aiConfig);
+    // Asistente de notas (opt-in por proyecto): extractos de la carpeta del
+    // proyecto como contexto. La micro-nota hace de query — BM25 siempre, y si
+    // hay búsqueda semántica activada, además un embedding de esa query para
+    // retrieval híbrido (RRF). Sin nota (captura sola), el shell cae a las
+    // notas más recientes. Nunca bloquea por indexado grueso: solo se embede
+    // la query (una llamada chica), la bóveda se indexa aparte (Archivos).
+    let notesContext: string | undefined;
+    const notesDir = focusProject.markdownDir ?? (storage === 'markdown' ? storageDir : null);
+    if (focusProject.useNotesContext && notesDir && streamable) {
+      let queryVector: number[] | undefined;
+      const noteQuery = note.trim();
+      if (noteQuery && embeddingsEnabled && aiConfig && embeddingsReady(ai, aiConfig)) {
+        try {
+          const [vec] = await embedTexts([noteQuery], aiConfig);
+          queryVector = vec;
+        } catch {
+          /* sin vector: el híbrido degrada solo a BM25 */
+        }
+      }
+      try {
+        notesContext =
+          (await bridge()?.readNotesContext?.({ dir: notesDir, query: noteQuery || undefined, queryVector, maxChars: 3000 })) ??
+          undefined;
+      } catch {
+        /* sin notas: el borrador sale igual */
+      }
+    }
     try {
       const s = await generateDraft({
         note,
         task: { title: focusProject.name },
         projectContext: focusProject.context,
+        notesContext,
         images: image ? [{ dataUrl: image }] : undefined,
         ai,
         config: aiConfig,
+        onDelta: streamable
+          ? (chunk) =>
+              setDraft((d) => ({
+                type: intent ?? d?.type ?? 'NOTE',
+                title: d?.title ?? '',
+                content: (d?.content ?? '') + chunk,
+                streaming: true,
+              }))
+          : undefined,
       });
       setDraft({ type: intent ?? s.type, title: s.title, content: s.content });
     } catch (e) {
+      setDraft(null);
       setError(
         e instanceof AiError && e.code === 'rate_limited'
           ? 'Demasiados pedidos. Probá en un momento.'
@@ -183,7 +228,8 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
   }
 
   // ---- Panel completo ----
-  const canGenerate = note.trim().length > 0 && !!focusProject;
+  // Con nota, con captura, o ambas: cualquiera alcanza para generar.
+  const canGenerate = (note.trim().length > 0 || !!image) && !!focusProject;
   return (
     <div className={`flex w-[360px] flex-col overflow-hidden rounded-2xl border border-border bg-surface/95 shadow-2xl backdrop-blur-xl ${embedded ? '' : 'max-h-[calc(100vh-1rem)]'}`}>
       {!embedded && (
@@ -244,17 +290,24 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
 
         {draft && (
           <div className="pulso-reveal mt-3 rounded-xl border border-border bg-bg/50 p-3">
-            <span className="font-meta text-[10px] uppercase tracking-[0.16em] text-muted">Sugerida · {draft.type}</span>
-            <h3 className="font-display mt-1 text-base leading-snug">{draft.title}</h3>
-            <p className="mt-1 text-xs leading-relaxed text-muted">{draft.content}</p>
+            <span className="font-meta text-[10px] uppercase tracking-[0.16em] text-muted">
+              {draft.streaming ? 'Escribiendo…' : `Sugerida · ${draft.type}`}
+            </span>
+            {draft.title && <h3 className="font-display mt-1 text-base leading-snug">{draft.title}</h3>}
+            <p className="mt-1 whitespace-pre-line text-xs leading-relaxed text-muted">
+              {draft.content}
+              {draft.streaming && <span className="pulso-beat ml-0.5 inline-block text-accent">▍</span>}
+            </p>
             {image && <img src={image} alt="" className="mt-2 h-14 w-auto rounded border border-border object-cover" />}
             {saved ? (
               <p className="mt-3 text-xs text-emerald-300">✓ Guardado{focusProject ? ` en ${focusProject.name}` : ''}.</p>
             ) : (
-              <div className="mt-3 flex gap-1.5 text-xs">
-                <button onClick={save} disabled={saving} className="rounded-full bg-accent px-4 py-1.5 font-medium text-bg disabled:opacity-40">Guardar</button>
-                <button onClick={reset} className="rounded-full px-3 py-1.5 text-muted transition hover:text-fg">Descartar</button>
-              </div>
+              !draft.streaming && (
+                <div className="mt-3 flex gap-1.5 text-xs">
+                  <button onClick={save} disabled={saving} className="rounded-full bg-accent px-4 py-1.5 font-medium text-bg disabled:opacity-40">Guardar</button>
+                  <button onClick={reset} className="rounded-full px-3 py-1.5 text-muted transition hover:text-fg">Descartar</button>
+                </div>
+              )
             )}
           </div>
         )}

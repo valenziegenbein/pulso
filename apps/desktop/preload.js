@@ -30,4 +30,26 @@ contextBridge.exposeInMainWorld('pulso', {
   // el widget (señal confiable: las navegaciones de Next son client-side "soft").
   personalReady: () => ipcRenderer.send('pulso:personal-ready'),
   authState: (state) => ipcRenderer.send('pulso:auth', state),
+  // Pulso Teams (web): el desktop abre el server remoto en su propia ventana.
+  getTeamsUrl: () => ipcRenderer.invoke('pulso:get-teams-url'),
+  setTeamsUrl: (url) => ipcRenderer.send('pulso:set-teams-url', url),
+  openTeams: () => ipcRenderer.send('pulso:open-teams'),
+  // "Ir a Personal": cierra la ventana Teams y vuelve al espacio Personal.
+  backToPersonal: () => ipcRenderer.send('pulso:back-to-personal'),
+  // Carpeta Markdown (Personal): elegir carpeta destino y agregar entradas .md.
+  chooseFolder: () => ipcRenderer.invoke('pulso:choose-folder'),
+  exportMarkdown: (payload) => ipcRenderer.invoke('pulso:export-markdown', payload),
+  // Asistente de notas: extractos relevantes (BM25 y, si se pasa queryVector,
+  // híbrido con embeddings) o recientes de una carpeta (solo lectura).
+  readNotesContext: (payload) => ipcRenderer.invoke('pulso:read-notes-context', payload),
+  // Asistente de notas — embeddings (etapa 2b, opt-in): indexado explícito.
+  embeddingsPending: (payload) => ipcRenderer.invoke('pulso:embeddings-pending', payload),
+  embeddingsSave: (payload) => ipcRenderer.invoke('pulso:embeddings-save', payload),
+  embeddingsStatus: (payload) => ipcRenderer.invoke('pulso:embeddings-status', payload),
+  // El panel escucha si falta configurar la URL del server Teams.
+  onNeedTeamsUrl: (handler) => {
+    const listener = () => handler();
+    ipcRenderer.on('pulso:need-teams-url', listener);
+    return () => ipcRenderer.removeListener('pulso:need-teams-url', listener);
+  },
 });

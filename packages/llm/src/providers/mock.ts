@@ -33,6 +33,26 @@ export class MockProvider implements LLMProvider {
 
     return { text: JSON.stringify(suggestion), model: 'mock-1' };
   }
+
+  /** Embeddings determinísticos (bag-of-hashed-words), sin red: alcanza para
+   *  probar ranking por similitud sin depender de un proveedor real. */
+  async embed(texts: string[]): Promise<number[][]> {
+    return texts.map((t) => hashEmbed(t));
+  }
+}
+
+const EMBED_DIMS = 32;
+
+function hashEmbed(text: string): number[] {
+  const vec = new Array(EMBED_DIMS).fill(0);
+  const words = text.toLowerCase().match(/[a-z0-9áéíóúñ]+/gi) ?? [];
+  for (const w of words) {
+    let h = 0;
+    for (let i = 0; i < w.length; i++) h = (h * 31 + w.charCodeAt(i)) >>> 0;
+    vec[h % EMBED_DIMS] += 1;
+  }
+  const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0)) || 1;
+  return vec.map((v) => v / norm);
 }
 
 function extractNote(userPrompt: string): string {

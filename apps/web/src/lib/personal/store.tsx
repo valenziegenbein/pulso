@@ -21,12 +21,20 @@ export interface AiConfig {
   model: string;
   /** Solo cloud (BYOK). Vive solo en este equipo; nunca vuelve del server. */
   apiKey?: string;
+  /** Solo local: modelo de embeddings (distinto al de chat), para búsqueda
+   *  semántica en la bóveda. OpenAI usa un modelo fijo; Anthropic no ofrece. */
+  embeddingsModel?: string;
 }
 
 export interface Project {
   id: string;
   name: string;
   context?: string;
+  /** Carpeta Markdown propia (p. ej. dentro de tu bóveda Obsidian). Si falta,
+   *  se usa la carpeta general de Ajustes. */
+  markdownDir?: string | null;
+  /** Opt-in: leer las notas recientes de la carpeta como contexto para la IA. */
+  useNotesContext?: boolean;
   createdAt: number;
 }
 
@@ -60,8 +68,13 @@ export interface PersonalState {
   tasks: Task[];
   focusProjectId: string | null;
   storage: StorageTarget;
+  /** Carpeta destino cuando storage === 'markdown' (solo desktop). */
+  storageDir: string | null;
   ai: AiMode;
   aiConfig: AiConfig | null;
+  /** Búsqueda semántica en la bóveda (etapa 2b, opt-in explícito). Requiere un
+   *  proveedor con embeddings (no Anthropic) y, si es local, embeddingsModel. */
+  embeddingsEnabled: boolean;
 }
 
 const STORAGE_KEY = 'pulso.personal.v1';
@@ -73,8 +86,10 @@ const DEFAULT_STATE: PersonalState = {
   tasks: [],
   focusProjectId: null,
   storage: null,
+  storageDir: null,
   ai: null,
   aiConfig: null,
+  embeddingsEnabled: false,
 };
 
 interface PersonalContextValue extends PersonalState {
@@ -88,6 +103,10 @@ interface PersonalContextValue extends PersonalState {
   toggleTask: (id: string) => void;
   setFocusProject: (id: string) => void;
   setStorage: (target: StorageTarget) => void;
+  setStorageDir: (dir: string | null) => void;
+  setProjectMarkdownDir: (id: string, dir: string | null) => void;
+  setProjectNotesContext: (id: string, on: boolean) => void;
+  setEmbeddingsEnabled: (on: boolean) => void;
   setAi: (mode: AiMode) => void;
   setAiConfig: (config: AiConfig | null) => void;
   completeOnboarding: () => void;
@@ -98,6 +117,56 @@ const PersonalContext = createContext<PersonalContextValue | null>(null);
 
 function newId(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+}
+
+// --- Export a carpeta Markdown (desktop) -----------------------------------
+// Formato "archivo diario": <carpeta>/Bitácora/YYYY-MM-DD.md. Pulso es un
+// huésped educado en tu bóveda: NUNCA edita notas existentes, solo agrega a sus
+// propios archivos diarios (identificables por `fuente: pulso`).
+type ShellBridge = {
+  isDesktop?: boolean;
+  exportMarkdown?: (payload: { dir: string; subdir?: string; fileName: string; text: string; header?: string }) => Promise<boolean>;
+};
+function shellBridge(): ShellBridge | undefined {
+  return typeof window !== 'undefined' ? (window as unknown as { pulso?: ShellBridge }).pulso : undefined;
+}
+
+/** Fecha local YYYY-MM-DD (nombre del archivo diario). */
+function localDateStamp(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Sección .md de una entrada aprobada dentro del archivo diario. */
+function entryToDailyBlock(entry: Entry): string {
+  const hhmm = new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }).format(entry.createdAt);
+  const lines = [`## ${hhmm} · ${ENTRY_LABEL[entry.type]} — ${entry.title}`, ''];
+  if (entry.content.trim()) lines.push(entry.content.trim(), '');
+  if (entry.image) lines.push('*(captura adjunta en Pulso)*', '');
+  return `\n${lines.join('\n')}`;
+}
+
+/** Frontmatter + título, solo al crear el archivo del día. */
+function dailyHeader(stamp: string): string {
+  return `---\nfuente: pulso\nfecha: ${stamp}\n---\n\n# Bitácora — ${stamp}\n`;
+}
+
+/** Fire-and-forget: agrega la entrada al archivo diario del proyecto. */
+function exportEntryToFolder(entry: Entry, dir: string): void {
+  const b = shellBridge();
+  if (!b?.isDesktop || !b.exportMarkdown) return;
+  const stamp = localDateStamp(entry.createdAt);
+  void b
+    .exportMarkdown({
+      dir,
+      subdir: 'Bitácora',
+      fileName: stamp,
+      text: entryToDailyBlock(entry),
+      header: dailyHeader(stamp),
+    })
+    .catch(() => {
+      /* export voluntario: si falla, la entrada sigue guardada en Pulso */
+    });
 }
 
 export function PersonalProvider({ children }: { children: ReactNode }) {
@@ -142,8 +211,10 @@ export function PersonalProvider({ children }: { children: ReactNode }) {
 
   const setName = useCallback((name: string) => setState((s) => ({ ...s, name })), []);
   const setStorage = useCallback((storage: StorageTarget) => setState((s) => ({ ...s, storage })), []);
+  const setStorageDir = useCallback((storageDir: string | null) => setState((s) => ({ ...s, storageDir })), []);
   const setAi = useCallback((ai: AiMode) => setState((s) => ({ ...s, ai })), []);
   const setAiConfig = useCallback((aiConfig: AiConfig | null) => setState((s) => ({ ...s, aiConfig })), []);
+  const setEmbeddingsEnabled = useCallback((embeddingsEnabled: boolean) => setState((s) => ({ ...s, embeddingsEnabled })), []);
   const completeOnboarding = useCallback(() => setState((s) => ({ ...s, onboarded: true })), []);
   const reset = useCallback(() => setState(DEFAULT_STATE), []);
   const setFocusProject = useCallback((focusProjectId: string) => setState((s) => ({ ...s, focusProjectId })), []);
@@ -162,6 +233,14 @@ export function PersonalProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, projects: s.projects.map((p) => (p.id === id ? { ...p, context } : p)) }));
   }, []);
 
+  const setProjectMarkdownDir = useCallback((id: string, markdownDir: string | null) => {
+    setState((s) => ({ ...s, projects: s.projects.map((p) => (p.id === id ? { ...p, markdownDir } : p)) }));
+  }, []);
+
+  const setProjectNotesContext = useCallback((id: string, useNotesContext: boolean) => {
+    setState((s) => ({ ...s, projects: s.projects.map((p) => (p.id === id ? { ...p, useNotesContext } : p)) }));
+  }, []);
+
   const addEntry = useCallback(
     (input: { projectId?: string | null; type: EntryType; title: string; content: string; image?: string }) => {
       const entry: Entry = {
@@ -174,9 +253,15 @@ export function PersonalProvider({ children }: { children: ReactNode }) {
         createdAt: Date.now(),
       };
       setState((s) => ({ ...s, entries: [entry, ...s.entries] }));
+      // Export voluntario: cada proyecto puede tener su propia carpeta Markdown
+      // (p. ej. su bóveda Obsidian); si no tiene, cae a la carpeta general de
+      // Ajustes (solo cuando el guardado elegido es 'markdown'). No bloquea.
+      const project = state.projects.find((p) => p.id === entry.projectId);
+      const dir = project?.markdownDir ?? (state.storage === 'markdown' ? state.storageDir : null);
+      if (dir) exportEntryToFolder(entry, dir);
       return entry;
     },
-    [],
+    [state.storage, state.storageDir, state.projects],
   );
 
   const addTask = useCallback(
@@ -223,12 +308,16 @@ export function PersonalProvider({ children }: { children: ReactNode }) {
       toggleTask,
       setFocusProject,
       setStorage,
+      setStorageDir,
+      setProjectMarkdownDir,
+      setProjectNotesContext,
       setAi,
       setAiConfig,
+      setEmbeddingsEnabled,
       completeOnboarding,
       reset,
     }),
-    [state, ready, focusProject, setName, addProject, updateProjectContext, addEntry, addTask, toggleTask, setFocusProject, setStorage, setAi, setAiConfig, completeOnboarding, reset],
+    [state, ready, focusProject, setName, addProject, updateProjectContext, addEntry, addTask, toggleTask, setFocusProject, setStorage, setStorageDir, setProjectMarkdownDir, setProjectNotesContext, setAi, setAiConfig, setEmbeddingsEnabled, completeOnboarding, reset],
   );
 
   return <PersonalContext.Provider value={value}>{children}</PersonalContext.Provider>;

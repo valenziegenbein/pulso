@@ -21,12 +21,15 @@ let BASE_URL = process.env.PULSO_URL || 'http://localhost:3000';
 
 let mainWindow = null;
 let widgetWindow = null;
+let teamsWindow = null;
 let tray = null;
 let serverProcess = null;
 let programmaticMove = false;
 let widgetOpened = false;
 let widgetMode = 'personal';
 let widgetView = 'full';
+// URL del server de Pulso Teams (web). Personal es local; Teams vive en el server.
+let TEAMS_URL = null;
 
 // --- Configuración del usuario (secretos + DB), persistida en userData ---
 function loadConfig() {
@@ -57,7 +60,88 @@ function loadConfig() {
   return { cfg };
 }
 
-// SQLite embebido (lo usa el modo Teams). Personal es local-first en el cliente.
+// --- URL del server Teams (web), persistida en pulso.config.json ---
+function configPath() {
+  return path.join(app.getPath('userData'), 'pulso.config.json');
+}
+// Default horneado al build: la organización distribuye su desktop con su URL ya
+// puesta (pulso.defaults.json) → el trabajador NO tipea nada, solo inicia sesión.
+function bundledDefaultTeamsUrl() {
+  try {
+    const d = JSON.parse(fs.readFileSync(path.join(__dirname, 'pulso.defaults.json'), 'utf8'));
+    return typeof d.teamsUrl === 'string' && d.teamsUrl.length > 0 ? d.teamsUrl.replace(/\/$/, '') : null;
+  } catch {
+    return null;
+  }
+}
+function readTeamsUrl() {
+  // Prioridad: lo que guardó el usuario > el default del build.
+  try {
+    const cfg = JSON.parse(fs.readFileSync(configPath(), 'utf8'));
+    if (typeof cfg.teamsUrl === 'string' && cfg.teamsUrl.length > 0) return cfg.teamsUrl.replace(/\/$/, '');
+  } catch {
+    /* primera vez */
+  }
+  return bundledDefaultTeamsUrl();
+}
+function writeTeamsUrl(url) {
+  const clean = typeof url === 'string' ? url.trim().replace(/\/$/, '') : '';
+  let cfg = {};
+  try {
+    cfg = JSON.parse(fs.readFileSync(configPath(), 'utf8'));
+  } catch {
+    /* primera vez */
+  }
+  cfg.teamsUrl = clean;
+  try {
+    fs.writeFileSync(configPath(), JSON.stringify(cfg, null, 2));
+  } catch {
+    /* no crítico */
+  }
+  TEAMS_URL = clean.length > 0 ? clean : null;
+  return TEAMS_URL;
+}
+
+// --- Export a carpeta Markdown (modo Personal) ---
+// La persona elige una carpeta (Obsidian, Logseq, un repo…) y cada entrada de
+// bitácora aprobada se agrega a un .md por proyecto. Local y voluntario.
+async function chooseFolder(win) {
+  const res = await dialog.showOpenDialog(win ?? undefined, {
+    title: 'Elegí la carpeta para tu bitácora Markdown',
+    buttonLabel: 'Usar esta carpeta',
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (res.canceled || res.filePaths.length === 0) return null;
+  return res.filePaths[0];
+}
+
+// Escritura del diario .md y retrieval de notas como contexto: ver markdown.js
+// y notes-index.js (módulos sin Electron, verificables con node puro).
+const { exportMarkdown } = require('./markdown');
+const { retrieveNotesContext } = require('./notes-index');
+const embeddingsIndex = require('./embeddings-index');
+
+// Cache de vectores del asistente de notas: SIEMPRE en userData, nunca en la
+// carpeta del usuario — es un dato derivado de la app, no algo que le
+// corresponda a su bóveda.
+function embeddingsCacheDir() {
+  return path.join(app.getPath('userData'), 'embeddings-cache');
+}
+
+/** Formatea chunks (BM25 o híbridos) al mismo formato de prompt que retrieveNotesContext. */
+function chunksToContext(chunks, budget) {
+  const parts = [];
+  let total = 0;
+  for (const c of chunks) {
+    if (total >= budget) break;
+    const text = c.text.slice(0, budget - total);
+    const where = c.heading ? `${c.file} › ${c.heading}` : c.file;
+    parts.push(`— ${where} —\n${text}`);
+    total += text.length;
+  }
+  return parts.length > 0 ? parts.join('\n\n') : null;
+}
+
 function logDesktop(msg) {
   try {
     fs.appendFileSync(path.join(app.getPath('userData'), 'desktop.log'), `[${new Date().toISOString()}] ${msg}\n`);
@@ -135,11 +219,13 @@ function ensureDatabase() {
 // --- Server Next standalone embebido (solo cuando está empaquetado) ---
 function startEmbeddedServer() {
   const { cfg } = loadConfig();
-  const dbPath = ensureDatabase();
+  // El server embebido sirve SOLO el modo Personal (local-first, sin DB). Teams
+  // vive en el server remoto (ver openTeams). Una DATABASE_URL válida en formato
+  // alcanza: Prisma init es lazy y las rutas Personal no consultan la base.
   const databaseUrl =
-    typeof cfg.DATABASE_URL === 'string' && cfg.DATABASE_URL.startsWith('file:')
+    typeof cfg.DATABASE_URL === 'string' && cfg.DATABASE_URL.startsWith('postgresql://')
       ? cfg.DATABASE_URL
-      : `file:${dbPath.replace(/\\/g, '/')}`;
+      : 'postgresql://pulso:pulso@127.0.0.1:5432/pulso?schema=public';
   const serverJs = path.join(process.resourcesPath, 'server', 'apps', 'web', 'server.js');
   const out = fs.openSync(path.join(app.getPath('userData'), 'server.log'), 'a');
   serverProcess = spawn(process.execPath, [serverJs], {
@@ -190,8 +276,53 @@ function normalizeWidgetView(view) {
 }
 
 function widgetUrl() {
-  if (widgetMode === 'teams') return `${BASE_URL}/widget?view=${widgetView}`;
+  // Teams vive en el server remoto; Personal es local (embebido).
+  if (widgetMode === 'teams') return `${TEAMS_URL ?? BASE_URL}/widget?view=${widgetView}`;
   return `${BASE_URL}/captura`;
+}
+
+/** Ventana de Pulso Teams: carga el server web remoto (mismo dato que la web, en
+ *  vivo). Si no hay URL configurada, avisa al panel para que la pida. */
+function openTeams() {
+  if (!TEAMS_URL) {
+    createMainWindow();
+    mainWindow.webContents.send('pulso:need-teams-url');
+    return;
+  }
+  if (teamsWindow && !teamsWindow.isDestroyed()) {
+    teamsWindow.show();
+    teamsWindow.focus();
+    return;
+  }
+  teamsWindow = new BrowserWindow({
+    width: 1280,
+    height: 840,
+    minWidth: 900,
+    minHeight: 600,
+    title: 'Pulso Teams',
+    backgroundColor: '#15110c',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      additionalArguments: [`--pulso-version=${app.getVersion()}`],
+    },
+  });
+  teamsWindow.loadURL(TEAMS_URL);
+  teamsWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.includes('/widget')) {
+      showWidget('teams');
+      return { action: 'deny' };
+    }
+    // Links externos (fuera de tu server) → navegador del sistema.
+    if (/^https?:\/\//.test(url) && TEAMS_URL && !url.startsWith(TEAMS_URL)) {
+      shell.openExternal(url);
+      return { action: 'deny' };
+    }
+    return { action: 'allow' };
+  });
+  teamsWindow.on('closed', () => {
+    teamsWindow = null;
+  });
 }
 
 function waitForServer(url, timeoutMs = 60000) {
@@ -443,6 +574,7 @@ function createTray() {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Abrir panel', click: createMainWindow },
+      { label: 'Abrir Pulso Teams', click: openTeams },
       { label: 'Mostrar / ocultar widget', click: toggleWidget },
       { type: 'separator' },
       { label: 'Buscar actualizaciones', click: () => checkForUpdates(true) },
@@ -499,6 +631,7 @@ function checkForUpdates(interactive = false) {
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
   loadState();
+  TEAMS_URL = readTeamsUrl();
   if (app.isPackaged) {
     startEmbeddedServer();
     BASE_URL = `http://127.0.0.1:${SERVER_PORT}`;
@@ -525,6 +658,57 @@ ipcMain.on('pulso:personal-ready', () => openWidgetCollapsed('personal'));
 ipcMain.on('pulso:auth', (_e, s) => {
   if (s === 'authed') openWidgetCollapsed('teams');
 });
+
+// Pulso Teams (web): configurar la URL del server y abrir la ventana remota.
+ipcMain.handle('pulso:get-teams-url', () => TEAMS_URL);
+ipcMain.on('pulso:set-teams-url', (_e, url) => writeTeamsUrl(url));
+ipcMain.on('pulso:open-teams', () => openTeams());
+// "Ir a Personal" desde la ventana Teams (login o sesión): cierra Teams y
+// vuelve al espacio Personal sin tocar ninguna configuración.
+ipcMain.on('pulso:back-to-personal', () => {
+  if (teamsWindow && !teamsWindow.isDestroyed()) teamsWindow.close();
+  createMainWindow();
+});
+
+// Carpeta Markdown (modo Personal): elegir carpeta y agregar entradas aprobadas.
+ipcMain.handle('pulso:choose-folder', async (e) => chooseFolder(BrowserWindow.fromWebContents(e.sender)));
+ipcMain.handle('pulso:export-markdown', (_e, payload) =>
+  exportMarkdown(payload?.dir, payload?.fileName, payload?.text, payload?.subdir, payload?.header, (err) =>
+    logDesktop(`export-markdown falló: ${err.message}`),
+  ),
+);
+ipcMain.handle('pulso:read-notes-context', (_e, payload) => {
+  const dir = payload?.dir;
+  const query = typeof payload?.query === 'string' ? payload.query.trim() : '';
+  const budget = Math.min(Math.max(Number(payload?.maxChars) || 3000, 500), 8000);
+  const queryVector = Array.isArray(payload?.queryVector) ? payload.queryVector : null;
+
+  // Híbrido (BM25 + embeddings vía RRF) solo si hay query Y un vector de esa
+  // query. Sin vector (embeddings apagados o proveedor sin soporte), o sin
+  // query, se comporta exactamente igual que antes (BM25 puro / recientes).
+  if (typeof dir === 'string' && dir.length > 0 && query.length > 0 && queryVector) {
+    try {
+      const chunks = embeddingsIndex.hybridSearch(dir, query, queryVector, 12, embeddingsCacheDir());
+      const out = chunksToContext(chunks, budget);
+      if (out) return out;
+    } catch {
+      /* si el híbrido falla por lo que sea, cae a BM25/recientes abajo */
+    }
+  }
+  return retrieveNotesContext(dir, query, budget);
+});
+
+// Asistente de notas — embeddings (etapa 2b): qué falta vectorizar, guardar
+// vectores recién calculados, y un status liviano para la UI de indexado.
+ipcMain.handle('pulso:embeddings-pending', (_e, payload) =>
+  embeddingsIndex.pendingChunks(payload?.dir, payload?.model, embeddingsCacheDir()),
+);
+ipcMain.handle('pulso:embeddings-save', (_e, payload) =>
+  embeddingsIndex.saveEmbeddings(payload?.dir, payload?.model, payload?.entries, embeddingsCacheDir()),
+);
+ipcMain.handle('pulso:embeddings-status', (_e, payload) =>
+  embeddingsIndex.status(payload?.dir, payload?.model, embeddingsCacheDir()),
+);
 
 // Captura rápida de pantalla. Oculta el widget un instante para no salir en la foto.
 ipcMain.handle('pulso:screenshot', async () => {

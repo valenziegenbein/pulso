@@ -6,6 +6,7 @@ import { logoutAction } from '@/server/actions/auth';
 import { AuthBridge } from '@/components/auth-bridge';
 import { VersionTag } from '@/components/version-tag';
 import { TeamsNav } from '@/components/teams/teams-nav';
+import { DesktopPersonalLink } from '@/components/desktop-personal-link';
 
 const display = Fraunces({ subsets: ['latin'], variable: '--font-display', display: 'swap' });
 const body = Hanken_Grotesk({ subsets: ['latin'], variable: '--font-body', display: 'swap' });
@@ -59,9 +60,13 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
               </div>
             </div>
             <div className="mt-3 flex items-center justify-between">
-              <form action={logoutAction}>
-                <button className="text-xs text-muted transition hover:text-fg">Salir</button>
-              </form>
+              <div className="flex items-center gap-3">
+                <form action={logoutAction}>
+                  <button className="text-xs text-muted transition hover:text-fg">Salir</button>
+                </form>
+                {/* Solo en el desktop: volver al espacio Personal sin cerrar sesión. */}
+                <DesktopPersonalLink label="Ir a Personal" />
+              </div>
               <VersionTag className="font-meta text-[10px] text-muted/50" />
             </div>
           </div>

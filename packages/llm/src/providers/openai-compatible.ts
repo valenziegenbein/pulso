@@ -4,6 +4,7 @@ import {
   type CompletionResult,
   type LLMProvider,
   LLMRequestError,
+  forEachSseData,
 } from '../provider';
 
 type OpenAIMessageContent =
@@ -36,6 +37,68 @@ export class OpenAICompatibleProvider implements LLMProvider {
   }
 
   async complete(request: CompletionRequest): Promise<CompletionResult> {
+    const res = await this.post(request, false);
+    const data = (await res.json()) as {
+      model?: string;
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    return {
+      text: data.choices?.[0]?.message?.content ?? '',
+      model: data.model ?? this.opts.model,
+    };
+  }
+
+  /** Streaming SSE (`stream: true`). Solo emite `delta.content` — el
+   *  `reasoning_content` de los modelos razonadores se descarta a propósito. */
+  async completeStream(request: CompletionRequest, onDelta: (text: string) => void): Promise<CompletionResult> {
+    const res = await this.post(request, true);
+    let text = '';
+    let model = this.opts.model;
+    await forEachSseData(res, (data) => {
+      if (data === '[DONE]') return;
+      try {
+        const obj = JSON.parse(data) as {
+          model?: string;
+          choices?: Array<{ delta?: { content?: string } }>;
+        };
+        if (obj.model) model = obj.model;
+        const delta = obj.choices?.[0]?.delta?.content;
+        if (typeof delta === 'string' && delta.length > 0) {
+          text += delta;
+          onDelta(delta);
+        }
+      } catch {
+        /* línea parcial o keep-alive: ignorar */
+      }
+    });
+    return { text, model };
+  }
+
+  /** POST /embeddings. Devuelve un vector por texto, en el mismo orden de entrada
+   *  (el server puede responder fuera de orden; se reordena por `index`). */
+  async embed(texts: string[]): Promise<number[][]> {
+    let res: Response;
+    try {
+      res = await this.fetchImpl(`${this.opts.baseUrl.replace(/\/$/, '')}/embeddings`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(this.opts.apiKey ? { authorization: `Bearer ${this.opts.apiKey}` } : {}),
+        },
+        body: JSON.stringify({ model: this.opts.model, input: texts }),
+      });
+    } catch (cause) {
+      throw new LLMRequestError(`No se pudo contactar al proveedor de embeddings: ${String(cause)}`, undefined, this.id);
+    }
+    if (!res.ok) {
+      throw new LLMRequestError(`Proveedor de embeddings respondió ${res.status}`, res.status, this.id);
+    }
+    const data = (await res.json()) as { data?: Array<{ embedding: number[]; index?: number }> };
+    const items = data.data ?? [];
+    return [...items].sort((a, b) => (a.index ?? 0) - (b.index ?? 0)).map((d) => d.embedding);
+  }
+
+  private async post(request: CompletionRequest, stream: boolean): Promise<Response> {
     let res: Response;
     try {
       res = await this.fetchImpl(`${this.opts.baseUrl.replace(/\/$/, '')}/chat/completions`, {
@@ -49,24 +112,16 @@ export class OpenAICompatibleProvider implements LLMProvider {
           messages: request.messages.map(toOpenAIMessage),
           temperature: request.temperature ?? 0.3,
           max_tokens: request.maxTokens ?? 600,
+          ...(stream ? { stream: true } : {}),
         }),
       });
     } catch (cause) {
       throw new LLMRequestError(`No se pudo contactar al proveedor: ${String(cause)}`, undefined, this.id);
     }
-
     if (!res.ok) {
       throw new LLMRequestError(`Proveedor respondió ${res.status}`, res.status, this.id);
     }
-
-    const data = (await res.json()) as {
-      model?: string;
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-    return {
-      text: data.choices?.[0]?.message?.content ?? '',
-      model: data.model ?? this.opts.model,
-    };
+    return res;
   }
 }
 

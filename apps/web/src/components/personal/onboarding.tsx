@@ -9,25 +9,56 @@ import { CloudAiSetup } from './cloud-ai-setup';
 
 const STEPS = ['intro', 'mode', 'name', 'project', 'storage', 'ai', 'widget', 'snap', 'done'] as const;
 
-type ShellBridge = { isDesktop?: boolean; introWidget?: () => void; collapse?: () => void };
+type ShellBridge = {
+  isDesktop?: boolean;
+  introWidget?: () => void;
+  collapse?: () => void;
+  openTeams?: () => void;
+  getTeamsUrl?: () => Promise<string | null>;
+  setTeamsUrl?: (url: string) => void;
+  chooseFolder?: () => Promise<string | null>;
+};
 function shell(): ShellBridge | undefined {
   return typeof window !== 'undefined' ? (window as unknown as { pulso?: ShellBridge }).pulso : undefined;
 }
 
 export function Onboarding() {
   const router = useRouter();
-  const { setName, addProject, setStorage, setAi, completeOnboarding, entries, focusProject } = usePersonal();
+  const { setName, addProject, setStorage, setStorageDir, setAi, completeOnboarding, entries, focusProject } = usePersonal();
 
   const [i, setI] = useState(0);
   const [name, setNameLocal] = useState('');
   const [projName, setProjName] = useState('');
   const [projCtx, setProjCtx] = useState('');
   const [storage, setStorageLocal] = useState<StorageTarget>(null);
+  const [storageDir, setStorageDirLocal] = useState<string | null>(null);
   const [ai, setAiLocal] = useState<AiMode>(null);
   const [committed, setCommitted] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
+  const [teamsMode, setTeamsMode] = useState(false);
+  const [teamsUrl, setTeamsUrlLocal] = useState('');
 
   useEffect(() => setIsDesktop(Boolean(shell()?.isDesktop)), []);
+
+  // "Con mi equipo": en web va al login del server; en desktop abre el server
+  // remoto en su propia ventana (Teams vive en el server, no en el embebido).
+  async function chooseTeams() {
+    const b = shell();
+    if (!b?.isDesktop) {
+      router.push('/login');
+      return;
+    }
+    const existing = await b.getTeamsUrl?.();
+    if (existing) b.openTeams?.();
+    else setTeamsMode(true);
+  }
+  function connectTeams() {
+    const b = shell();
+    const url = teamsUrl.trim();
+    if (!b || !url) return;
+    b.setTeamsUrl?.(url);
+    b.openTeams?.();
+  }
 
   const step = STEPS[i];
   const go = (n: number) => setI((v) => Math.min(Math.max(v + n, 0), STEPS.length - 1));
@@ -49,8 +80,18 @@ export function Onboarding() {
     return () => clearTimeout(t);
   }, [i]);
 
+  // "Carpeta Markdown": en desktop abre el diálogo del sistema para elegirla.
+  async function chooseMarkdown() {
+    setStorageLocal('markdown');
+    const b = shell();
+    if (!b?.isDesktop || !b.chooseFolder) return;
+    const dir = await b.chooseFolder();
+    if (dir) setStorageDirLocal(dir);
+  }
+
   function finish() {
     setStorage(storage);
+    setStorageDir(storage === 'markdown' ? storageDir : null);
     setAi(ai);
     completeOnboarding();
     router.push('/personal');
@@ -89,10 +130,30 @@ export function Onboarding() {
           <div>
             <h1 className="font-display text-4xl sm:text-5xl">¿Cómo vas a usar Pulso?</h1>
             <p className="mt-3 text-muted">Misma herramienta, dos formas de trabajar.</p>
-            <div className="mt-8 grid gap-4 sm:grid-cols-2">
-              <OptionCard title="Para mí" desc="Notas, proyectos propios, bitácora. Local, sin cuenta. Tus datos son tuyos." badge="Personal" onClick={() => go(1)} />
-              <OptionCard title="Con mi equipo" desc="Equipos, personas, tareas, comunicación y resultados. Requiere cuenta." badge="Teams" onClick={() => router.push('/login')} />
-            </div>
+            {teamsMode ? (
+              <div className="pulso-reveal mt-8 max-w-md">
+                <p className="mb-2 text-sm text-muted">Pegá la URL de tu Pulso Teams (te la pasa tu organización):</p>
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    autoFocus
+                    value={teamsUrl}
+                    onChange={(e) => setTeamsUrlLocal(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && connectTeams()}
+                    placeholder="https://pulso.tu-empresa.com"
+                    className="font-meta min-w-[16rem] flex-1 rounded-xl border border-border bg-surface px-3 py-2 text-sm text-fg outline-none transition placeholder:text-muted/60 focus:border-accent"
+                  />
+                  <button onClick={connectTeams} disabled={!teamsUrl.trim()} className="shrink-0 rounded-full bg-accent px-5 py-2 text-sm font-medium text-bg transition hover:brightness-110 disabled:opacity-40">
+                    Conectar
+                  </button>
+                </div>
+                <button onClick={() => setTeamsMode(false)} className="mt-3 text-sm text-muted transition hover:text-fg">← Volver</button>
+              </div>
+            ) : (
+              <div className="mt-8 grid gap-4 sm:grid-cols-2">
+                <OptionCard title="Para mí" desc="Notas, proyectos propios, bitácora. Local, sin cuenta. Tus datos son tuyos." badge="Personal" onClick={() => go(1)} />
+                <OptionCard title="Con mi equipo" desc="Equipos, personas, tareas y resultados. Tu cuenta del server." badge="Teams" onClick={chooseTeams} />
+              </div>
+            )}
           </div>
         )}
 
@@ -182,9 +243,27 @@ export function Onboarding() {
             <p className="mt-3 text-muted">Pulso captura. Tu sistema favorito guarda.</p>
             <div className="mt-8 grid gap-3 sm:grid-cols-3">
               <OptionCard small title="En Pulso" desc="Base local simple." selected={storage === 'pulso'} onClick={() => setStorageLocal('pulso')} />
-              <OptionCard small title="Carpeta Markdown" desc="Obsidian, Logseq, Git." selected={storage === 'markdown'} onClick={() => setStorageLocal('markdown')} />
+              <OptionCard small title="Carpeta Markdown" desc="Obsidian, Logseq, Git." selected={storage === 'markdown'} onClick={chooseMarkdown} />
               <OptionCard small title="Notion" desc="A una base de Notion." selected={storage === 'notion'} onClick={() => setStorageLocal('notion')} />
             </div>
+            {storage === 'markdown' && (
+              <p className="pulso-reveal mt-4 text-sm text-muted">
+                {storageDir ? (
+                  <>
+                    Cada entrada aprobada se agrega a un .md por proyecto en{' '}
+                    <button onClick={chooseMarkdown} className="font-meta text-accent underline-offset-2 transition hover:underline" title="Cambiar carpeta">
+                      {storageDir}
+                    </button>
+                  </>
+                ) : isDesktop ? (
+                  <button onClick={chooseMarkdown} className="text-accent underline-offset-2 transition hover:underline">
+                    Elegí la carpeta destino…
+                  </button>
+                ) : (
+                  'La carpeta se elige en la app de escritorio. Acá queda anotada tu preferencia.'
+                )}
+              </p>
+            )}
             <StepNav onBack={() => go(-1)} onNext={() => go(1)} nextLabel={storage ? 'Continuar' : 'Configurar después'} />
           </div>
         )}

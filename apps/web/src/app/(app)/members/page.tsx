@@ -1,7 +1,7 @@
 import { requireAuth } from '@/lib/auth/context';
 import { getMembersPage, getTeamsPage } from '@/server/queries';
-import { invitePersonAction } from '@/server/actions/teams';
-import { Card, Dot, PageHeader, inputCls, selectCls } from '@/components/teams/ui';
+import { Card, Dot, PageHeader } from '@/components/teams/ui';
+import { InviteMemberForm } from '@/components/teams/invite-member-form';
 
 const ROLE_OPTIONS = [
   ['MEMBER', 'Miembro'],
@@ -72,18 +72,7 @@ export default async function MembersPage() {
         </Card>
 
         <Card id="nuevo" title="Añadir miembro">
-          <form action={invitePersonAction} className="space-y-2.5">
-            <input name="name" required placeholder="Nombre" className={inputCls} />
-            <input name="email" type="email" required placeholder="Email" className={inputCls} />
-            <select name="roleKey" defaultValue="MEMBER" className={selectCls}>
-              {ROLE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
-            <select name="teamId" className={selectCls}>
-              <option value="">Sin equipo</option>
-              {teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
-            </select>
-            <button className="w-full rounded-xl bg-accent px-3 py-2.5 text-sm font-medium text-bg transition hover:brightness-110">Añadir miembro</button>
-          </form>
+          <InviteMemberForm teams={teams} roleOptions={ROLE_OPTIONS} />
         </Card>
       </div>
     </main>

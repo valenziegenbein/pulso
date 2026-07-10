@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { usePersonal } from '@/lib/personal/store';
 
@@ -20,6 +21,21 @@ function relative(ts: number): string {
 export function ProjectChooser({ variant }: { variant: 'switcher' | 'inline' }) {
   const { projects, entries, focusProject, setFocusProject } = usePersonal();
   const [open, setOpen] = useState(false);
+  // El trigger inline vive dentro de contenedores con overflow (el widget):
+  // el menú se posiciona `fixed` midiendo el trigger, así nunca queda clipeado.
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ left: number; bottom: number } | null>(null);
+
+  function toggle() {
+    if (!open && variant === 'inline' && triggerRef.current) {
+      const r = triggerRef.current.getBoundingClientRect();
+      setPos({
+        left: Math.max(8, Math.min(r.left, window.innerWidth - 264)),
+        bottom: Math.max(8, window.innerHeight - r.top + 8),
+      });
+    }
+    setOpen((v) => !v);
+  }
 
   const lastActivity = (id: string) => entries.find((e) => e.projectId === id)?.createdAt ?? 0;
   const recent = [...projects]
@@ -47,7 +63,7 @@ export function ProjectChooser({ variant }: { variant: 'switcher' | 'inline' }) 
     <div className="relative">
       {variant === 'switcher' ? (
         <button
-          onClick={() => setOpen((v) => !v)}
+          onClick={toggle}
           className="group min-w-[12rem] rounded-2xl border border-border bg-surface/50 px-4 py-2.5 text-left transition hover:border-muted hover:bg-surface"
         >
           <div className="font-meta text-[10px] uppercase tracking-[0.18em] text-muted">Proyecto en foco</div>
@@ -61,52 +77,60 @@ export function ProjectChooser({ variant }: { variant: 'switcher' | 'inline' }) 
         </button>
       ) : (
         <button
-          onClick={() => setOpen((v) => !v)}
-          className="font-meta text-[11px] uppercase tracking-[0.14em] text-muted transition hover:text-fg"
+          ref={triggerRef}
+          onClick={toggle}
+          className="no-drag font-meta text-[11px] uppercase tracking-[0.14em] text-muted transition hover:text-fg"
         >
           para guardar en: <span className="text-accent">{focusProject.name}</span> ⌄
         </button>
       )}
 
-      {open && (
-        <>
-          <button className="fixed inset-0 z-30 cursor-default" aria-hidden onClick={() => setOpen(false)} />
-          <div
-            className={`absolute z-40 mt-2 w-64 overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl ${
-              variant === 'switcher' ? 'right-0' : 'left-0 bottom-full mb-2 mt-0'
-            }`}
-          >
-            <div className="font-meta border-b border-border px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-muted">
-              Proyectos recientes
-            </div>
-            <ul className="p-1">
-              {recent.map((p) => (
-                <li key={p.id}>
-                  <button
-                    onClick={() => {
-                      setFocusProject(p.id);
-                      setOpen(false);
-                    }}
-                    className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition hover:bg-bg ${
-                      p.id === focusProject.id ? 'text-accent' : 'text-fg'
-                    }`}
-                  >
-                    <span className="truncate">{p.name}</span>
-                    <span className="font-meta ml-2 shrink-0 text-[10px] text-muted">{relative(lastActivity(p.id) || p.createdAt)}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <Link
-              href="/personal/proyectos"
-              onClick={() => setOpen(false)}
-              className="block border-t border-border px-3 py-2.5 text-sm text-muted transition hover:bg-bg hover:text-fg"
+      {open && (() => {
+        const menu = (
+          <>
+            <button className="fixed inset-0 z-30 cursor-default" aria-hidden onClick={() => setOpen(false)} />
+            <div
+              className={`z-40 w-64 overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl ${
+                variant === 'switcher' ? 'absolute right-0 mt-2' : 'fixed'
+              }`}
+              style={variant === 'inline' && pos ? { left: pos.left, bottom: pos.bottom } : undefined}
             >
-              + Nuevo proyecto…
-            </Link>
-          </div>
-        </>
-      )}
+              <div className="font-meta border-b border-border px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-muted">
+                Proyectos recientes
+              </div>
+              <ul className="p-1">
+                {recent.map((p) => (
+                  <li key={p.id}>
+                    <button
+                      onClick={() => {
+                        setFocusProject(p.id);
+                        setOpen(false);
+                      }}
+                      className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition hover:bg-bg ${
+                        p.id === focusProject.id ? 'text-accent' : 'text-fg'
+                      }`}
+                    >
+                      <span className="truncate">{p.name}</span>
+                      <span className="font-meta ml-2 shrink-0 text-[10px] text-muted">{relative(lastActivity(p.id) || p.createdAt)}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/personal/proyectos"
+                onClick={() => setOpen(false)}
+                className="block border-t border-border px-3 py-2.5 text-sm text-muted transition hover:bg-bg hover:text-fg"
+              >
+                + Nuevo proyecto…
+              </Link>
+            </div>
+          </>
+        );
+        // Portal: el menú inline vive dentro de contenedores con overflow y
+        // ancestros con transform (animaciones) — montado en <body>, el `fixed`
+        // es realmente relativo al viewport y nunca queda clipeado.
+        return variant === 'inline' ? createPortal(menu, document.body) : menu;
+      })()}
     </div>
   );
 }

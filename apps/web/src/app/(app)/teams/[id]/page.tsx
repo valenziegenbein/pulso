@@ -2,9 +2,9 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireAuth } from '@/lib/auth/context';
 import { getAssignablePeople, getTeamDetail } from '@/server/queries';
-import { invitePersonAction } from '@/server/actions/teams';
 import { TaskSuggestionPanel } from '@/components/teams/task-suggestion-panel';
-import { Card, EmptyState, PriorityBadge, StatusBadge, inputCls, selectCls } from '@/components/teams/ui';
+import { InviteMemberForm } from '@/components/teams/invite-member-form';
+import { Card, EmptyState, PriorityBadge, StatusBadge } from '@/components/teams/ui';
 
 const ROLE_OPTIONS = [
   ['MEMBER', 'Miembro'],
@@ -101,15 +101,7 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ id:
         </Card>
 
         <Card id="miembro" title="Añadir miembro">
-          <form action={invitePersonAction} className="space-y-2.5">
-            <input type="hidden" name="teamId" value={team.id} />
-            <input name="name" required placeholder="Nombre" className={inputCls} />
-            <input name="email" type="email" required placeholder="Email" className={inputCls} />
-            <select name="roleKey" defaultValue="MEMBER" className={selectCls}>
-              {ROLE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
-            <button className="w-full rounded-xl bg-accent px-3 py-2.5 text-sm font-medium text-bg transition hover:brightness-110">Añadir miembro</button>
-          </form>
+          <InviteMemberForm teams={[]} roleOptions={ROLE_OPTIONS} fixedTeamId={team.id} />
         </Card>
 
         <div id="tarea" className="lg:col-span-2">
