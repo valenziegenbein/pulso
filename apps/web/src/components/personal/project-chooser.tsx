@@ -21,18 +21,30 @@ function relative(ts: number): string {
 export function ProjectChooser({ variant }: { variant: 'switcher' | 'inline' }) {
   const { projects, entries, focusProject, setFocusProject } = usePersonal();
   const [open, setOpen] = useState(false);
-  // El trigger inline vive dentro de contenedores con overflow (el widget):
-  // el menú se posiciona `fixed` midiendo el trigger, así nunca queda clipeado.
+  // Los triggers de ambas variantes pueden vivir dentro de ancestros que, sin
+  // querer, se vuelven raíz de stacking context (p. ej. `.pulso-reveal`: la
+  // animación de entrada deja un `transform: matrix(...)` computado en vez de
+  // `none` al terminar — un elemento "hermano" posterior en el DOM puede
+  // "atrapar" el menú debajo suyo aunque se vea encima). El menú SIEMPRE se
+  // porta a <body> y se posiciona midiendo el trigger, así escapa cualquier
+  // contexto de apilamiento u overflow de sus ancestros.
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const [pos, setPos] = useState<{ left: number; bottom: number } | null>(null);
+  const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number } | null>(null);
 
   function toggle() {
-    if (!open && variant === 'inline' && triggerRef.current) {
+    if (!open && triggerRef.current) {
       const r = triggerRef.current.getBoundingClientRect();
-      setPos({
-        left: Math.max(8, Math.min(r.left, window.innerWidth - 264)),
-        bottom: Math.max(8, window.innerHeight - r.top + 8),
-      });
+      if (variant === 'inline') {
+        setPos({
+          left: Math.max(8, Math.min(r.left, window.innerWidth - 264)),
+          bottom: Math.max(8, window.innerHeight - r.top + 8),
+        });
+      } else {
+        setPos({
+          left: Math.max(8, Math.min(r.right - 256, window.innerWidth - 264)),
+          top: r.bottom + 8,
+        });
+      }
     }
     setOpen((v) => !v);
   }
@@ -63,6 +75,7 @@ export function ProjectChooser({ variant }: { variant: 'switcher' | 'inline' }) 
     <div className="relative">
       {variant === 'switcher' ? (
         <button
+          ref={triggerRef}
           onClick={toggle}
           className="group min-w-[12rem] rounded-2xl border border-border bg-surface/50 px-4 py-2.5 text-left transition hover:border-muted hover:bg-surface"
         >
@@ -85,15 +98,13 @@ export function ProjectChooser({ variant }: { variant: 'switcher' | 'inline' }) 
         </button>
       )}
 
-      {open && (() => {
+      {open && pos && (() => {
         const menu = (
           <>
             <button className="fixed inset-0 z-30 cursor-default" aria-hidden onClick={() => setOpen(false)} />
             <div
-              className={`z-40 w-64 overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl ${
-                variant === 'switcher' ? 'absolute right-0 mt-2' : 'fixed'
-              }`}
-              style={variant === 'inline' && pos ? { left: pos.left, bottom: pos.bottom } : undefined}
+              className="fixed z-40 w-64 overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl"
+              style={{ left: pos.left, top: pos.top, bottom: pos.bottom }}
             >
               <div className="font-meta border-b border-border px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-muted">
                 Proyectos recientes
@@ -126,10 +137,11 @@ export function ProjectChooser({ variant }: { variant: 'switcher' | 'inline' }) 
             </div>
           </>
         );
-        // Portal: el menú inline vive dentro de contenedores con overflow y
-        // ancestros con transform (animaciones) — montado en <body>, el `fixed`
-        // es realmente relativo al viewport y nunca queda clipeado.
-        return variant === 'inline' ? createPortal(menu, document.body) : menu;
+        // Portal SIEMPRE: cualquiera de los dos triggers puede vivir dentro de
+        // ancestros con overflow o con transform (animaciones de entrada) que
+        // atrapan al menú por debajo pese a su z-index. Montado en <body>, el
+        // `fixed` es realmente relativo al viewport y nunca queda atrapado.
+        return createPortal(menu, document.body);
       })()}
     </div>
   );
