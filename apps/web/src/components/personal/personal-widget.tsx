@@ -11,6 +11,7 @@ type Bridge = {
   collapse?: () => void;
   expand?: () => void;
   screenshot?: () => Promise<string | null>;
+  readNotesContext?: (payload: { dir: string; maxChars?: number }) => Promise<string | null>;
 };
 function bridge(): Bridge | undefined {
   return typeof window !== 'undefined' ? (window as unknown as { pulso?: Bridge }).pulso : undefined;
@@ -76,7 +77,7 @@ function useWindowWidth(): number {
 export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}) {
   const elapsed = useElapsed();
   const width = useWindowWidth();
-  const { focusProject, addEntry, tasks, toggleTask, ai, aiConfig } = usePersonal();
+  const { focusProject, addEntry, tasks, toggleTask, ai, aiConfig, storage, storageDir } = usePersonal();
   const [isDesktop, setIsDesktop] = useState(false);
   useEffect(() => setIsDesktop(Boolean(bridge()?.isDesktop)), []);
 
@@ -137,11 +138,23 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
     // Streaming: el borrador aparece mientras el modelo escribe (si el
     // proveedor lo soporta; si no, el server degrada solo).
     const streamable = ai !== 'none' && aiReady(ai, aiConfig);
+    // Asistente de notas (opt-in por proyecto): extractos de las notas
+    // recientes de la carpeta del proyecto como contexto del borrador.
+    let notesContext: string | undefined;
+    const notesDir = focusProject.markdownDir ?? (storage === 'markdown' ? storageDir : null);
+    if (focusProject.useNotesContext && notesDir && streamable) {
+      try {
+        notesContext = (await bridge()?.readNotesContext?.({ dir: notesDir, maxChars: 3000 })) ?? undefined;
+      } catch {
+        /* sin notas: el borrador sale igual */
+      }
+    }
     try {
       const s = await generateDraft({
         note,
         task: { title: focusProject.name },
         projectContext: focusProject.context,
+        notesContext,
         images: image ? [{ dataUrl: image }] : undefined,
         ai,
         config: aiConfig,

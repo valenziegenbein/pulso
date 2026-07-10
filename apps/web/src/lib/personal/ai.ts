@@ -215,6 +215,8 @@ export async function generateDraft(params: {
   note: string;
   task?: { title?: string };
   projectContext?: string;
+  /** Extractos de las notas recientes del proyecto (bóveda, opt-in, solo desktop). */
+  notesContext?: string;
   attachmentsHint?: string[];
   images?: DraftImage[];
   ai: AiMode;
@@ -222,13 +224,14 @@ export async function generateDraft(params: {
   /** Si se pasa y el proveedor lo soporta, el contenido llega en vivo (streaming). */
   onDelta?: (text: string) => void;
 }): Promise<DraftSuggestion> {
-  const { note, task, projectContext, attachmentsHint, images, ai, config, onDelta } = params;
+  const { note, task, projectContext, notesContext, attachmentsHint, images, ai, config, onDelta } = params;
   if (ai === 'none') return manualDraft(note);
   if (aiReady(ai, config) && config) {
     const body = {
       note,
       task,
       projectContext,
+      notesContext,
       attachmentsHint,
       images,
       provider: config.provider,

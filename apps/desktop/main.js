@@ -115,19 +115,9 @@ async function chooseFolder(win) {
   return res.filePaths[0];
 }
 
-function exportMarkdown(dir, fileName, text) {
-  if (typeof dir !== 'string' || typeof fileName !== 'string' || typeof text !== 'string') return false;
-  if (dir.length === 0 || text.length === 0) return false;
-  // Nombre saneado: sin separadores ni traversal — siempre queda DENTRO de dir.
-  const safeName = fileName.replace(/[\\/:*?"<>|]/g, '-').replace(/^\.+|\.+$/g, '').trim().slice(0, 120) || 'bitacora';
-  try {
-    fs.appendFileSync(path.join(dir, `${safeName}.md`), text, 'utf8');
-    return true;
-  } catch (err) {
-    logDesktop(`export-markdown falló: ${err.message}`);
-    return false;
-  }
-}
+// Escritura del diario .md y lectura de notas como contexto: ver markdown.js
+// (módulo sin Electron, verificable con node puro).
+const { exportMarkdown, readNotesContext } = require('./markdown');
 
 function logDesktop(msg) {
   try {
@@ -660,8 +650,11 @@ ipcMain.on('pulso:back-to-personal', () => {
 // Carpeta Markdown (modo Personal): elegir carpeta y agregar entradas aprobadas.
 ipcMain.handle('pulso:choose-folder', async (e) => chooseFolder(BrowserWindow.fromWebContents(e.sender)));
 ipcMain.handle('pulso:export-markdown', (_e, payload) =>
-  exportMarkdown(payload?.dir, payload?.fileName, payload?.text),
+  exportMarkdown(payload?.dir, payload?.fileName, payload?.text, payload?.subdir, payload?.header, (err) =>
+    logDesktop(`export-markdown falló: ${err.message}`),
+  ),
 );
+ipcMain.handle('pulso:read-notes-context', (_e, payload) => readNotesContext(payload?.dir, payload?.maxChars));
 
 // Captura rápida de pantalla. Oculta el widget un instante para no salir en la foto.
 ipcMain.handle('pulso:screenshot', async () => {

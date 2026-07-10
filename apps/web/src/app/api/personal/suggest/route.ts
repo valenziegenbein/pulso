@@ -11,11 +11,13 @@ const MAX_IMAGE_CHARS = 2_000_000;
 const IMAGE_DATA_URL = /^data:(image\/(?:png|jpe?g|webp|gif));base64,([a-z0-9+/=\r\n]+)$/i;
 
 const MAX_PROJECT_CONTEXT = 4000; // tope defensivo; el servicio recorta al presupuesto real
+const MAX_NOTES_CONTEXT = 8000; // ídem: extractos de la bóveda (opt-in)
 
 interface SuggestBody {
   note?: unknown;
   task?: { title?: unknown };
   projectContext?: unknown;
+  notesContext?: unknown;
   attachmentsHint?: unknown;
   image?: unknown;
   images?: unknown;
@@ -92,6 +94,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
   const title = typeof body?.task?.title === 'string' ? body.task.title : undefined;
   const projectContext = typeof body?.projectContext === 'string' ? body.projectContext.slice(0, MAX_PROJECT_CONTEXT) : undefined;
+  const notesContext = typeof body?.notesContext === 'string' ? body.notesContext.slice(0, MAX_NOTES_CONTEXT) : undefined;
   const attachmentsHint = Array.isArray(body?.attachmentsHint)
     ? body.attachmentsHint.filter((a): a is string => typeof a === 'string').slice(0, 5)
     : undefined;
@@ -108,6 +111,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     note,
     task: title ? { title } : undefined,
     projectContext,
+    notesContext,
     attachmentsHint,
     images,
   };

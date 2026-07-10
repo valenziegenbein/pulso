@@ -116,6 +116,25 @@ describe('WorklogSuggestionService', () => {
     expect(suggestion.content).toBe('generado solo con texto');
   });
 
+  it('incluye extractos de notas de la bóveda como contexto (opt-in)', async () => {
+    let captured: CompletionRequest | undefined;
+    const capturing: LLMProvider = {
+      id: 'capturing',
+      async complete(request) {
+        captured = request;
+        return { text: '{"type":"PROGRESS","title":"x","content":"y"}', model: 'x' };
+      },
+    };
+    await new WorklogSuggestionService(capturing).suggest({
+      note: 'seguí con el flujo de pago',
+      notesContext: '— checkout.md —\nDecidimos usar Stripe.',
+    });
+    const userText = captured?.messages.find((m) => m.role === 'user')?.content;
+    expect(typeof userText).toBe('string');
+    expect(userText).toContain('Notas recientes del proyecto');
+    expect(userText).toContain('Decidimos usar Stripe.');
+  });
+
   it('captura sola (sin nota): adapta el prompt y no reintenta sin imagen', async () => {
     let calls = 0;
     const capturing: LLMProvider = {

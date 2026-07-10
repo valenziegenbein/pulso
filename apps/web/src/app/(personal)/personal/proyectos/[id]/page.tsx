@@ -34,7 +34,7 @@ function fmt(ts: number): string {
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { ready, projects, entries, tasks, storage, storageDir, updateProjectContext, setProjectMarkdownDir } = usePersonal();
+  const { ready, projects, entries, tasks, storage, storageDir, aiConfig, updateProjectContext, setProjectMarkdownDir, setProjectNotesContext } = usePersonal();
   const project = projects.find((p) => p.id === id);
 
   const [tab, setTab] = useState<Tab>('resumen');
@@ -255,6 +255,35 @@ export default function ProjectDetailPage() {
                     'La carpeta se elige en la app de escritorio.'
                   )}
                 </p>
+              )}
+
+              {/* Asistente de notas (opt-in): la carpeta también se puede LEER como contexto. */}
+              {isDesktop && (project.markdownDir ?? (storage === 'markdown' ? storageDir : null)) && (
+                <div className="mt-4 border-t border-border/60 pt-4">
+                  <label className="flex cursor-pointer items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(project.useNotesContext)}
+                      onChange={(e) => setProjectNotesContext(project.id, e.target.checked)}
+                      className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
+                    />
+                    <span className="text-sm">
+                      Usar mis notas como contexto para la IA
+                      <span className="mt-0.5 block text-xs text-muted">
+                        Al generar un borrador, Pulso lee extractos de las notas recientes de esta carpeta (solo lectura,
+                        solo esta carpeta).{' '}
+                        {aiConfig && (aiConfig.provider === 'openai' || aiConfig.provider === 'anthropic') ? (
+                          <span className="text-[#d98a5e]">
+                            Tu IA es cloud ({aiConfig.provider === 'openai' ? 'OpenAI' : 'Anthropic'}): esos extractos viajan
+                            al proveedor.
+                          </span>
+                        ) : (
+                          'Con IA local, todo queda en tu máquina.'
+                        )}
+                      </span>
+                    </span>
+                  </label>
+                </div>
               )}
             </section>
             <section className="rounded-2xl border border-border bg-surface/50 p-5">

@@ -14,6 +14,8 @@ export interface SuggestionInput {
   task?: TaskContext;
   /** Contexto del proyecto en foco (modo personal). Se recorta a un presupuesto. */
   projectContext?: string;
+  /** Extractos de las notas recientes del proyecto (bóveda del usuario, opt-in). */
+  notesContext?: string;
   attachmentsHint?: string[];
   /** Imagenes/capturas adjuntas manualmente para contexto visual del borrador. */
   images?: SuggestionImage[];
@@ -25,6 +27,7 @@ export interface SuggestionInput {
 const BUDGET = {
   note: 2000,
   projectContext: 1200,
+  notesContext: 2500,
   taskDescription: 800,
 } as const;
 
@@ -226,6 +229,11 @@ function buildUserPrompt(input: SuggestionInput): string {
   }
   if (input.projectContext) {
     lines.push(`Contexto del proyecto: ${clamp(input.projectContext, BUDGET.projectContext)}`);
+  }
+  if (input.notesContext) {
+    lines.push(
+      `Notas recientes del proyecto (extractos de la bóveda de la persona; usalas SOLO como contexto, no las cites ni las resumas):\n${clamp(input.notesContext, BUDGET.notesContext)}`,
+    );
   }
   if (input.attachmentsHint?.length) {
     lines.push(`Adjuntos/links de referencia: ${input.attachmentsHint.join(', ')}`);
