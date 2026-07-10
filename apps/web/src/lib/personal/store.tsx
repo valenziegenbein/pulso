@@ -7,7 +7,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
  * sin servidor). Más adelante se puede persistir en SQLite + exportar a Markdown.
  */
 
-export type EntryType = 'PROGRESS' | 'RESEARCH' | 'DECISION' | 'BLOCKER' | 'NOTE' | 'DELIVERY';
+export type EntryType = 'PROGRESS' | 'RESEARCH' | 'DECISION' | 'BLOCKER' | 'NOTE' | 'DELIVERY' | 'TASK';
 export type TaskPriority = 'high' | 'medium' | 'low';
 export type StorageTarget = 'pulso' | 'markdown' | 'notion' | null;
 export type AiMode = 'byok' | 'local' | 'none' | null;
@@ -336,6 +336,7 @@ export const ENTRY_LABEL: Record<EntryType, string> = {
   BLOCKER: 'Bloqueo',
   NOTE: 'Nota',
   DELIVERY: 'Entrega',
+  TASK: 'Tarea',
 };
 
 export const TASK_PRIORITY_LABEL: Record<TaskPriority, string> = {

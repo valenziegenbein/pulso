@@ -4,10 +4,11 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { CaptureCard } from '@/components/personal/capture-card';
+import { EntryHistory } from '@/components/personal/entry-history';
 import { ProjectTasks } from '@/components/personal/project-tasks';
 import { NotesIndexPanel } from '@/components/personal/notes-index-panel';
 import { embeddingsReady } from '@/lib/personal/ai';
-import { ENTRY_LABEL, usePersonal, type EntryType } from '@/lib/personal/store';
+import { ENTRY_LABEL, usePersonal } from '@/lib/personal/store';
 
 type ShellBridge = { isDesktop?: boolean; chooseFolder?: () => Promise<string | null> };
 function shell(): ShellBridge | undefined {
@@ -22,14 +23,6 @@ const TABS: Array<[Tab, string]> = [
   ['archivos', 'Archivos'],
 ];
 
-const BITACORA_FILTERS: Array<{ label: string; types: EntryType[] | null }> = [
-  { label: 'Todo', types: null },
-  { label: 'Avances', types: ['PROGRESS', 'DELIVERY'] },
-  { label: 'Investigación', types: ['RESEARCH'] },
-  { label: 'Decisiones', types: ['DECISION'] },
-  { label: 'Bloqueos', types: ['BLOCKER'] },
-];
-
 function fmt(ts: number): string {
   return new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(ts);
 }
@@ -42,7 +35,6 @@ export default function ProjectDetailPage() {
   const [tab, setTab] = useState<Tab>('resumen');
   const [editingCtx, setEditingCtx] = useState(false);
   const [ctxDraft, setCtxDraft] = useState('');
-  const [filter, setFilter] = useState(0);
   const [isDesktop, setIsDesktop] = useState(false);
   useEffect(() => setIsDesktop(Boolean(shell()?.isDesktop)), []);
 
@@ -66,9 +58,6 @@ export default function ProjectDetailPage() {
   const decisions = projEntries.filter((e) => e.type === 'DECISION');
   const blockers = projEntries.filter((e) => e.type === 'BLOCKER');
   const lastEntry = projEntries[0];
-
-  const fil = BITACORA_FILTERS[filter]!;
-  const shownEntries = fil.types ? projEntries.filter((e) => fil.types!.includes(e.type)) : projEntries;
 
   function exportMarkdown() {
     const out: string[] = [`# ${project!.name}`, ''];
@@ -177,42 +166,7 @@ export default function ProjectDetailPage() {
 
         {tab === 'tareas' && <ProjectTasks projectId={project.id} />}
 
-        {tab === 'bitacora' && (
-          <div>
-            <div className="mb-6 flex flex-wrap gap-2">
-              {BITACORA_FILTERS.map((f, idx) => (
-                <button
-                  key={f.label}
-                  onClick={() => setFilter(idx)}
-                  className={`rounded-full border px-3.5 py-1.5 text-xs transition ${
-                    idx === filter ? 'border-accent text-accent' : 'border-border text-muted hover:border-muted hover:text-fg'
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-            {shownEntries.length === 0 ? (
-              <p className="rounded-2xl border border-dashed border-border p-8 text-center text-muted">Nada por acá todavía.</p>
-            ) : (
-              <ol className="relative space-y-5 border-l border-border pl-6">
-                {shownEntries.map((e) => (
-                  <li key={e.id} className="relative">
-                    <span className="absolute -left-[1.7rem] top-1.5 h-2 w-2 rounded-full bg-accent" />
-                    <div className="font-meta flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-muted">
-                      <span className="text-accent">{ENTRY_LABEL[e.type]}</span>
-                      <span>·</span>
-                      <span>{fmt(e.createdAt)}</span>
-                    </div>
-                    <h3 className="font-display mt-1 text-xl">{e.title}</h3>
-                    <p className="mt-1 text-sm leading-relaxed text-muted">{e.content}</p>
-                    {e.image && <img src={e.image} alt="captura" className="mt-2 max-h-44 w-auto rounded-lg border border-border" />}
-                  </li>
-                ))}
-              </ol>
-            )}
-          </div>
-        )}
+        {tab === 'bitacora' && <EntryHistory entries={projEntries} />}
 
         {tab === 'archivos' && (
           <div className="space-y-6">

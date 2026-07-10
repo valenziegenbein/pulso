@@ -16,6 +16,8 @@ app.setName('Pulso'); // userData limpio: %APPDATA%\Pulso
 const SERVER_PORT = 41789;
 const WIDGET_FULL = { width: 384, height: 520 };
 const WIDGET_PILL = { width: 188, height: 64 };
+const WIDGET_EDGE_GAP = 12;
+const WIDGET_RIGHT_SAFE_TOP = 72;
 const WIDGET_VIEWS = new Set(['collapsed', 'quick', 'full']);
 let BASE_URL = process.env.PULSO_URL || 'http://localhost:3000';
 
@@ -376,9 +378,12 @@ function createMainWindow() {
 
 function createWidgetWindow() {
   if (widgetWindow && !widgetWindow.isDestroyed()) return widgetWindow;
-  const { workArea } = screen.getPrimaryDisplay();
-  const x = state.x ?? workArea.x + workArea.width - WIDGET_FULL.width - 24;
-  const y = state.y ?? workArea.y + 24;
+  const remembered = state.x != null && state.y != null
+    ? { x: state.x, y: state.y, ...WIDGET_FULL }
+    : null;
+  const { workArea } = remembered ? screen.getDisplayMatching(remembered) : screen.getPrimaryDisplay();
+  const x = state.x ?? workArea.x + workArea.width - WIDGET_FULL.width - WIDGET_EDGE_GAP;
+  const y = clampWidgetY(state.y ?? workArea.y + WIDGET_RIGHT_SAFE_TOP, WIDGET_FULL.height, x, WIDGET_FULL.width, workArea);
 
   widgetWindow = new BrowserWindow({
     width: WIDGET_FULL.width,
@@ -387,6 +392,7 @@ function createWidgetWindow() {
     y: Math.round(y),
     frame: false,
     transparent: true,
+    backgroundColor: '#00000000',
     resizable: false,
     alwaysOnTop: true,
     skipTaskbar: true,
@@ -434,15 +440,29 @@ function sendWidgetView(view) {
   widgetWindow.webContents.send('widget:view-state', view);
 }
 
-function clampY(y, h) {
-  const { workArea } = screen.getPrimaryDisplay();
-  return Math.max(workArea.y + 8, Math.min(y, workArea.y + workArea.height - h - 8));
+function displayForBounds(bounds) {
+  return screen.getDisplayMatching(bounds);
 }
-function snapX(width) {
-  const { workArea } = screen.getPrimaryDisplay();
-  const b = widgetWindow.getBounds();
-  const center = b.x + b.width / 2;
-  return center < workArea.x + workArea.width / 2 ? workArea.x + 12 : workArea.x + workArea.width - width - 12;
+
+function snapX(width, bounds, workArea) {
+  const center = bounds.x + bounds.width / 2;
+  return center < workArea.x + workArea.width / 2
+    ? workArea.x + WIDGET_EDGE_GAP
+    : workArea.x + workArea.width - width - WIDGET_EDGE_GAP;
+}
+
+function clampWidgetY(y, height, x, width, workArea) {
+  const onRight = x + width / 2 >= workArea.x + workArea.width / 2;
+  const topGap = onRight ? WIDGET_RIGHT_SAFE_TOP : WIDGET_EDGE_GAP;
+  const min = workArea.y + topGap;
+  const max = workArea.y + workArea.height - height - WIDGET_EDGE_GAP;
+  return Math.max(min, Math.min(y, Math.max(min, max)));
+}
+
+function snappedWidgetBounds(width, height, bounds) {
+  const { workArea } = displayForBounds(bounds);
+  const x = snapX(width, bounds, workArea);
+  return { x, y: clampWidgetY(bounds.y, height, x, width, workArea), width, height };
 }
 /** Anima bounds de la ventana (easeOutCubic) — snap suave. */
 function animateTo(win, target, ms = 340) {
@@ -475,17 +495,12 @@ function animateTo(win, target, ms = 340) {
 function collapseWidget() {
   if (!widgetWindow || widgetWindow.isDestroyed()) return;
   const b = widgetWindow.getBounds();
-  animateTo(widgetWindow, { x: snapX(WIDGET_PILL.width), y: clampY(b.y, WIDGET_PILL.height), ...WIDGET_PILL });
+  animateTo(widgetWindow, snappedWidgetBounds(WIDGET_PILL.width, WIDGET_PILL.height, b));
 }
 function expandWidget() {
   if (!widgetWindow || widgetWindow.isDestroyed()) return;
-  const { workArea } = screen.getPrimaryDisplay();
   const b = widgetWindow.getBounds();
-  let x = b.x;
-  // Si está pegado a la derecha, expandir hacia la izquierda para no salirse.
-  if (x + WIDGET_FULL.width > workArea.x + workArea.width - 12) x = workArea.x + workArea.width - WIDGET_FULL.width - 12;
-  x = Math.max(workArea.x + 12, x);
-  animateTo(widgetWindow, { x, y: clampY(b.y, WIDGET_FULL.height), ...WIDGET_FULL });
+  animateTo(widgetWindow, snappedWidgetBounds(WIDGET_FULL.width, WIDGET_FULL.height, b));
 }
 
 function applyWidgetView(view, notifyRenderer = false) {
@@ -533,7 +548,11 @@ function introWidget(mode = 'personal') {
   wnd.focus();
   widgetOpened = true;
   setTimeout(
-    () => animateTo(wnd, { x: workArea.x + workArea.width - WIDGET_FULL.width - 24, y: workArea.y + 24, ...WIDGET_FULL }, 460),
+    () => animateTo(wnd, {
+      x: workArea.x + workArea.width - WIDGET_FULL.width - WIDGET_EDGE_GAP,
+      y: workArea.y + WIDGET_RIGHT_SAFE_TOP,
+      ...WIDGET_FULL,
+    }, 460),
     420,
   );
 }
@@ -544,11 +563,26 @@ function openWidgetCollapsed(mode = widgetMode) {
   widgetOpened = true;
   ensureWidgetRoute(nextMode, 'collapsed');
   const wnd = createWidgetWindow();
-  const { workArea } = screen.getPrimaryDisplay();
+  const remembered = state.x != null && state.y != null
+    ? { x: state.x, y: state.y, ...WIDGET_PILL }
+    : null;
+  const { workArea } = remembered ? screen.getDisplayMatching(remembered) : screen.getPrimaryDisplay();
+  const initialBounds = remembered ?? {
+    x: workArea.x + workArea.width - WIDGET_PILL.width - WIDGET_EDGE_GAP,
+    y: workArea.y + WIDGET_RIGHT_SAFE_TOP,
+    ...WIDGET_PILL,
+  };
+  const x = snapX(WIDGET_PILL.width, initialBounds, workArea);
   programmaticMove = true;
   wnd.setBounds({
-    x: workArea.x + workArea.width - WIDGET_PILL.width - 12,
-    y: Math.round(clampY(state.y ?? workArea.y + 24, WIDGET_PILL.height)),
+    x,
+    y: Math.round(clampWidgetY(
+      state.y ?? workArea.y + WIDGET_RIGHT_SAFE_TOP,
+      WIDGET_PILL.height,
+      x,
+      WIDGET_PILL.width,
+      workArea,
+    )),
     ...WIDGET_PILL,
   });
   programmaticMove = false;

@@ -37,9 +37,23 @@ body {
 
 /* Efecto glass del widget (se ve translúcido sobre la ventana transparente). */
 .pulso-glass {
-  background: rgba(20, 22, 27, 0.82);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  background: rgba(20, 22, 27, 0.94);
+  backdrop-filter: blur(22px) saturate(135%);
+  -webkit-backdrop-filter: blur(22px) saturate(135%);
+}
+
+/* `bg-surface/95` no compone bien opacidad cuando el color es una variable hex.
+ * Esta base explicita evita que el contenido de la ventana de abajo se mezcle
+ * con los controles del widget, conservando profundidad de glass. */
+.pulso-widget-glass {
+  background:
+    linear-gradient(145deg, rgba(255, 244, 226, 0.035), transparent 42%),
+    rgba(30, 24, 16, 0.965);
+  backdrop-filter: blur(24px) saturate(130%);
+  -webkit-backdrop-filter: blur(24px) saturate(130%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 244, 226, 0.08),
+    0 18px 48px rgba(0, 0, 0, 0.42);
 }
 
 /* ============================================================= */

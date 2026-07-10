@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type ReactNode } from 'react';
-import { TASK_PRIORITY_ORDER, usePersonal, type EntryType } from '@/lib/personal/store';
-import { AiError, aiReady, embedTexts, embeddingsReady, generateDraft } from '@/lib/personal/ai';
+import { ENTRY_LABEL, TASK_PRIORITY_ORDER, usePersonal, type EntryType, type TaskPriority } from '@/lib/personal/store';
+import { AiError, aiReady, embedTexts, embeddingsReady, generateDraft, generatePersonalTask } from '@/lib/personal/ai';
 import { ProjectChooser } from './project-chooser';
 
 type Bridge = {
@@ -21,9 +21,12 @@ interface Draft {
   type: EntryType;
   title: string;
   content: string;
+  priority?: TaskPriority;
   /** true mientras el modelo sigue escribiendo (streaming). */
   streaming?: boolean;
 }
+
+const AUTO_SAVE_KEY = 'pulso.widget.auto-save.v1';
 
 /** Reduce una imagen (blob o data URL) a un data URL JPEG manejable para localStorage. */
 async function downscale(src: string | Blob, maxW = 1100): Promise<string> {
@@ -77,11 +80,12 @@ function useWindowWidth(): number {
 export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}) {
   const elapsed = useElapsed();
   const width = useWindowWidth();
-  const { focusProject, addEntry, tasks, toggleTask, ai, aiConfig, storage, storageDir, embeddingsEnabled } = usePersonal();
+  const { focusProject, addEntry, addTask, tasks, toggleTask, ai, aiConfig, storage, storageDir, embeddingsEnabled } = usePersonal();
   const [isDesktop, setIsDesktop] = useState(false);
   useEffect(() => setIsDesktop(Boolean(bridge()?.isDesktop)), []);
 
   const fileRef = useRef<HTMLInputElement>(null);
+  const committingRef = useRef(false);
   const [note, setNote] = useState('');
   const [image, setImage] = useState<string | null>(null);
   const [shooting, setShooting] = useState(false);
@@ -91,6 +95,15 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [autoSave, setAutoSave] = useState(false);
+
+  useEffect(() => {
+    try {
+      setAutoSave(localStorage.getItem(AUTO_SAVE_KEY) === 'true');
+    } catch {
+      /* preferencia opcional */
+    }
+  }, []);
 
   const collapsed = isDesktop && !embedded && width < 240;
 
@@ -129,6 +142,42 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
     e.target.value = '';
   }
 
+  function toggleAutoSave() {
+    setAutoSave((current) => {
+      const next = !current;
+      try {
+        localStorage.setItem(AUTO_SAVE_KEY, String(next));
+      } catch {
+        /* preferencia opcional */
+      }
+      return next;
+    });
+  }
+
+  function commitDraft(next: Draft) {
+    if (!focusProject || next.streaming || committingRef.current) return;
+    committingRef.current = true;
+    setSaving(true);
+    if (next.type === 'TASK') {
+      addTask({
+        projectId: focusProject.id,
+        title: next.title,
+        note: next.content,
+        priority: next.priority ?? 'medium',
+      });
+    }
+    addEntry({
+      projectId: focusProject.id,
+      type: next.type,
+      title: next.title,
+      content: next.content,
+      image: image ?? undefined,
+    });
+    setSaved(true);
+    setSaving(false);
+    setTimeout(reset, 1400);
+  }
+
   async function generate() {
     // Captura sola alcanza: la nota es opcional si hay imagen adjunta.
     if ((note.trim().length === 0 && !image) || !focusProject) return;
@@ -138,6 +187,30 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
     // Streaming: el borrador aparece mientras el modelo escribe (si el
     // proveedor lo soporta; si no, el server degrada solo).
     const streamable = ai !== 'none' && aiReady(ai, aiConfig);
+    if (intent === 'TASK') {
+      try {
+        const suggestion = await generatePersonalTask({
+          instruction: note,
+          project: { name: focusProject.name, context: focusProject.context },
+          activeTasks: pending.map((task) => ({ title: task.title, priority: task.priority })),
+          ai,
+          config: aiConfig,
+        });
+        const next: Draft = suggestion;
+        setDraft(next);
+        if (autoSave) commitDraft(next);
+      } catch (e) {
+        setDraft(null);
+        setError(
+          e instanceof AiError && e.code === 'rate_limited'
+            ? 'Demasiados pedidos. Probá en un momento.'
+            : 'No se pudo proponer la tarea. Revisá tu IA en Ajustes.',
+        );
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
     // Asistente de notas (opt-in por proyecto): extractos de la carpeta del
     // proyecto como contexto. La micro-nota hace de query — BM25 siempre, y si
     // hay búsqueda semántica activada, además un embedding de esa query para
@@ -184,7 +257,9 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
               }))
           : undefined,
       });
-      setDraft({ type: intent ?? s.type, title: s.title, content: s.content });
+      const next: Draft = { type: intent ?? s.type, title: s.title, content: s.content };
+      setDraft(next);
+      if (autoSave) commitDraft(next);
     } catch (e) {
       setDraft(null);
       setError(
@@ -198,6 +273,7 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
   }
 
   function reset() {
+    committingRef.current = false;
     setDraft(null);
     setNote('');
     setImage(null);
@@ -206,18 +282,14 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
   }
 
   function save() {
-    if (!draft || !focusProject) return;
-    setSaving(true);
-    addEntry({ projectId: focusProject.id, type: draft.type, title: draft.title, content: draft.content, image: image ?? undefined });
-    setSaved(true);
-    setSaving(false);
-    setTimeout(reset, 1400);
+    if (!draft) return;
+    commitDraft(draft);
   }
 
   // ---- Pill minimizada (pegada al borde) ----
   if (collapsed) {
     return (
-      <div className="drag-region flex w-[160px] items-center gap-2 rounded-full border border-border bg-surface/95 px-3 py-2 shadow-2xl backdrop-blur-xl">
+      <div className="pulso-widget-glass drag-region flex w-[160px] items-center gap-2 rounded-full border border-border px-3 py-2">
         <span className="pulso-beat inline-block text-accent">✦</span>
         <span className="text-sm font-semibold">Pulso</span>
         <button onClick={() => bridge()?.expand?.()} className="font-meta no-drag ml-auto rounded-full bg-accent px-3 py-1 text-[11px] font-medium text-bg transition hover:brightness-110">
@@ -229,9 +301,11 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
 
   // ---- Panel completo ----
   // Con nota, con captura, o ambas: cualquiera alcanza para generar.
-  const canGenerate = (note.trim().length > 0 || !!image) && !!focusProject;
+  const canGenerate = intent === 'TASK'
+    ? note.trim().length >= 3 && !!focusProject
+    : (note.trim().length > 0 || !!image) && !!focusProject;
   return (
-    <div className={`flex w-[360px] flex-col overflow-hidden rounded-2xl border border-border bg-surface/95 shadow-2xl backdrop-blur-xl ${embedded ? '' : 'max-h-[calc(100vh-1rem)]'}`}>
+    <div className={`pulso-widget-glass flex w-[360px] flex-col overflow-hidden rounded-2xl border border-border ${embedded ? '' : 'max-h-[calc(100vh-1rem)]'}`}>
       {!embedded && (
         <div className="drag-region flex shrink-0 items-center justify-between rounded-t-2xl border-b border-border/60 px-4 py-2.5">
           <div className="flex items-center gap-2 text-sm font-semibold">
@@ -278,11 +352,13 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
           <MiniChip onClick={captureScreen}>{shooting ? '…' : '📎 Captura'}</MiniChip>
           <MiniChip active={intent === 'BLOCKER'} onClick={() => setIntent((v) => (v === 'BLOCKER' ? null : 'BLOCKER'))}>⛔ Bloqueo</MiniChip>
           <MiniChip active={intent === 'DECISION'} onClick={() => setIntent((v) => (v === 'DECISION' ? null : 'DECISION'))}>◆ Decisión</MiniChip>
+          <MiniChip active={intent === 'TASK'} onClick={() => setIntent((value) => (value === 'TASK' ? null : 'TASK'))}>＋ Tarea</MiniChip>
+          <MiniChip active={autoSave} onClick={toggleAutoSave}>Auto guardar</MiniChip>
         </div>
 
         {!draft && (
           <button onClick={generate} disabled={loading || !canGenerate} className="mt-3 w-full rounded-full bg-accent px-4 py-2 text-sm font-medium text-bg transition hover:brightness-110 disabled:opacity-40">
-            {loading ? 'Generando…' : 'Generar bitácora'}
+            {loading ? 'Generando…' : intent === 'TASK' ? 'Proponer tarea' : autoSave ? 'Generar y guardar' : 'Generar bitácora'}
           </button>
         )}
 
@@ -291,7 +367,7 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
         {draft && (
           <div className="pulso-reveal mt-3 rounded-xl border border-border bg-bg/50 p-3">
             <span className="font-meta text-[10px] uppercase tracking-[0.16em] text-muted">
-              {draft.streaming ? 'Escribiendo…' : `Sugerida · ${draft.type}`}
+              {draft.streaming ? 'Escribiendo…' : `Sugerida · ${ENTRY_LABEL[draft.type]}`}
             </span>
             {draft.title && <h3 className="font-display mt-1 text-base leading-snug">{draft.title}</h3>}
             <p className="mt-1 whitespace-pre-line text-xs leading-relaxed text-muted">
@@ -300,11 +376,15 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
             </p>
             {image && <img src={image} alt="" className="mt-2 h-14 w-auto rounded border border-border object-cover" />}
             {saved ? (
-              <p className="mt-3 text-xs text-emerald-300">✓ Guardado{focusProject ? ` en ${focusProject.name}` : ''}.</p>
+              <p className="mt-3 text-xs text-emerald-300">
+                ✓ {draft.type === 'TASK' ? 'Tarea y entrada guardadas' : 'Guardado'}{focusProject ? ` en ${focusProject.name}` : ''}.
+              </p>
             ) : (
               !draft.streaming && (
                 <div className="mt-3 flex gap-1.5 text-xs">
-                  <button onClick={save} disabled={saving} className="rounded-full bg-accent px-4 py-1.5 font-medium text-bg disabled:opacity-40">Guardar</button>
+                  <button onClick={save} disabled={saving} className="rounded-full bg-accent px-4 py-1.5 font-medium text-bg disabled:opacity-40">
+                    {draft.type === 'TASK' ? 'Agregar tarea' : 'Guardar'}
+                  </button>
                   <button onClick={reset} className="rounded-full px-3 py-1.5 text-muted transition hover:text-fg">Descartar</button>
                 </div>
               )

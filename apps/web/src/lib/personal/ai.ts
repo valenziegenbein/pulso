@@ -1,6 +1,6 @@
 // Cliente del pipeline de IA en modo Personal. Decide a dónde generar la
 // bitácora según la config del usuario (IA local, sin IA, o fallback mock).
-import type { AiConfig, AiMode, AiProvider, EntryType } from './store';
+import type { AiConfig, AiMode, AiProvider, EntryType, TaskPriority } from './store';
 
 export interface ProviderPreset {
   label: string;
@@ -62,6 +62,11 @@ export interface DraftSuggestion {
   type: EntryType;
   title: string;
   content: string;
+}
+
+export interface PersonalTaskSuggestion extends DraftSuggestion {
+  type: 'TASK';
+  priority: TaskPriority;
 }
 
 export interface DraftImage {
@@ -159,7 +164,7 @@ export async function verifyCloud(provider: CloudProvider, apiKey: string): Prom
   return data.models ?? [];
 }
 
-const ENTRY_TYPES: EntryType[] = ['PROGRESS', 'RESEARCH', 'DECISION', 'BLOCKER', 'NOTE', 'DELIVERY'];
+const ENTRY_TYPES: EntryType[] = ['PROGRESS', 'RESEARCH', 'DECISION', 'BLOCKER', 'NOTE', 'DELIVERY', 'TASK'];
 
 function coerceType(value: unknown): EntryType {
   return typeof value === 'string' && ENTRY_TYPES.includes(value as EntryType) ? (value as EntryType) : 'NOTE';
@@ -294,4 +299,50 @@ export async function generateDraft(params: {
   // Sin IA configurada no hay quien "lea" la captura: borrador manual.
   if (note.trim().length === 0) return manualDraft(note);
   return postSuggest('/api/worklog/suggest', { note, task, attachmentsHint });
+}
+
+function fallbackPersonalTask(instruction: string): PersonalTaskSuggestion {
+  const clean = instruction.trim().replace(/[.!?]+$/g, '');
+  const title = clean.length > 90 ? `${clean.slice(0, 87).trim()}...` : clean;
+  return {
+    type: 'TASK',
+    title: title || 'Nueva tarea',
+    content: clean || 'Definir el próximo paso y el resultado esperado.',
+    priority: /urgente|bloque|riesgo|crit/i.test(clean) ? 'high' : 'medium',
+  };
+}
+
+/** Convierte una instrucción breve del widget en una tarea personal estructurada. */
+export async function generatePersonalTask(params: {
+  instruction: string;
+  project: { name: string; context?: string };
+  activeTasks: Array<{ title: string; priority: TaskPriority }>;
+  ai: AiMode;
+  config: AiConfig | null;
+}): Promise<PersonalTaskSuggestion> {
+  const { instruction, project, activeTasks, ai, config } = params;
+  if (!aiReady(ai, config) || !config) return fallbackPersonalTask(instruction);
+
+  let res: Response;
+  try {
+    res = await fetch('/api/personal/tasks/suggest', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        instruction,
+        project,
+        activeTasks,
+        provider: config.provider,
+        baseUrl: config.baseUrl,
+        model: config.model,
+        apiKey: config.apiKey,
+      }),
+    });
+  } catch {
+    throw new AiError('network');
+  }
+  if (res.status === 429) throw new AiError('rate_limited');
+  if (!res.ok) throw new AiError('unavailable');
+  const data = (await res.json()) as { suggestion?: PersonalTaskSuggestion };
+  return data.suggestion ?? fallbackPersonalTask(instruction);
 }
