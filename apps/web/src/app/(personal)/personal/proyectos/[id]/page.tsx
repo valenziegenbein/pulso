@@ -1,11 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { CaptureCard } from '@/components/personal/capture-card';
 import { ProjectTasks } from '@/components/personal/project-tasks';
 import { ENTRY_LABEL, usePersonal, type EntryType } from '@/lib/personal/store';
+
+type ShellBridge = { isDesktop?: boolean; chooseFolder?: () => Promise<string | null> };
+function shell(): ShellBridge | undefined {
+  return typeof window !== 'undefined' ? (window as unknown as { pulso?: ShellBridge }).pulso : undefined;
+}
 
 type Tab = 'resumen' | 'tareas' | 'bitacora' | 'archivos';
 const TABS: Array<[Tab, string]> = [
@@ -29,13 +34,21 @@ function fmt(ts: number): string {
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { ready, projects, entries, tasks, updateProjectContext } = usePersonal();
+  const { ready, projects, entries, tasks, storage, storageDir, updateProjectContext, setProjectMarkdownDir } = usePersonal();
   const project = projects.find((p) => p.id === id);
 
   const [tab, setTab] = useState<Tab>('resumen');
   const [editingCtx, setEditingCtx] = useState(false);
   const [ctxDraft, setCtxDraft] = useState('');
   const [filter, setFilter] = useState(0);
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => setIsDesktop(Boolean(shell()?.isDesktop)), []);
+
+  async function pickProjectFolder() {
+    if (!project) return;
+    const dir = await shell()?.chooseFolder?.();
+    if (dir) setProjectMarkdownDir(project.id, dir);
+  }
 
   if (ready && !project) {
     return (
@@ -202,8 +215,51 @@ export default function ProjectDetailPage() {
         {tab === 'archivos' && (
           <div className="space-y-6">
             <section className="rounded-2xl border border-border bg-surface/50 p-5">
+              <h2 className="font-display text-xl">Carpeta Markdown de este proyecto</h2>
+              <p className="mt-1 text-sm text-muted">
+                Cada entrada que apruebes se agrega al .md de este proyecto en su carpeta (tu bóveda Obsidian, Logseq, un
+                repo…). Cada proyecto puede guardar en un lugar distinto.
+              </p>
+              {project.markdownDir ? (
+                <p className="mt-3 text-sm">
+                  <span className="font-meta text-fg">{project.markdownDir}</span>
+                  {isDesktop && (
+                    <>
+                      <button onClick={pickProjectFolder} className="ml-3 text-sm text-accent underline-offset-2 transition hover:underline">
+                        Cambiar…
+                      </button>
+                      <button
+                        onClick={() => setProjectMarkdownDir(project.id, null)}
+                        className="ml-3 text-sm text-muted transition hover:text-fg"
+                        title="Volver a usar la carpeta general de Ajustes"
+                      >
+                        Quitar
+                      </button>
+                    </>
+                  )}
+                </p>
+              ) : (
+                <p className="mt-3 text-sm text-muted">
+                  {storage === 'markdown' && storageDir ? (
+                    <>
+                      Ahora usa la carpeta general: <span className="font-meta text-fg">{storageDir}</span>.
+                    </>
+                  ) : (
+                    'Este proyecto todavía no guarda en Markdown.'
+                  )}{' '}
+                  {isDesktop ? (
+                    <button onClick={pickProjectFolder} className="text-accent underline-offset-2 transition hover:underline">
+                      Elegir carpeta propia…
+                    </button>
+                  ) : (
+                    'La carpeta se elige en la app de escritorio.'
+                  )}
+                </p>
+              )}
+            </section>
+            <section className="rounded-2xl border border-border bg-surface/50 p-5">
               <h2 className="font-display text-xl">Exportar</h2>
-              <p className="mt-1 text-sm text-muted">Pulso captura; tu sistema guarda. Bajá este proyecto como Markdown (Obsidian, Git, etc.).</p>
+              <p className="mt-1 text-sm text-muted">Bajá el proyecto completo (contexto, tareas y bitácora) como un único .md.</p>
               <button onClick={exportMarkdown} className="mt-4 rounded-full bg-accent px-5 py-2 text-sm font-medium text-bg transition hover:brightness-110">
                 ↓ Exportar a Markdown
               </button>

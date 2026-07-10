@@ -27,6 +27,9 @@ export interface Project {
   id: string;
   name: string;
   context?: string;
+  /** Carpeta Markdown propia (p. ej. dentro de tu bóveda Obsidian). Si falta,
+   *  se usa la carpeta general de Ajustes. */
+  markdownDir?: string | null;
   createdAt: number;
 }
 
@@ -92,6 +95,7 @@ interface PersonalContextValue extends PersonalState {
   setFocusProject: (id: string) => void;
   setStorage: (target: StorageTarget) => void;
   setStorageDir: (dir: string | null) => void;
+  setProjectMarkdownDir: (id: string, dir: string | null) => void;
   setAi: (mode: AiMode) => void;
   setAiConfig: (config: AiConfig | null) => void;
   completeOnboarding: () => void;
@@ -194,6 +198,10 @@ export function PersonalProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, projects: s.projects.map((p) => (p.id === id ? { ...p, context } : p)) }));
   }, []);
 
+  const setProjectMarkdownDir = useCallback((id: string, markdownDir: string | null) => {
+    setState((s) => ({ ...s, projects: s.projects.map((p) => (p.id === id ? { ...p, markdownDir } : p)) }));
+  }, []);
+
   const addEntry = useCallback(
     (input: { projectId?: string | null; type: EntryType; title: string; content: string; image?: string }) => {
       const entry: Entry = {
@@ -206,12 +214,12 @@ export function PersonalProvider({ children }: { children: ReactNode }) {
         createdAt: Date.now(),
       };
       setState((s) => ({ ...s, entries: [entry, ...s.entries] }));
-      // Export voluntario: si la persona eligió una carpeta Markdown, la entrada
-      // aprobada también se agrega al .md de su proyecto (no bloquea el guardado).
-      if (state.storage === 'markdown' && state.storageDir) {
-        const projectName = state.projects.find((p) => p.id === entry.projectId)?.name;
-        exportEntryToFolder(entry, projectName, state.storageDir);
-      }
+      // Export voluntario: cada proyecto puede tener su propia carpeta Markdown
+      // (p. ej. su bóveda Obsidian); si no tiene, cae a la carpeta general de
+      // Ajustes (solo cuando el guardado elegido es 'markdown'). No bloquea.
+      const project = state.projects.find((p) => p.id === entry.projectId);
+      const dir = project?.markdownDir ?? (state.storage === 'markdown' ? state.storageDir : null);
+      if (dir) exportEntryToFolder(entry, project?.name, dir);
       return entry;
     },
     [state.storage, state.storageDir, state.projects],
@@ -262,12 +270,13 @@ export function PersonalProvider({ children }: { children: ReactNode }) {
       setFocusProject,
       setStorage,
       setStorageDir,
+      setProjectMarkdownDir,
       setAi,
       setAiConfig,
       completeOnboarding,
       reset,
     }),
-    [state, ready, focusProject, setName, addProject, updateProjectContext, addEntry, addTask, toggleTask, setFocusProject, setStorage, setStorageDir, setAi, setAiConfig, completeOnboarding, reset],
+    [state, ready, focusProject, setName, addProject, updateProjectContext, addEntry, addTask, toggleTask, setFocusProject, setStorage, setStorageDir, setProjectMarkdownDir, setAi, setAiConfig, completeOnboarding, reset],
   );
 
   return <PersonalContext.Provider value={value}>{children}</PersonalContext.Provider>;

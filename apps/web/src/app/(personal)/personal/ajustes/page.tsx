@@ -43,12 +43,15 @@ export default function AjustesPage() {
           <p className="mt-3 text-sm text-muted">
             {storageDir ? (
               <>
-                Carpeta destino: <span className="font-meta text-fg">{storageDir}</span>{' '}
+                Carpeta por defecto: <span className="font-meta text-fg">{storageDir}</span>{' '}
                 {isDesktop && (
                   <button onClick={pickFolder} className="ml-2 text-accent underline-offset-2 transition hover:underline">
                     Cambiar…
                   </button>
                 )}
+                <span className="mt-1 block text-xs text-muted/80">
+                  Cada proyecto puede usar su propia carpeta (su bóveda, un repo…): Proyecto → Archivos.
+                </span>
               </>
             ) : isDesktop ? (
               <button onClick={pickFolder} className="text-accent underline-offset-2 transition hover:underline">
