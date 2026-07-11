@@ -108,3 +108,16 @@
   producción deben referenciar exclusivamente el digest registrado.
 - Reversibilidad: media; una nueva versión requiere otro SHA, build, gate y
   digest, sin retargetear despliegues existentes.
+
+## D-012 — Reemplazar artefactos fallidos, nunca retargetearlos
+
+- Fecha: 2026-07-11
+- Contexto: el primer digest registrado inició Next standalone ligado al
+  hostname del contenedor y falló healthcheck por loopback.
+- Decisión: conservar el artefacto fallido como evidencia, corregir mediante un
+  nuevo commit y publicar un tag/digest nuevos; promover sólo el digest verde.
+- Alternativas: mover el tag anterior o relajar el healthcheck; rechazadas por
+  pérdida de trazabilidad y por ocultar una incompatibilidad real.
+- Consecuencias: staging y producción usan
+  `sha256:ccb32ed56d8f9d381675196de7c9a342b67f9d3e4d58ef82fdc177b6d2bc6ab6`.
+- Reversibilidad: alta; cada digest permanece independiente y auditable.

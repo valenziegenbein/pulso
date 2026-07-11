@@ -162,3 +162,44 @@ Total de tests ejecutados por el gate: 67.
 - `latest`: no creado ni publicado.
 - Docker Hub muestra repositorio privado, un único tag y tamaño comprimido
   aproximado de 782,5 MB.
+
+## Incidente de staging efímero — 2026-07-11
+
+- Entorno: Compose local aislado, datos sintéticos, proxy en loopback; sin VPS.
+- Imagen: digest `sha256:e4b0c1223612375def6dfebdca948348f46bc2fcb5c60afe3957c69d208bb69d`.
+- Migration job: 2 migraciones aplicadas correctamente desde base vacía.
+- Fixture sintético: carga completa exit 0.
+- App: Next.js 15.5.19 inició y registró `Ready` con la revisión esperada.
+- Healthcheck: permaneció `starting` y luego `unhealthy`; smoke no ejecutado.
+- Prueba directa dentro del contenedor: `127.0.0.1` produjo `TypeError`; el
+  hostname del contenedor respondió HTTP 200 en `/api/readiness`.
+- Causa: la rama standalone de `docker-entrypoint.sh` no fuerza bind
+  `0.0.0.0`; el healthcheck consulta loopback.
+- Limpieza: contenedores, red, volumen, fixture y secretos efímeros eliminados.
+- Producción/VPS, Caddy público y datos reales: no accedidos.
+
+## Corrección y staging verde — 2026-07-11
+
+- Fix commit: `14bf70a64d2316a34f8010e16f931c49cbc0b82d`.
+- Cambio: la rama standalone exporta `HOSTNAME=0.0.0.0` antes de iniciar Next.
+- Guard: production-safety falla si el bind explícito desaparece.
+- Green gate del fix: exit 0; 55 unitarios/servicio, 9 PostgreSQL, 3 upgrade,
+  typecheck, lint, build, Electron y production safety.
+- Tag corregido:
+  `docker.io/valenziegenbein/pulso-app:14bf70a64d2316a34f8010e16f931c49cbc0b82d`.
+- Digest corregido:
+  `docker.io/valenziegenbein/pulso-app@sha256:ccb32ed56d8f9d381675196de7c9a342b67f9d3e4d58ef82fdc177b6d2bc6ab6`.
+- Manifest `linux/amd64`:
+  `sha256:98c56d289553ea1c4b4bbd2034f70a2a00f113187ea3eb2a46ae96064e5fafbe`.
+- Pull por digest y label OCI de revisión: verificados.
+- Staging: Compose efímero local, datos exclusivamente sintéticos y exposición
+  sólo en `127.0.0.1:43100`.
+- Migration job: 2 migraciones aplicadas desde base vacía.
+- Conteos `(org,user,membership,team,task,worklog,migrations)`:
+  `1,2,2,1,1,2,2`.
+- DB, app y Caddy: healthy.
+- `ops/smoke.sh`: `Smoke público: OK`; health/readiness y bloqueos de registro
+  y Personal verificados.
+- Logs: revisión esperada presente; sin marcadores de secretos ni URLs DB.
+- Cleanup: cero contenedores, redes, volúmenes, fixtures o secretos temporales.
+- Imagen anterior `sha256:e4b0c122...` conservada en registry y no promovida.
