@@ -2,23 +2,40 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { SESSION_COOKIE } from '@/lib/auth/constants';
 
-/**
- * Guard de rutas: si no hay cookie de sesión, redirige a /login.
- * La verificación criptográfica real ocurre en el servidor (getAuthContext);
- * el middleware solo hace el chequeo barato de presencia.
- */
+const MAX_API_BODY_BYTES = 8 * 1024 * 1024;
+const PUBLIC_PATHS = ['/login', '/register', '/select-organization', '/widget', '/welcome', '/personal', '/captura'];
+
+function requestId(req: NextRequest): string {
+  const incoming = req.headers.get('x-request-id');
+  return incoming && /^[a-zA-Z0-9_-]{8,64}$/.test(incoming) ? incoming : crypto.randomUUID();
+}
+
+function isPublic(pathname: string): boolean {
+  return pathname.startsWith('/api/') || PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+}
+
 export function middleware(req: NextRequest): NextResponse {
-  if (!req.cookies.has(SESSION_COOKIE)) {
+  const id = requestId(req);
+  const length = Number(req.headers.get('content-length') ?? '0');
+  if (req.nextUrl.pathname.startsWith('/api/') && Number.isFinite(length) && length > MAX_API_BODY_BYTES) {
+    return NextResponse.json({ error: 'payload_too_large' }, { status: 413, headers: { 'x-request-id': id } });
+  }
+
+  if (!isPublic(req.nextUrl.pathname) && !req.cookies.has(SESSION_COOKIE)) {
     const url = req.nextUrl.clone();
     url.pathname = '/login';
-    return NextResponse.redirect(url);
+    const response = NextResponse.redirect(url);
+    response.headers.set('x-request-id', id);
+    return response;
   }
-  return NextResponse.next();
+
+  const headers = new Headers(req.headers);
+  headers.set('x-request-id', id);
+  const response = NextResponse.next({ request: { headers } });
+  response.headers.set('x-request-id', id);
+  return response;
 }
 
 export const config = {
-  // Excluidos del guard de auth:
-  // - /widget: maneja su propio estado "sin sesión".
-  // - /welcome y /personal: modo personal local-first (sin cuenta).
-  matcher: ['/((?!login|register|widget|welcome|personal|captura|api|_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 };
