@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { LLMProvider } from '../provider';
 import { AnthropicProvider } from './anthropic';
 import { MockProvider } from './mock';
 import { OpenAICompatibleProvider } from './openai-compatible';
@@ -35,7 +36,7 @@ describe('embed()', () => {
   });
 
   it('AnthropicProvider: no implementa embed (no soportado)', () => {
-    const provider = new AnthropicProvider({ apiKey: 'sk-test', model: 'm' });
+    const provider: LLMProvider = new AnthropicProvider({ apiKey: 'sk-test', model: 'm' });
     expect(provider.embed).toBeUndefined();
   });
 
