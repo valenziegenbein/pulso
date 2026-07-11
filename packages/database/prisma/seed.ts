@@ -2,6 +2,9 @@ import { PrismaClient } from '@prisma/client';
 import { DEFAULT_ROLE_PERMISSIONS } from '@pulso/domain';
 import { PLAN_SEAT_LIMIT, ROLE_KEY, type RoleKey } from '@pulso/shared';
 import { hashPassword } from '../src/crypto';
+import { assertSeedAllowed } from '../src/seed-safety';
+
+assertSeedAllowed();
 
 const prisma = new PrismaClient();
 
