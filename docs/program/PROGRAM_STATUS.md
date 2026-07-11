@@ -4,18 +4,18 @@
 
 ## Fase actual
 
-**P0.5 — Estabilización y hardening**, detenida en **P0.5-G3: backup
-externo subido, descargado y restaurado**.
+**P0.5 — Estabilización y hardening**, detenida en **P0.5-G5: imagen
+inmutable construida y registrada**.
 
 La implementación, el versionado y el gate local están listos, pero P0.5 no
-está terminada: faltan backup externo restaurable, contraste productivo, imagen
-registrada, staging y producción.
+está terminada: falta un offsite duradero, imagen registrada, staging y
+producción.
 
 ## Estado por fase
 
 | Fase | Estado | Evidencia / próximo gate |
 | --- | --- | --- |
-| P0.5 | En progreso | G1 y G2 cumplidos; G3 requiere configuración y L3 |
+| P0.5 | En progreso | G1–G4 cumplidos; G5 requiere registry y autorización L3 |
 | P1 | Preparación local implementada, no promovida | G1–G3 locales cumplidos; runbooks listos; staging no autorizado |
 | P2 | No iniciada | Requiere cierre/checkpoint de fase anterior y diseño de migración aprobado |
 | P3 | No iniciada | Depende de P2 |
@@ -30,7 +30,7 @@ registrada, staging y producción.
 - Rama: `codex/web-control-plane-hardening`
 - Commit inicial: `e8ac1cf6d98c2163abf6bdcabbceab88b9bc9220`
 - HEAD operativo previo a este documento: `a6e2a0ab55cd0a71ca669aaaa8625c2508cf55ec`
-- Commits operativos generados: 8 (enumerados abajo)
+- Commits locales generados: 11 (8 operativos y 3 checkpoints/follow-ups)
 - Tags generados: ninguno
 - Pushes: ninguno
 - Índice Git: vacío
@@ -40,19 +40,19 @@ registrada, staging y producción.
 
 - L0 (lectura/planes): autorizado
 - L1 (cambios locales reversibles): autorizado
-- L2 (commits): autorización puntual para el follow-up de `F:`; se consume con un único commit y no autoriza tags, pushes ni reescrituras
+- L2 (commits): autorización puntual consumida por el checkpoint G3/G4; no autoriza nuevos commits, tags, pushes ni reescrituras
 - L3 (secretos, uploads, registry): **no autorizado**
 - L4 (staging): **no autorizado**
-- L5 (producción/VPS): **no autorizado**
+- L5 (producción/VPS): autorizaciones puntuales de P0.5-G3/G4 consumidas; no autoriza nuevas acciones
 
 ## Gates P0.5
 
 | Gate | Estado | Evidencia |
 | --- | --- | --- |
 | G1 Green gate local completo | Cumplido | `pnpm green` exit 0; ver `EVIDENCE.md` |
-| G2 Autorización para commits | Cumplido | 8 commits operativos atómicos + checkpoint documental |
-| G3 Backup externo subido/descargado/restaurado | Pendiente | Destino temporal `F:\Pulso-backups` definido; faltan clave age, transferencia y restore |
-| G4 `_prisma_migrations` productivo comparado | Pendiente | Requiere acceso específico L5 |
+| G2 Autorización para commits | Cumplido | 8 commits operativos atómicos + checkpoint documental + follow-up de backup |
+| G3 Backup externo subido/descargado/restaurado | Cumplido temporalmente | Bundle cifrado transferido a `F:`, checksum y restore PostgreSQL 16 aislado OK |
+| G4 `_prisma_migrations` productivo comparado | Cumplido | 2 migraciones; nombres, checksums y estados coinciden exactamente |
 | G5 Imagen inmutable construida y registrada | Pendiente | Build local validado; requiere commits L2 y registry L3 |
 | G6 Staging verde | Pendiente | Requiere L4 |
 | G7 Producción autorizada | Pendiente | Requiere L5 |
@@ -79,19 +79,18 @@ registrada, staging y producción.
 ## Gates pendientes
 
 - Push/registry (no autorizado)
-- Backup externo y restore real con age
-- Comparación productiva de migraciones
+- Segundo destino offsite duradero
 - Imagen Pulso por Git SHA y digest de registry
 - Staging y smokes remotos
 - Producción y ventana de observación
 
 ## Riesgos prioritarios P0/P1/P2
 
-- P0: existe destino temporal fuera del VPS en `F:`, pero está vacío y no reemplaza offsite hasta completar G3.
+- P0: el backup cifrado restaurable existe en `F:`, pero todavía no reemplaza un offsite duradero.
 - P0: hardening está versionado localmente, pero no fue publicado ni desplegado.
-- P0: historial productivo de migraciones no fue contrastado.
+- P0: historial productivo de migraciones contrastado sin diferencias.
 - P1: faltan constraints compuestas multi-tenant evaluadas y aprobadas; no se agregó RLS.
-- P1: backup/restore con age tiene sintaxis validada, pero no un ensayo end-to-end autorizado.
+- P1: backup/restore con age fue probado end-to-end contra PostgreSQL 16 aislado.
 - P2: auth actual no es todavía el modelo persistido/revocable definido para auth comercial.
 
 Detalle y responsables en `RISK_REGISTER.md`.
@@ -109,12 +108,6 @@ Detalle y responsables en `RISK_REGISTER.md`.
 
 ## Próxima acción autorizable
 
-Completar **P0.5-G3**. El destino temporal ya fue definido en `F:`. Falta:
-
-- clave pública age;
-- autorización específica para acceder al VPS y transferir sólo el bundle cifrado;
-- restore local aislado y checksum verificado;
-- retención definitiva y un segundo destino offsite cuando esté disponible.
-
-No se hará push, registry, staging ni acceso al VPS bajo esa autorización salvo
-que se concedan por separado.
+Completar **P0.5-G5** construyendo desde un commit limpio y registrando la imagen
+inmutable por Git SHA y digest real. Requiere definir registry y autorización
+puntual L3 para login/push. No habilita staging ni producción.

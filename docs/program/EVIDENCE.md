@@ -106,19 +106,39 @@ Total de tests ejecutados por el gate: 67.
 
 ## Evidencia aún inexistente
 
-- Backup externo, checksum remoto y restore descargado.
-- Historial productivo `_prisma_migrations`.
 - Digest de imagen Pulso en registry.
 - Staging, smokes remotos y producción.
 - Ventana de observación post-deploy.
 
-## Preparación temporal de backup en F — 2026-07-11
+## Backup cifrado y restore temporal en F — 2026-07-11
 
 - Capacidad libre observada: aproximadamente 908 GiB.
 - Directorio reservado: `F:\Pulso-backups`.
 - Subdirectorios: `incoming`, `verified`, `restore-tests`.
-- Contenido productivo copiado: ninguno.
-- Claves generadas o almacenadas: ninguna.
-- Acceso al VPS: ninguno.
+- Bundle: `pulso-20260711T162936Z`.
+- Artefactos transferidos: dump y manifiesto cifrados con age + SHA-256.
+- Dump plano persistente en `F:`: ninguno.
+- Identidad age: existente fuera del repo, ACL restringida; nunca copiada al VPS.
+- Checksum remoto y local: OK.
+- Restore: PostgreSQL 16 efímero, sin puertos ni red, destino vacío.
+- Conteos restaurados: 2 organizaciones, 6 usuarios, 6 membresías, 4 equipos,
+  6 tareas y 1 worklog.
+- Inconsistencias organización/equipo/tarea/worklog/rol detectadas: 0.
+- Migraciones terminadas y no revertidas restauradas: 2.
+- Contenedor, volumen, identidad temporal, dump y manifiesto planos: eliminados.
+- Estado post-operación del VPS: `pulso-db` healthy; `pulso-app` running.
+- ACL de `F:\Pulso-backups`: sólo usuario actual, SYSTEM y Administradores.
 - Verificador local preparado: `ops/verify-backup-bundle.ps1`.
 - El verificador exige cabecera age v1 y SHA-256 antes de copiar a `verified`.
+
+## Comparación productiva de migraciones — 2026-07-11
+
+- Acceso: consulta PostgreSQL en transacción `READ ONLY` dentro de `pulso-db`.
+- Filas productivas: 2; filas locales: 2.
+- `20260624213924_init`: finalizada, activa, 1 paso, checksum local/productivo
+  `e59699068fea924132a8e04332a07f923643d862f38fd20eb762c5a8a8584c8e`.
+- `20260625010000_org_plans`: finalizada, activa, 1 paso, checksum
+  local/productivo
+  `4f377ebdb8b45df0709f6f5b5d0be5c0b80c2de0c4839821ebb116fa3c56d8ac`.
+- Migraciones extra, faltantes, duplicadas, inconclusas o revertidas: 0.
+- Escrituras, migraciones, restart y cambios de contenedor: ninguno.
