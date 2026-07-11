@@ -66,12 +66,68 @@ function loadConfig() {
 function configPath() {
   return path.join(app.getPath('userData'), 'pulso.config.json');
 }
+
+function normalizeTeamsUrl(raw) {
+  if (typeof raw !== 'string' || raw.trim().length === 0) return null;
+  const url = new URL(raw.trim());
+  const localDev = !app.isPackaged && ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+  if (url.protocol !== 'https:' && !(localDev && url.protocol === 'http:')) {
+    throw new Error('La URL de Teams debe usar HTTPS.');
+  }
+  if (url.username || url.password) throw new Error('La URL de Teams no puede incluir credenciales.');
+  url.search = '';
+  url.hash = '';
+  return `${url.origin}${url.pathname}`.replace(/\/$/, '');
+}
+
+function sameOrigin(candidate, trustedBase) {
+  try {
+    return Boolean(trustedBase) && new URL(candidate).origin === new URL(trustedBase).origin;
+  } catch {
+    return false;
+  }
+}
+
+function senderIsMainFrame(event) {
+  return !event.senderFrame || event.senderFrame === event.sender.mainFrame;
+}
+
+function senderMatchesWindow(event, win) {
+  return Boolean(win && !win.isDestroyed() && event.sender === win.webContents && senderIsMainFrame(event));
+}
+
+function isLocalRenderer(event) {
+  const owned = senderMatchesWindow(event, mainWindow) || senderMatchesWindow(event, widgetWindow);
+  return owned && sameOrigin(event.sender.getURL(), BASE_URL);
+}
+
+function isTeamsRenderer(event) {
+  const owned = senderMatchesWindow(event, teamsWindow) || senderMatchesWindow(event, widgetWindow);
+  return owned && sameOrigin(event.sender.getURL(), TEAMS_URL);
+}
+
+function isPulsoRenderer(event) {
+  return isLocalRenderer(event) || isTeamsRenderer(event);
+}
+
+function requireLocalRenderer(event) {
+  if (!isLocalRenderer(event)) throw new Error('IPC no autorizado para contenido remoto.');
+}
+
+function safeOpenExternal(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') void shell.openExternal(parsed.toString());
+  } catch {
+    /* URL no confiable: se ignora. */
+  }
+}
 // Default horneado al build: la organización distribuye su desktop con su URL ya
 // puesta (pulso.defaults.json) → el trabajador NO tipea nada, solo inicia sesión.
 function bundledDefaultTeamsUrl() {
   try {
     const d = JSON.parse(fs.readFileSync(path.join(__dirname, 'pulso.defaults.json'), 'utf8'));
-    return typeof d.teamsUrl === 'string' && d.teamsUrl.length > 0 ? d.teamsUrl.replace(/\/$/, '') : null;
+    return normalizeTeamsUrl(d.teamsUrl);
   } catch {
     return null;
   }
@@ -80,27 +136,28 @@ function readTeamsUrl() {
   // Prioridad: lo que guardó el usuario > el default del build.
   try {
     const cfg = JSON.parse(fs.readFileSync(configPath(), 'utf8'));
-    if (typeof cfg.teamsUrl === 'string' && cfg.teamsUrl.length > 0) return cfg.teamsUrl.replace(/\/$/, '');
+    const configured = normalizeTeamsUrl(cfg.teamsUrl);
+    if (configured) return configured;
   } catch {
     /* primera vez */
   }
   return bundledDefaultTeamsUrl();
 }
 function writeTeamsUrl(url) {
-  const clean = typeof url === 'string' ? url.trim().replace(/\/$/, '') : '';
+  const clean = normalizeTeamsUrl(url);
   let cfg = {};
   try {
     cfg = JSON.parse(fs.readFileSync(configPath(), 'utf8'));
   } catch {
     /* primera vez */
   }
-  cfg.teamsUrl = clean;
+  cfg.teamsUrl = clean ?? '';
   try {
     fs.writeFileSync(configPath(), JSON.stringify(cfg, null, 2));
   } catch {
     /* no crítico */
   }
-  TEAMS_URL = clean.length > 0 ? clean : null;
+  TEAMS_URL = clean;
   return TEAMS_URL;
 }
 
@@ -245,6 +302,8 @@ function startEmbeddedServer() {
       LLM_BASE_URL: cfg.LLM_BASE_URL || '',
       LLM_MODEL: cfg.LLM_MODEL || '',
       LLM_API_KEY: cfg.LLM_API_KEY || '',
+      PULSO_PERSONAL_API_ENABLED: 'true',
+      PULSO_PUBLIC_REGISTRATION_ENABLED: 'false',
     },
     stdio: ['ignore', out, out],
   });
@@ -305,22 +364,37 @@ function openTeams() {
     backgroundColor: '#15110c',
     autoHideMenuBar: true,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload-teams.js'),
       additionalArguments: [`--pulso-version=${app.getVersion()}`],
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
     },
   });
   teamsWindow.loadURL(TEAMS_URL);
   teamsWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.includes('/widget')) {
-      showWidget('teams');
-      return { action: 'deny' };
+    if (sameOrigin(url, TEAMS_URL)) {
+      try {
+        if (new URL(url).pathname === '/widget') showWidget('teams');
+        else void teamsWindow?.loadURL(url);
+      } catch {
+        /* URL inválida: se deniega. */
+      }
+    } else {
+      safeOpenExternal(url);
     }
-    // Links externos (fuera de tu server) → navegador del sistema.
-    if (/^https?:\/\//.test(url) && TEAMS_URL && !url.startsWith(TEAMS_URL)) {
-      shell.openExternal(url);
-      return { action: 'deny' };
-    }
-    return { action: 'allow' };
+    return { action: 'deny' };
+  });
+  teamsWindow.webContents.on('will-navigate', (event, url) => {
+    if (sameOrigin(url, TEAMS_URL)) return;
+    event.preventDefault();
+    safeOpenExternal(url);
+  });
+  teamsWindow.webContents.on('will-attach-webview', (event) => event.preventDefault());
+  teamsWindow.webContents.on('render-process-gone', (_event, details) => {
+    logDesktop(`teams renderer stopped: ${details.reason}`);
   });
   teamsWindow.on('closed', () => {
     teamsWindow = null;
@@ -370,6 +444,11 @@ function createMainWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       additionalArguments: [`--pulso-version=${app.getVersion()}`],
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
     },
   });
   mainWindow.loadURL(`${BASE_URL}/personal`);
@@ -385,7 +464,7 @@ function createWidgetWindow() {
   const x = state.x ?? workArea.x + workArea.width - WIDGET_FULL.width - WIDGET_EDGE_GAP;
   const y = clampWidgetY(state.y ?? workArea.y + WIDGET_RIGHT_SAFE_TOP, WIDGET_FULL.height, x, WIDGET_FULL.width, workArea);
 
-  widgetWindow = new BrowserWindow({
+  const createdWindow = new BrowserWindow({
     width: WIDGET_FULL.width,
     height: WIDGET_FULL.height,
     x: Math.round(x),
@@ -401,13 +480,33 @@ function createWidgetWindow() {
     minimizable: false,
     hasShadow: false,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, widgetMode === 'teams' ? 'preload-teams.js' : 'preload.js'),
       additionalArguments: [`--pulso-version=${app.getVersion()}`],
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
     },
   });
+  widgetWindow = createdWindow;
   widgetWindow.setAlwaysOnTop(true, 'screen-saver');
   widgetWindow.loadURL(widgetUrl());
-  attachWindowOpenHandler(widgetWindow.webContents);
+  if (widgetMode === 'teams') {
+    widgetWindow.webContents.setWindowOpenHandler(({ url }) => {
+      if (sameOrigin(url, TEAMS_URL)) void widgetWindow?.loadURL(url);
+      else safeOpenExternal(url);
+      return { action: 'deny' };
+    });
+    widgetWindow.webContents.on('will-navigate', (event, url) => {
+      if (sameOrigin(url, TEAMS_URL)) return;
+      event.preventDefault();
+      safeOpenExternal(url);
+    });
+    widgetWindow.webContents.on('will-attach-webview', (event) => event.preventDefault());
+  } else {
+    attachWindowOpenHandler(widgetWindow.webContents);
+  }
   widgetWindow.webContents.on('did-finish-load', () => {
     widgetWindow.webContents.insertCSS('html,body{background:transparent !important; overflow:hidden !important;}');
   });
@@ -418,8 +517,8 @@ function createWidgetWindow() {
     state.y = by;
     saveState();
   });
-  widgetWindow.on('closed', () => {
-    widgetWindow = null;
+  createdWindow.on('closed', () => {
+    if (widgetWindow === createdWindow) widgetWindow = null;
   });
   return widgetWindow;
 }
@@ -427,11 +526,17 @@ function createWidgetWindow() {
 function ensureWidgetRoute(mode = widgetMode, view = widgetView) {
   const nextMode = normalizeWidgetMode(mode);
   const nextView = normalizeWidgetView(view);
-  const changed = widgetMode !== nextMode || widgetView !== nextView;
+  const modeChanged = widgetMode !== nextMode;
+  const changed = modeChanged || widgetView !== nextView;
   widgetMode = nextMode;
   widgetView = nextView;
-  if (widgetWindow && !widgetWindow.isDestroyed() && changed) {
-    widgetWindow.loadURL(widgetUrl());
+  if (widgetWindow && !widgetWindow.isDestroyed()) {
+    if (modeChanged) {
+      widgetWindow.destroy();
+      widgetWindow = null;
+    } else if (changed) {
+      widgetWindow.loadURL(widgetUrl());
+    }
   }
 }
 
@@ -680,38 +785,51 @@ app.whenReady().then(async () => {
   checkForUpdates();
 });
 
-ipcMain.on('widget:hide', hideWidget);
-ipcMain.on('widget:show', (_e, mode) => showWidget(mode));
-ipcMain.on('widget:collapse', collapseWidget);
-ipcMain.on('widget:expand', expandWidget);
-ipcMain.on('widget:view', (_e, view) => applyWidgetView(view, false));
-ipcMain.on('widget:intro', (_e, mode) => introWidget(mode));
+ipcMain.on('widget:hide', (e) => { if (isPulsoRenderer(e)) hideWidget(); });
+ipcMain.on('widget:show', (e, mode) => { if (isPulsoRenderer(e)) showWidget(mode); });
+ipcMain.on('widget:collapse', (e) => { if (isPulsoRenderer(e)) collapseWidget(); });
+ipcMain.on('widget:expand', (e) => { if (isPulsoRenderer(e)) expandWidget(); });
+ipcMain.on('widget:view', (e, view) => { if (isPulsoRenderer(e)) applyWidgetView(view, false); });
+ipcMain.on('widget:intro', (e, mode) => { if (isLocalRenderer(e)) introWidget(mode); });
 // La web avisa cuando el espacio de trabajo está listo (personal onboarded o
 // sesión Teams activa) → abrimos el widget minimizado en el borde (no invasivo).
-ipcMain.on('pulso:personal-ready', () => openWidgetCollapsed('personal'));
-ipcMain.on('pulso:auth', (_e, s) => {
-  if (s === 'authed') openWidgetCollapsed('teams');
+ipcMain.on('pulso:personal-ready', (e) => { if (isLocalRenderer(e)) openWidgetCollapsed('personal'); });
+ipcMain.on('pulso:auth', (e, s) => {
+  if (isTeamsRenderer(e) && s === 'authed') openWidgetCollapsed('teams');
 });
 
 // Pulso Teams (web): configurar la URL del server y abrir la ventana remota.
-ipcMain.handle('pulso:get-teams-url', () => TEAMS_URL);
-ipcMain.on('pulso:set-teams-url', (_e, url) => writeTeamsUrl(url));
-ipcMain.on('pulso:open-teams', () => openTeams());
+ipcMain.handle('pulso:get-teams-url', (e) => { requireLocalRenderer(e); return TEAMS_URL; });
+ipcMain.on('pulso:set-teams-url', (e, url) => {
+  if (!isLocalRenderer(e)) return;
+  try {
+    writeTeamsUrl(url);
+  } catch (err) {
+    logDesktop(`teams URL rejected: ${err == null ? '' : err.message || err}`);
+  }
+});
+ipcMain.on('pulso:open-teams', (e) => { if (isLocalRenderer(e)) openTeams(); });
 // "Ir a Personal" desde la ventana Teams (login o sesión): cierra Teams y
 // vuelve al espacio Personal sin tocar ninguna configuración.
-ipcMain.on('pulso:back-to-personal', () => {
+ipcMain.on('pulso:back-to-personal', (e) => {
+  if (!isTeamsRenderer(e)) return;
   if (teamsWindow && !teamsWindow.isDestroyed()) teamsWindow.close();
   createMainWindow();
 });
 
 // Carpeta Markdown (modo Personal): elegir carpeta y agregar entradas aprobadas.
-ipcMain.handle('pulso:choose-folder', async (e) => chooseFolder(BrowserWindow.fromWebContents(e.sender)));
-ipcMain.handle('pulso:export-markdown', (_e, payload) =>
-  exportMarkdown(payload?.dir, payload?.fileName, payload?.text, payload?.subdir, payload?.header, (err) =>
+ipcMain.handle('pulso:choose-folder', async (e) => {
+  requireLocalRenderer(e);
+  return chooseFolder(BrowserWindow.fromWebContents(e.sender));
+});
+ipcMain.handle('pulso:export-markdown', (e, payload) => {
+  requireLocalRenderer(e);
+  return exportMarkdown(payload?.dir, payload?.fileName, payload?.text, payload?.subdir, payload?.header, (err) =>
     logDesktop(`export-markdown falló: ${err.message}`),
-  ),
-);
-ipcMain.handle('pulso:read-notes-context', (_e, payload) => {
+  );
+});
+ipcMain.handle('pulso:read-notes-context', (e, payload) => {
+  requireLocalRenderer(e);
   const dir = payload?.dir;
   const query = typeof payload?.query === 'string' ? payload.query.trim() : '';
   const budget = Math.min(Math.max(Number(payload?.maxChars) || 3000, 500), 8000);
@@ -734,18 +852,22 @@ ipcMain.handle('pulso:read-notes-context', (_e, payload) => {
 
 // Asistente de notas — embeddings (etapa 2b): qué falta vectorizar, guardar
 // vectores recién calculados, y un status liviano para la UI de indexado.
-ipcMain.handle('pulso:embeddings-pending', (_e, payload) =>
-  embeddingsIndex.pendingChunks(payload?.dir, payload?.model, embeddingsCacheDir()),
-);
-ipcMain.handle('pulso:embeddings-save', (_e, payload) =>
-  embeddingsIndex.saveEmbeddings(payload?.dir, payload?.model, payload?.entries, embeddingsCacheDir()),
-);
-ipcMain.handle('pulso:embeddings-status', (_e, payload) =>
-  embeddingsIndex.status(payload?.dir, payload?.model, embeddingsCacheDir()),
-);
+ipcMain.handle('pulso:embeddings-pending', (e, payload) => {
+  requireLocalRenderer(e);
+  return embeddingsIndex.pendingChunks(payload?.dir, payload?.model, embeddingsCacheDir());
+});
+ipcMain.handle('pulso:embeddings-save', (e, payload) => {
+  requireLocalRenderer(e);
+  return embeddingsIndex.saveEmbeddings(payload?.dir, payload?.model, payload?.entries, embeddingsCacheDir());
+});
+ipcMain.handle('pulso:embeddings-status', (e, payload) => {
+  requireLocalRenderer(e);
+  return embeddingsIndex.status(payload?.dir, payload?.model, embeddingsCacheDir());
+});
 
 // Captura rápida de pantalla. Oculta el widget un instante para no salir en la foto.
-ipcMain.handle('pulso:screenshot', async () => {
+ipcMain.handle('pulso:screenshot', async (e) => {
+  requireLocalRenderer(e);
   const widgetWasVisible = widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible();
   try {
     if (widgetWasVisible) widgetWindow.hide();

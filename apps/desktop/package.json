@@ -7,6 +7,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "security:check": "node --check main.js && node --check preload.js && node --check preload-teams.js && node security-check.cjs",
     "prepare:standalone": "node prepare-standalone.cjs",
     "dist:dir": "node prepare-standalone.cjs && electron-builder --dir",
     "dist": "node prepare-standalone.cjs && electron-builder --win nsis",
@@ -17,7 +18,7 @@
     "productName": "Pulso",
     "electronVersion": "33.4.11",
     "directories": { "output": "dist" },
-    "files": ["main.js", "preload.js", "markdown.js", "notes-index.js", "embeddings-index.js", "package.json", "pulso.defaults.json"],
+    "files": ["main.js", "preload.js", "preload-teams.js", "markdown.js", "notes-index.js", "embeddings-index.js", "package.json", "pulso.defaults.json"],
     "extraResources": [
       { "from": "../../apps/web/.next/standalone", "to": "server" },
       { "from": "db-template", "to": "db-template" }

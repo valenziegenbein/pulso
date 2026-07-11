@@ -82,6 +82,19 @@ en la primera instalación (el auto-update funciona igual: se verifica por sha51
 Con un certificado `.pfx`, configurar `CSC_LINK` + `CSC_KEY_PASSWORD` y quitar
 `win.signAndEditExecutable: false`.
 
+Checklist para una release firmada futura (no ejecutar sin autorización):
+
+1. Obtener un certificado Authenticode vigente de una CA confiable y custodiar el
+   `.pfx` fuera del repo.
+2. Configurar `CSC_LINK` y `CSC_KEY_PASSWORD` como secretos del entorno/CI.
+3. Quitar `win.signAndEditExecutable: false` y generar primero `dist:dir`.
+4. Ejecutar `pnpm --filter @pulso/desktop security:check` y verificar la firma con
+   `Get-AuthenticodeSignature` sobre el `.exe` generado.
+5. Probar instalación, login Teams, Personal, widget y auto-update en una VM limpia.
+6. Recién después incrementar versión y ejecutar `release` con `GH_TOKEN` efímero.
+
+Nunca reutilizar `GH_TOKEN`, el `.pfx` o su contraseña como secretos de la app.
+
 ### Gotchas de Windows (ya resueltos en la config)
 
 - **pnpm + standalone/electron-builder**: requieren node_modules plano →
