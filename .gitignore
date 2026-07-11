@@ -16,6 +16,8 @@ out/
 
 # test / coverage
 coverage/
+/backups/
+/artifacts/
 
 # logs
 *.log

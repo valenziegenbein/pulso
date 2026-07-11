@@ -3,7 +3,7 @@
 
 services:
   db:
-    image: postgres:16
+    image: postgres:16@sha256:be01cf82fc7dbba824acf0a82e150b4b360f3ff93c6631d7844af431e841a95c
     container_name: pulso-db
     restart: unless-stopped
     environment:
@@ -19,7 +19,11 @@ services:
       retries: 20
 
   app:
-    build: .
+    image: ${PULSO_IMAGE:-pulso:local}
+    build:
+      context: .
+      args:
+        PULSO_GIT_SHA: ${PULSO_GIT_SHA:-unknown}
     container_name: pulso-app
     restart: unless-stopped
     depends_on:
@@ -31,18 +35,41 @@ services:
       WORKLOG_ENCRYPTION_KEY: ${WORKLOG_ENCRYPTION_KEY:?Falta WORKLOG_ENCRYPTION_KEY en .env}
       NODE_ENV: production
       PORT: '3000'
+      PULSO_PUBLIC_REGISTRATION_ENABLED: 'false'
+      PULSO_PERSONAL_API_ENABLED: 'false'
+      LLM_ALLOWED_PUBLIC_HOSTS: ${LLM_ALLOWED_PUBLIC_HOSTS:-}
+      LLM_ALLOWED_PRIVATE_HOSTS: ${LLM_ALLOWED_PRIVATE_HOSTS:-}
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/api/readiness').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
     # Sin puerto al host: sólo Caddy queda expuesto. Si traés tu propio reverse
     # proxy, comentá el servicio `caddy` y descomentá:
     # ports:
     #   - '${APP_PORT:-3000}:3000'
 
+  migrate:
+    image: ${PULSO_IMAGE:-pulso:local}
+    profiles: ['ops']
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://pulso:${POSTGRES_PASSWORD}@db:5432/pulso?schema=public
+      NODE_ENV: production
+    command: ['./docker-migrate.sh']
+    restart: 'no'
+
   # Reverse proxy + HTTPS automático (Let's Encrypt). Servís en https://${DOMAIN}.
   caddy:
-    image: caddy:2
+    image: caddy:2@sha256:af5fdcd76f2db5e4e974ee92f96ee8c0fc3edb55bd4ba5032547cbf3f65e486d
     container_name: pulso-caddy
     restart: unless-stopped
     depends_on:
-      - app
+      app:
+        condition: service_healthy
     ports:
       - '80:80'
       - '443:443'

@@ -1,139 +1,99 @@
 # Desplegar Pulso Web/Server
 
-Stack de produccion: **Next.js server + PostgreSQL**, en Docker. La web/server
-es el panel de control: login/register, organizaciones, equipos, miembros,
-tareas, resumen, administracion, planes/seats y lectura/gestion de bitacora.
+Este documento resume el flujo seguro. Los procedimientos completos están en:
 
-Pulso Desktop sigue siendo la superficie diaria de trabajo: onboarding, widget,
-capturas manuales, avances, exportaciones y flujo cotidiano.
+- `docs/operations/MIGRATIONS.md`;
+- `docs/operations/BACKUP_RESTORE.md`;
+- `docs/operations/DEPLOY_ROLLBACK.md`.
 
-El stack incluye **HTTPS automatico** (Caddy + Let's Encrypt): no hace falta
-configurar un proxy aparte.
+## Estado de superficies públicas
 
-## 1. Requisitos
+En producción permanecen cerrados:
 
-- VPS o servidor con Docker y Docker Compose v2.
-- Puertos **80 y 443 abiertos** en el firewall (Caddy los usa para el certificado
-  y para servir).
-- Un dominio que resuelva a la IP del servidor. Si no tenes dominio propio, usa
-  **nip.io**: para la IP `2.25.184.183` el dominio es `2-25-184-183.nip.io`.
+- `/register`;
+- `/api/personal/*`.
 
-## 2. Configurar entorno
+Hay dos defensas: feature flags fail-closed en la aplicación y respuestas 404
+en Caddy. No habilitarlas durante el sprint de migraciones.
 
-```bash
-ssh root@2.25.184.183
-git clone <repo> pulso && cd pulso
-cp .env.docker.example .env
-```
+## Requisitos
 
-Edita `.env`:
+- Docker y Docker Compose v2;
+- imagen Pulso construida una sola vez y promovida por digest real;
+- PostgreSQL 16;
+- dominio TLS;
+- secretos fuera del repositorio;
+- backup externo cifrado y restauración ensayada.
 
-```bash
-# Genera cada secreto por separado, 32 bytes hex:
-openssl rand -hex 32   # AUTH_SECRET
-openssl rand -hex 32   # WORKLOG_ENCRYPTION_KEY
-```
+Los digests de las imágenes base fueron resueltos desde Docker Hub y están
+versionados en Dockerfile/Compose. Su procedencia y actualización se documentan
+en `docs/operations/DEPLOY_ROLLBACK.md`.
 
-Variables principales:
+## Configuración
 
-- `POSTGRES_PASSWORD`: password fuerte para Postgres.
-- `AUTH_SECRET`: secreto de sesion/auth, 64 caracteres hex.
-- `WORKLOG_ENCRYPTION_KEY`: clave AES para secretos LLM, 64 caracteres hex.
-- `DOMAIN`: dominio para el certificado (ej: `2-25-184-183.nip.io` o el tuyo).
+Copiar `.env.docker.example` a `.env` y completar localmente:
 
-No configures `LLM_*` para el server. En produccion la IA se configura por
-organizacion desde **Admin -> IA de la organizacion**.
+- `POSTGRES_PASSWORD`;
+- `AUTH_SECRET`;
+- `WORKLOG_ENCRYPTION_KEY`;
+- `DOMAIN`;
+- `PULSO_IMAGE` con referencia inmutable;
+- allowlists LLM si corresponden.
 
-## 3. Levantar
+Las URLs LLM públicas adicionales requieren coincidencia exacta en
+`LLM_ALLOWED_PUBLIC_HOSTS`. Cualquier URL privada requiere coincidencia exacta
+en `LLM_ALLOWED_PRIVATE_HOSTS`. Loopback, link-local y metadata continúan
+bloqueados aunque se intenten allowlistear.
 
-```bash
-docker compose up -d --build
-docker compose logs -f app
-```
+## Flujo obligatorio
 
-El contenedor `app` ejecuta `prisma migrate deploy` antes de arrancar Next, y
-`caddy` obtiene el certificado TLS solo. En ~1 minuto:
+1. Ejecutar `pnpm green` localmente.
+2. Construir imagen versionada desde un worktree limpio.
+3. Probar esa misma imagen en un entorno efímero/staging.
+4. Crear backup cifrado, checksum y copia externa.
+5. Restaurar la copia en una base aislada y ejecutar smoke.
+6. Registrar digest actual y digest candidato.
+7. Ejecutar la migración como job previo:
 
-```text
-https://2-25-184-183.nip.io
-```
+   ```sh
+   docker compose --profile ops run --rm migrate
+   ```
 
-Los datos persisten en el volumen `pulso-db-data`. (Si preferis tu propio reverse
-proxy, comenta el servicio `caddy` y descomenta `ports` + `APP_PORT` en
-`docker-compose.yml`.)
+8. Si la migración fue exitosa, promover app y Caddy sin reconstruir:
 
-## 4. Crear organizaciones
+   ```sh
+   docker compose up -d --no-build app caddy
+   ```
 
-La ruta publica `/register` crea una organizacion nueva, su primer `ORG_ADMIN`,
-roles base y un equipo inicial.
+9. Ejecutar `ops/smoke.sh` y verificaciones autenticadas.
 
-Tambien podes crear un tenant inicial por CLI:
+La aplicación normal no ejecuta migraciones durante el arranque. Producción
+usa exclusivamente `prisma migrate deploy`; `prisma db push` y el seed están
+prohibidos.
 
-```bash
-docker compose run --rm \
-  -e ORG_NAME="Acme" -e ORG_SLUG="acme" -e PLAN_KEY="FREE" \
-  -e ADMIN_NAME="Nombre del Jefe" -e ADMIN_EMAIL="jefe@acme.com" -e ADMIN_PASSWORD="..." \
-  -e MEMBER_NAME="Tu Nombre" -e MEMBER_EMAIL="vos@acme.com" -e MEMBER_PASSWORD="..." \
-  -e TEAM_NAME="Direccion" \
-  app pnpm --filter @pulso/database tenant
-```
+## Health y readiness
 
-Planes internos actuales, sin cobro real:
+- `/api/health`: liveness del proceso;
+- `/api/readiness`: conexión real con PostgreSQL;
+- el healthcheck del contenedor y la dependencia de Caddy usan readiness.
 
-- `FREE`: 5 seats.
-- `TEAM`: 15 seats.
-- `BUSINESS`: 50 seats.
+Una base inaccesible deja la aplicación en estado no-ready y evita promover el
+proxy hacia una instancia fallida.
 
-El limite se guarda en la organizacion y se valida al anadir miembros.
+## IA por organización
 
-## 5. IA por organizacion
+Proveedores oficiales usan HTTPS. Endpoints OpenAI-compatible adicionales deben
+estar allowlisteados explícitamente. Una URL privada accesible desde Docker no
+queda autorizada sólo por ser alcanzable.
 
-Un `ORG_ADMIN` configura el proveedor desde **Admin -> IA de la organizacion**:
+## Seeds
 
-- `MOCK`: sin API key, fallback seguro.
-- `OPENAI_COMPATIBLE`: OpenAI, LM Studio, vLLM u otro endpoint compatible.
-- `ANTHROPIC`: Anthropic.
+No se reseedea producción. `packages/database/prisma/seed.ts` aborta con
+`NODE_ENV=production`. Los fixtures de integración son sintéticos y sólo se
+aplican al PostgreSQL efímero.
 
-La API key se cifra con `WORKLOG_ENCRYPTION_KEY` y no vuelve al cliente. Si no
-hay config activa, Pulso usa resumen heuristico y sugerencias mock/fallback.
+## Rollback
 
-Para LM Studio, el `baseUrl` debe ser alcanzable desde el servidor, no desde el
-navegador. En Docker Desktop suele ser:
-
-```text
-http://host.docker.internal:1234/v1
-```
-
-## 6. Operacion
-
-Actualizar:
-
-```bash
-git pull
-docker compose up -d --build
-```
-
-Backup:
-
-```bash
-docker compose exec db pg_dump -U pulso pulso > pulso-$(date +%F).sql
-```
-
-Restore:
-
-```bash
-cat backup.sql | docker compose exec -T db psql -U pulso -d pulso
-```
-
-Migraciones manuales, si hacen falta:
-
-```bash
-docker compose run --rm app pnpm --filter @pulso/database run migrate:deploy
-```
-
-## Notas
-
-- Multi-tenant: las escrituras validan entidad + `organizationId` y scope del rol.
-- Privacidad: no hay mouse tracking, keylogging, tiempo activo ni capturas automaticas.
-- Web/server no reemplaza Desktop: el widget y la captura cotidiana viven en la app.
-- Billing real queda pendiente; por ahora solo existen plan y seats internos.
+Para cambios backward-compatible, volver al digest anterior y ejecutar smoke.
+Para un schema incompatible, restaurar el backup en una base nueva, validar y
+cambiar la conexión. Prisma no ofrece down migrations automáticas.
