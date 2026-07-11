@@ -1,7 +1,15 @@
 import { prisma } from '@pulso/database';
-import { buildWorkloadSnapshot, evaluateOverload, type TaskLike } from '@pulso/domain';
+import { buildWorkloadSnapshot, evaluateOverload, isOrgAdmin, type TaskLike } from '@pulso/domain';
 import type { TaskPriority, TaskStatus } from '@pulso/shared';
 import type { AuthContext } from '@/lib/auth/context';
+import {
+  assertAllowed,
+  assertTaskAccess,
+  assertTeamAccess,
+  getAuthorizedUser,
+  isAuthorizationError,
+  type AuthorizedUser,
+} from '@/server/authz';
 
 const ACTIVE_STATUSES = { notIn: ['DONE', 'CANCELLED'] as TaskStatus[] };
 const ACTIVE_STATUS_LIST = ['BACKLOG', 'TODO', 'IN_PROGRESS', 'BLOCKED', 'IN_REVIEW'] as TaskStatus[];
@@ -20,6 +28,15 @@ function startOfToday(): Date {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   return d;
+}
+
+function worklogVisibilityFilter(ctx: AuthContext, actor: AuthorizedUser) {
+  const or: Array<Record<string, unknown>> = [{ authorId: ctx.user.id }];
+  if (actor.permissions.includes('worklog.viewOthers')) or.push({ status: 'PUBLISHED' });
+  if (actor.permissions.includes('worklog.approve') && (isOrgAdmin(actor) || actor.role === 'TEAM_ADMIN')) {
+    or.push({ status: 'DRAFT' });
+  }
+  return { OR: or };
 }
 
 export async function getPersonalDashboard(ctx: AuthContext) {
@@ -49,6 +66,7 @@ export async function getMemberDashboard(ctx: AuthContext) {
   const data = await getPersonalDashboard(ctx);
   const openBlockers = await prisma.blocker.findMany({
     where: {
+      organizationId: ctx.organizationId,
       status: 'OPEN',
       OR: [{ createdById: ctx.user.id }, { task: { assigneeId: ctx.user.id, organizationId: ctx.organizationId } }],
     },
@@ -70,6 +88,8 @@ export async function getMemberDashboard(ctx: AuthContext) {
 }
 
 export async function getAdminDashboard(ctx: AuthContext) {
+  const actor = await getAuthorizedUser(ctx);
+  assertAllowed(isOrgAdmin(actor));
   const org = ctx.organizationId;
   const activeWhere = { organizationId: org, status: ACTIVE_STATUSES };
 
@@ -94,7 +114,17 @@ export async function getAdminDashboard(ctx: AuthContext) {
     }),
     prisma.orgMembership.findMany({
       where: { organizationId: org },
-      include: { user: { include: { teamMemberships: { include: { team: true } } } }, role: true },
+      include: {
+        user: {
+          include: {
+            teamMemberships: {
+              where: { team: { organizationId: org } },
+              include: { team: true },
+            },
+          },
+        },
+        role: true,
+      },
     }),
     prisma.blocker.findMany({
       where: { status: 'OPEN', OR: [{ organizationId: org }, { task: { organizationId: org } }] },
@@ -225,6 +255,12 @@ export async function getTasksBoard(ctx: AuthContext) {
 }
 
 export async function getTaskDetail(ctx: AuthContext, id: string) {
+  const accessibleTask = await assertTaskAccess(ctx, id).catch((error: unknown) => {
+    if (isAuthorizationError(error)) return null;
+    throw error;
+  });
+  if (!accessibleTask) return null;
+  const actor = await getAuthorizedUser(ctx);
   const task = await prisma.task.findFirst({
     where: { id, organizationId: ctx.organizationId },
     include: {
@@ -233,22 +269,45 @@ export async function getTaskDetail(ctx: AuthContext, id: string) {
       blockers: { orderBy: { createdAt: 'desc' } },
       decisions: { include: { requestedBy: true }, orderBy: { createdAt: 'desc' } },
       comments: { include: { author: true }, orderBy: { createdAt: 'asc' } },
-      worklogEntries: { include: { author: true }, orderBy: { createdAt: 'desc' } },
+      worklogEntries: {
+        where: worklogVisibilityFilter(ctx, actor),
+        include: { author: true },
+        orderBy: { createdAt: 'desc' },
+      },
       subtasks: { include: { assignee: { select: { name: true } } }, orderBy: { createdAt: 'asc' } },
     },
   });
   if (!task) return null;
-  const people = await getAssignablePeople(ctx);
+  const people = await getAssignablePeople(ctx, accessibleTask.teamId);
   return { task, people };
 }
 
-export async function getAssignablePeople(ctx: AuthContext) {
+export async function getAssignablePeople(ctx: AuthContext, teamId?: string) {
+  const actor = await getAuthorizedUser(ctx);
+  if (teamId) await assertTeamAccess(ctx, teamId);
+  const visibleTeamIds = isOrgAdmin(actor) ? null : actor.teamIds;
   const members = await prisma.orgMembership.findMany({
     where: { organizationId: ctx.organizationId },
-    include: { user: true },
+    include: {
+      user: {
+        include: {
+          teamMemberships: {
+            where: {
+              team: { organizationId: ctx.organizationId },
+              ...(teamId ? { teamId } : visibleTeamIds ? { teamId: { in: visibleTeamIds } } : {}),
+            },
+            select: { teamId: true },
+          },
+        },
+      },
+    },
     orderBy: { createdAt: 'asc' },
   });
-  return members.map((m) => ({ id: m.user.id, name: m.user.name }));
+  return members
+    .filter((membership) => teamId
+      ? membership.user.teamMemberships.length > 0
+      : isOrgAdmin(actor) || membership.userId === ctx.user.id || membership.user.teamMemberships.length > 0)
+    .map((membership) => ({ id: membership.user.id, name: membership.user.name }));
 }
 
 /** Foco actual para el widget: tareas activas propias + su última bitácora. */
@@ -260,7 +319,7 @@ export async function getWidgetFocus(ctx: AuthContext) {
     where: { organizationId: ctx.organizationId, assigneeId: ctx.user.id, status: ACTIVE_STATUSES },
     include: {
       team: true,
-      worklogEntries: { orderBy: { createdAt: 'desc' }, take: 1 },
+      worklogEntries: { where: { status: 'PUBLISHED' }, orderBy: { createdAt: 'desc' }, take: 1 },
       blockers: { where: { status: 'OPEN' } },
     },
     orderBy: [{ priority: 'desc' }, { dueDate: 'asc' }],
@@ -292,7 +351,11 @@ export async function getTeamsPage(ctx: AuthContext) {
         memberships: { include: { user: true, role: true } },
         tasks: {
           where: { status: ACTIVE_STATUSES },
-          include: { assignee: true, blockers: { where: { status: 'OPEN' } }, worklogEntries: { orderBy: { createdAt: 'desc' }, take: 1 } },
+          include: {
+            assignee: true,
+            blockers: { where: { status: 'OPEN' } },
+            worklogEntries: { where: { status: 'PUBLISHED' }, orderBy: { createdAt: 'desc' }, take: 1 },
+          },
           orderBy: { updatedAt: 'desc' },
         },
         blockers: { where: { status: 'OPEN' } },
@@ -304,11 +367,35 @@ export async function getTeamsPage(ctx: AuthContext) {
     }),
     prisma.orgMembership.findMany({
       where: { organizationId: ctx.organizationId },
-      include: { user: { include: { teamMemberships: { include: { team: true } }, assignedTasks: true } }, role: true },
+      include: {
+        user: {
+          include: {
+            teamMemberships: {
+              where: {
+                team: { organizationId: ctx.organizationId },
+                ...(visibleTeamIds ? { teamId: { in: visibleTeamIds } } : {}),
+              },
+              include: { team: true },
+            },
+            assignedTasks: {
+              where: {
+                organizationId: ctx.organizationId,
+                ...(visibleTeamIds ? { teamId: { in: visibleTeamIds } } : {}),
+              },
+            },
+          },
+        },
+        role: true,
+      },
       orderBy: { createdAt: 'asc' },
     }),
   ]);
-  return { teams, members };
+  return {
+    teams,
+    members: visibleTeamIds
+      ? members.filter((member) => member.userId === ctx.user.id || member.user.teamMemberships.length > 0)
+      : members,
+  };
 }
 
 export async function getMembersPage(ctx: AuthContext) {
@@ -319,12 +406,26 @@ export async function getMembersPage(ctx: AuthContext) {
       role: true,
       user: {
         include: {
-          teamMemberships: { include: { team: true, role: true } },
+          teamMemberships: {
+            where: { team: { organizationId: ctx.organizationId } },
+            include: { team: true, role: true },
+          },
           assignedTasks: {
-            where: { organizationId: ctx.organizationId },
+            where: {
+              organizationId: ctx.organizationId,
+              ...(visibleTeamIds ? { teamId: { in: visibleTeamIds } } : {}),
+            },
             include: { team: true, blockers: { where: { status: 'OPEN' } }, worklogEntries: { where: { status: 'PUBLISHED' }, orderBy: { createdAt: 'desc' }, take: 1 } },
           },
-          authoredWorklogs: { where: { organizationId: ctx.organizationId, status: 'PUBLISHED' }, orderBy: { createdAt: 'desc' }, take: 1 },
+          authoredWorklogs: {
+            where: {
+              organizationId: ctx.organizationId,
+              status: 'PUBLISHED',
+              ...(visibleTeamIds ? { teamId: { in: visibleTeamIds } } : {}),
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
         },
       },
     },
@@ -336,25 +437,40 @@ export async function getMembersPage(ctx: AuthContext) {
 }
 
 export async function getTeamDetail(ctx: AuthContext, id: string) {
-  const visibleTeamIds = await getVisibleTeamIds(ctx);
-  if (visibleTeamIds && !visibleTeamIds.includes(id)) return null;
+  try {
+    await assertTeamAccess(ctx, id);
+  } catch (error) {
+    if (isAuthorizationError(error)) return null;
+    throw error;
+  }
+  const actor = await getAuthorizedUser(ctx);
   return prisma.team.findFirst({
     where: { id, organizationId: ctx.organizationId },
     include: {
       memberships: { include: { user: true, role: true } },
-      tasks: { include: { assignee: true, blockers: { where: { status: 'OPEN' } }, worklogEntries: { orderBy: { createdAt: 'desc' }, take: 1 } }, orderBy: { updatedAt: 'desc' } },
+      tasks: {
+        include: {
+          assignee: true,
+          blockers: { where: { status: 'OPEN' } },
+          worklogEntries: { where: { status: 'PUBLISHED' }, orderBy: { createdAt: 'desc' }, take: 1 },
+        },
+        orderBy: { updatedAt: 'desc' },
+      },
       blockers: { where: { status: 'OPEN' }, include: { task: true, createdBy: true }, orderBy: { createdAt: 'desc' } },
       decisions: { where: { status: 'OPEN' }, include: { task: true, requestedBy: true }, orderBy: { createdAt: 'desc' } },
-      worklogEntries: { include: { author: true, task: true }, orderBy: { createdAt: 'desc' }, take: 8 },
+      worklogEntries: {
+        where: worklogVisibilityFilter(ctx, actor),
+        include: { author: true, task: true },
+        orderBy: { createdAt: 'desc' },
+        take: 8,
+      },
     },
   });
 }
 
 export async function getVisibleTeamIds(ctx: AuthContext): Promise<string[] | null> {
-  if (ctx.role === 'ORG_ADMIN' || ctx.role === 'SUPER_ADMIN') return null;
-  const memberships = await prisma.teamMembership.findMany({ where: { userId: ctx.user.id }, select: { teamId: true } });
-  if (ctx.role === 'TEAM_ADMIN') return memberships.map((m) => m.teamId);
-  return memberships.map((m) => m.teamId);
+  const actor = await getAuthorizedUser(ctx);
+  return isOrgAdmin(actor) ? null : actor.teamIds;
 }
 
 export { ACTIVE_STATUS_LIST };

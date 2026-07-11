@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import { Fraunces, Hanken_Grotesk, JetBrains_Mono } from 'next/font/google';
-import { PERMISSIONS } from '@pulso/domain';
-import { hasPermission, requireAuth } from '@/lib/auth/context';
+import { requireAuth } from '@/lib/auth/context';
 import { logoutAction } from '@/server/actions/auth';
 import { AuthBridge } from '@/components/auth-bridge';
 import { VersionTag } from '@/components/version-tag';
@@ -22,7 +21,7 @@ const NAV: Array<[string, string, 'all' | 'admin']> = [
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const ctx = await requireAuth();
-  const isAdmin = hasPermission(ctx, PERMISSIONS.DASHBOARD_VIEW_ADMIN);
+  const isAdmin = ctx.role === 'ORG_ADMIN' || ctx.role === 'SUPER_ADMIN';
   const items = NAV.filter(([, , scope]) => scope === 'all' || isAdmin).map(([href, label]) => ({ href, label }));
   const initials = ctx.user.name
     .split(' ')

@@ -1,6 +1,5 @@
 import Link from 'next/link';
-import { PERMISSIONS } from '@pulso/domain';
-import { hasPermission, requireAuth } from '@/lib/auth/context';
+import { requireAuth } from '@/lib/auth/context';
 import { getAdminDashboard, getAssignablePeople, getMemberDashboard } from '@/server/queries';
 import { resolveDecisionAction } from '@/server/actions/decisions';
 import { heuristicPulse, peopleToWatch } from '@/lib/teams/digest';
@@ -14,7 +13,7 @@ type Auth = Awaited<ReturnType<typeof requireAuth>>;
 
 export default async function DashboardPage() {
   const ctx = await requireAuth();
-  if (hasPermission(ctx, PERMISSIONS.DASHBOARD_VIEW_ADMIN)) {
+  if (ctx.role === 'ORG_ADMIN' || ctx.role === 'SUPER_ADMIN') {
     return AdminDashboard(ctx);
   }
   return MemberDashboard(ctx);

@@ -1,14 +1,13 @@
 import Link from 'next/link';
-import { PERMISSIONS } from '@pulso/domain';
 import { LLM_PROVIDER_TYPE, PLAN_SEAT_LIMIT } from '@pulso/shared';
-import { hasPermission, requireAuth } from '@/lib/auth/context';
+import { requireAuth } from '@/lib/auth/context';
 import { configureOrganizationLLMAction } from '@/server/actions/admin';
 import { getAdminDashboard, getOrganizationSettings } from '@/server/queries';
 import { Card, PageHeader, inputCls, selectCls } from '@/components/teams/ui';
 
 export default async function AdminPage() {
   const ctx = await requireAuth();
-  if (!hasPermission(ctx, PERMISSIONS.DASHBOARD_VIEW_ADMIN)) {
+  if (ctx.role !== 'ORG_ADMIN' && ctx.role !== 'SUPER_ADMIN') {
     return (
       <main className="mx-auto max-w-5xl px-6 py-12">
         <p className="text-sm text-muted">No tenes permiso para ver administracion.</p>

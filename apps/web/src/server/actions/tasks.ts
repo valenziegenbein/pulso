@@ -33,7 +33,7 @@ export async function createTaskAction(formData: FormData): Promise<void> {
   });
   const [actor, team] = await Promise.all([getAuthorizedUser(ctx), requireTeamInOrg(ctx, parsed.teamId)]);
   assertAllowed(canCreateTaskForTeam(actor, team), 'Sin permiso para crear tareas en este equipo.');
-  if (parsed.assigneeId) await requireUserInOrg(ctx, parsed.assigneeId);
+  if (parsed.assigneeId) await requireUserInOrg(ctx, parsed.assigneeId, team.id);
   // Subtarea: el proyecto padre debe ser de la misma org (anti cross-tenant).
   if (parsed.parentTaskId) await requireTaskInOrg(ctx, parsed.parentTaskId);
 
@@ -75,7 +75,8 @@ export async function assignTaskAction(_prev: AssignState, formData: FormData): 
   const assigneeId = str(formData, 'assigneeId');
   const acknowledge = formData.get('acknowledge') === 'true';
   if (!taskId || !assigneeId) return { status: 'error', message: 'Elegi una persona.' };
-  const [actor, task] = await Promise.all([getAuthorizedUser(ctx), requireTaskInOrg(ctx, taskId), requireUserInOrg(ctx, assigneeId)]);
+  const [actor, task] = await Promise.all([getAuthorizedUser(ctx), requireTaskInOrg(ctx, taskId)]);
+  await requireUserInOrg(ctx, assigneeId, task.teamId);
   assertAllowed(canAssignTaskInScope(actor, task), 'Sin permiso para asignar esta tarea.');
 
   const result = await assignTask(

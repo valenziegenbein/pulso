@@ -20,7 +20,7 @@ const ROLE_LABEL: Record<string, string> = {
 export default async function TeamDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ctx = await requireAuth();
-  const [team, people] = await Promise.all([getTeamDetail(ctx, id), getAssignablePeople(ctx)]);
+  const [team, people] = await Promise.all([getTeamDetail(ctx, id), getAssignablePeople(ctx, id)]);
   if (!team) notFound();
 
   const activeTasks = team.tasks.filter((task) => task.status !== 'DONE' && task.status !== 'CANCELLED');

@@ -5,7 +5,7 @@ import { prisma } from '@pulso/database';
 import { canApproveWorklog, canCreateWorklogForTarget } from '@pulso/domain';
 import { saveWorklogSchema, type WorklogSource } from '@pulso/shared';
 import { requireAuth } from '@/lib/auth/context';
-import { assertAllowed, getAuthorizedUser, requireTaskInOrg, requireTeamInOrg, requireWorklogInOrg } from '@/server/authz';
+import { assertAllowed, assertWorklogAccess, getAuthorizedUser, requireTaskInOrg, requireTeamInOrg } from '@/server/authz';
 import { auditLogger } from '@/server/deps';
 
 /**
@@ -94,7 +94,7 @@ export async function approveWorklogAction(formData: FormData): Promise<void> {
   if (!worklogId) throw new Error('Falta el id de la entrada.');
 
   // Solo el autor (o quien tenga worklog.approve) puede publicar.
-  const entry = await requireWorklogInOrg(ctx, worklogId);
+  const entry = await assertWorklogAccess(ctx, worklogId, 'approve');
   const actor = await getAuthorizedUser(ctx);
   if (!canApproveWorklog(actor, entry)) {
     throw new Error('Sin permiso para aprobar esta bitacora.');

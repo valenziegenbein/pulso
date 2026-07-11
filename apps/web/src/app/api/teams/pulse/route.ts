@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { PERMISSIONS } from '@pulso/domain';
-import { getAuthContext, hasPermission } from '@/lib/auth/context';
+import { getAuthContext } from '@/lib/auth/context';
 import { getAdminDashboard } from '@/server/queries';
 import { buildTeamPulse } from '@/lib/teams/digest';
 
@@ -23,7 +22,7 @@ const TTL_MS = 10 * 60 * 1000;
 
 export async function GET(): Promise<NextResponse> {
   const ctx = await getAuthContext();
-  if (!ctx || !hasPermission(ctx, PERMISSIONS.DASHBOARD_VIEW_ADMIN)) {
+  if (!ctx || (ctx.role !== 'ORG_ADMIN' && ctx.role !== 'SUPER_ADMIN')) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 

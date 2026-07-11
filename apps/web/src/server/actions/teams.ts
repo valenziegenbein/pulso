@@ -109,7 +109,7 @@ export async function invitePersonAction(_prev: InviteState, formData: FormData)
     if (!existingMembership) {
       const [org, usedSeats] = await Promise.all([
         prisma.organization.findUnique({ where: { id: ctx.organizationId }, select: { seatLimit: true } }),
-        countOrgMembers(ctx.organizationId),
+        countOrgMembers(ctx),
       ]);
       if (org && usedSeats >= org.seatLimit) {
         return { status: 'error', error: 'Tu plan no tiene seats disponibles. Cambiá de plan para sumar más personas.' };

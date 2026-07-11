@@ -6,7 +6,9 @@ import { hashPassword, prisma, verifyPassword } from '@pulso/database';
 import { DEFAULT_ROLE_PERMISSIONS } from '@pulso/domain';
 import { PLAN_SEAT_LIMIT, ROLE_KEY, registerOrganizationSchema, type RoleKey } from '@pulso/shared';
 import { SESSION_COOKIE, SESSION_MAX_AGE } from '@/lib/auth/constants';
+import { getSessionIdentity } from '@/lib/auth/context';
 import { createSessionToken } from '@/lib/auth/session';
+import { isPublicRegistrationEnabled } from '@/lib/deployment-features';
 import type { LoginState, RegisterState } from '@/server/action-types';
 
 const ROLE_NAMES: Record<RoleKey, string> = {
@@ -28,17 +30,17 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
     return { error: 'Credenciales inválidas.' };
   }
 
-  const membership = await prisma.orgMembership.findFirst({ where: { userId: user.id } });
-  if (!membership) return { error: 'El usuario no pertenece a ninguna organización.' };
-
-  (await cookies()).set(SESSION_COOKIE, createSessionToken(user.id), {
-    httpOnly: true,
-    sameSite: 'lax',
-    path: '/',
-    maxAge: SESSION_MAX_AGE,
-    secure: process.env.NODE_ENV === 'production',
+  const memberships = await prisma.orgMembership.findMany({
+    where: { userId: user.id },
+    select: { organizationId: true },
+    orderBy: [{ createdAt: 'asc' }, { organizationId: 'asc' }],
+    take: 2,
   });
-  redirect('/');
+  if (memberships.length === 0) return { error: 'El usuario no pertenece a ninguna organización.' };
+
+  const activeOrganizationId = memberships.length === 1 ? memberships[0]!.organizationId : null;
+  await setSessionCookie(user.id, activeOrganizationId);
+  redirect(activeOrganizationId ? '/' : '/select-organization');
 }
 
 export async function logoutAction(): Promise<void> {
@@ -47,6 +49,7 @@ export async function logoutAction(): Promise<void> {
 }
 
 export async function registerOrganizationAction(_prev: RegisterState, formData: FormData): Promise<RegisterState> {
+  if (!isPublicRegistrationEnabled()) return { error: 'El registro público está temporalmente cerrado.' };
   const parsed = registerOrganizationSchema.safeParse({
     organizationName: String(formData.get('organizationName') ?? '').trim(),
     adminName: String(formData.get('adminName') ?? '').trim(),
@@ -61,7 +64,7 @@ export async function registerOrganizationAction(_prev: RegisterState, formData:
   const existingUser = await prisma.user.findUnique({ where: { email: input.adminEmail } });
   if (existingUser) return { error: 'Ese email ya esta registrado. Inicia sesion o usa otro email.' };
 
-  const admin = await prisma.$transaction(async (tx) => {
+  const registration = await prisma.$transaction(async (tx) => {
     const org = await tx.organization.create({
       data: {
         name: input.organizationName,
@@ -99,17 +102,37 @@ export async function registerOrganizationAction(_prev: RegisterState, formData:
     await tx.teamMembership.create({
       data: { teamId: team.id, userId: user.id, roleId: roleByKey.get('TEAM_ADMIN')! },
     });
-    return user;
+    return { userId: user.id, organizationId: org.id };
   });
 
-  (await cookies()).set(SESSION_COOKIE, createSessionToken(admin.id), {
+  await setSessionCookie(registration.userId, registration.organizationId);
+  redirect('/');
+}
+
+export async function selectOrganizationAction(formData: FormData): Promise<void> {
+  const session = await getSessionIdentity();
+  if (!session) redirect('/login');
+  const organizationId = String(formData.get('organizationId') ?? '').trim();
+  if (!organizationId) throw new Error('Seleccioná una organización.');
+
+  const membership = await prisma.orgMembership.findUnique({
+    where: { organizationId_userId: { organizationId, userId: session.userId } },
+    select: { id: true },
+  });
+  if (!membership) throw new Error('Organización no disponible.');
+
+  await setSessionCookie(session.userId, organizationId);
+  redirect('/');
+}
+
+async function setSessionCookie(userId: string, activeOrganizationId: string | null): Promise<void> {
+  (await cookies()).set(SESSION_COOKIE, createSessionToken(userId, activeOrganizationId), {
     httpOnly: true,
     sameSite: 'lax',
     path: '/',
     maxAge: SESSION_MAX_AGE,
     secure: process.env.NODE_ENV === 'production',
   });
-  redirect('/');
 }
 
 function slugify(value: string): string {

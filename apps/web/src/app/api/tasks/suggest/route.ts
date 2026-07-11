@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@pulso/database';
-import { PERMISSIONS } from '@pulso/domain';
+import { canCreateTaskForTeam, isOrgAdmin, PERMISSIONS } from '@pulso/domain';
 import { fallbackTaskSuggestion } from '@pulso/llm';
 import { taskSuggestionRequestSchema, taskSuggestionSchema } from '@pulso/shared';
 import { getAuthContext, hasPermission } from '@/lib/auth/context';
 import { getTaskSuggestionService } from '@/lib/llm';
 import { rateLimit } from '@/lib/rate-limit';
+import { assertTeamAccess, getAuthorizedUser, isAuthorizationError, requireUserInOrg } from '@/server/authz';
+import { PayloadTooLargeError, readJsonBody } from '@/server/http';
 
 const LIMIT = Number(process.env.TASK_SUGGEST_RATE_LIMIT ?? 20);
 const WINDOW_MS = Number(process.env.TASK_SUGGEST_RATE_WINDOW_MS ?? 60_000);
@@ -27,23 +29,54 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const body = await req.json().catch(() => null);
+  let body: unknown;
+  try {
+    body = await readJsonBody(req, 64 * 1024);
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) return NextResponse.json({ error: 'payload_too_large' }, { status: 413 });
+    throw error;
+  }
   const parsed = taskSuggestionRequestSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: 'invalid_input', issues: parsed.error.flatten() }, { status: 400 });
   }
 
   const input = parsed.data;
-  const [team, memberships, activeTasks] = await Promise.all([
-    input.teamId
-      ? prisma.team.findFirst({ where: { id: input.teamId, organizationId: ctx.organizationId } })
-      : prisma.team.findFirst({ where: { organizationId: ctx.organizationId }, orderBy: { createdAt: 'asc' } }),
+  const actor = await getAuthorizedUser(ctx);
+  const team = input.teamId
+    ? await assertTeamAccess(ctx, input.teamId).catch((error: unknown) => {
+        if (isAuthorizationError(error)) return null;
+        throw error;
+      })
+    : await prisma.team.findFirst({
+        where: {
+          organizationId: ctx.organizationId,
+          ...(isOrgAdmin(actor) ? {} : { id: { in: actor.teamIds } }),
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+  if (!team || !canCreateTaskForTeam(actor, team)) {
+    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  }
+  if (input.assigneeId) {
+    try {
+      await requireUserInOrg(ctx, input.assigneeId, team.id);
+    } catch (error) {
+      if (isAuthorizationError(error)) return NextResponse.json({ error: 'not_found' }, { status: 404 });
+      throw error;
+    }
+  }
+
+  const [memberships, activeTasks] = await Promise.all([
     prisma.orgMembership.findMany({
-      where: { organizationId: ctx.organizationId },
+      where: {
+        organizationId: ctx.organizationId,
+        user: { teamMemberships: { some: { teamId: team.id } } },
+      },
       include: {
         user: {
           include: {
-            teamMemberships: { include: { team: true } },
+            teamMemberships: { where: { teamId: team.id }, include: { team: true } },
             assignedTasks: {
               where: { organizationId: ctx.organizationId, status: { in: ACTIVE_STATUSES } },
               select: { id: true },
@@ -58,7 +91,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       where: {
         organizationId: ctx.organizationId,
         status: { in: ACTIVE_STATUSES },
-        ...(input.teamId ? { teamId: input.teamId } : {}),
+        teamId: team.id,
       },
       include: { assignee: true },
       orderBy: { updatedAt: 'desc' },
