@@ -13,7 +13,22 @@ Estos dos estados son textualmente equivalentes y permanecen fuera del índice:
 No usar `git add -A`. Antes de cada commit se debe verificar `git diff --cached
 --name-status` y confirmar que ninguno de esos paths esté staged.
 
-## Commits futuros exactos
+## Commits creados
+
+| SHA | Commit |
+| --- | --- |
+| `f703a86` | `test(llm): validate unsupported Anthropic embeddings capability` |
+| `4218594` | `security(web): enforce active organization and tenant authorization` |
+| `ea8a5f7` | `security(web): close public surfaces and prevent LLM SSRF` |
+| `abdb5eb` | `chore(web): add HTTP and container hardening` |
+| `cf88bf0` | `security(desktop): isolate remote Teams renderers` |
+| `59ee460` | `test(db): validate PostgreSQL isolation and migration upgrades` |
+| `99f07b3` | `ops(db): enforce safe migration backup and restore workflows` |
+| `a6e2a0a` | `ops(deploy): add immutable promotion smoke and rollback workflow` |
+
+Los bloques 6 y 7 del plan original se fusionaron porque comparten el runner.
+
+## Inventario aplicado
 
 ### 1. `test(llm): validate unsupported Anthropic embeddings capability`
 
