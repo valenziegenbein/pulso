@@ -4,6 +4,32 @@ Los scripts preparan el flujo, pero ningún upload está autorizado por defecto.
 Nunca se guardan dumps sin cifrar fuera de un directorio temporal con permisos
 restrictivos.
 
+## Destino temporal autorizado
+
+Hasta disponer de un segundo servidor o proveedor, el destino fuera del VPS es:
+
+```text
+F:\Pulso-backups
+```
+
+Estructura local:
+
+- `incoming`: recepción temporal de un bundle ya cifrado;
+- `verified`: bundles que pasaron SHA-256 y validación de cabecera age;
+- `restore-tests`: restauraciones aisladas, nunca datos activos.
+
+`F:` reduce el riesgo de perder VPS y backup a la vez, pero no sustituye una
+copia offsite duradera. No se permite guardar allí `.sql` ni `.dump` planos.
+
+Después de una transferencia autorizada, verificar y copiar el bundle:
+
+```powershell
+powershell -File .\ops\verify-backup-bundle.ps1 `
+  -BundleDirectory 'F:\Pulso-backups\incoming\pulso-<UTC>' `
+  -DestinationRoot 'F:\Pulso-backups' `
+  -CopyToVerified
+```
+
 ## Requisitos
 
 - cliente PostgreSQL 16 (`pg_dump`, `pg_restore`, `psql`);

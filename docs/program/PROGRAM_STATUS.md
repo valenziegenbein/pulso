@@ -40,7 +40,7 @@ registrada, staging y producción.
 
 - L0 (lectura/planes): autorizado
 - L1 (cambios locales reversibles): autorizado
-- L2 (commits): autorización puntual ejecutada; no autoriza más commits, tags ni reescrituras
+- L2 (commits): autorización puntual para el follow-up de `F:`; se consume con un único commit y no autoriza tags, pushes ni reescrituras
 - L3 (secretos, uploads, registry): **no autorizado**
 - L4 (staging): **no autorizado**
 - L5 (producción/VPS): **no autorizado**
@@ -51,7 +51,7 @@ registrada, staging y producción.
 | --- | --- | --- |
 | G1 Green gate local completo | Cumplido | `pnpm green` exit 0; ver `EVIDENCE.md` |
 | G2 Autorización para commits | Cumplido | 8 commits operativos atómicos + checkpoint documental |
-| G3 Backup externo subido/descargado/restaurado | Pendiente | Requiere destino, credenciales, clave age, retención y L3 |
+| G3 Backup externo subido/descargado/restaurado | Pendiente | Destino temporal `F:\Pulso-backups` definido; faltan clave age, transferencia y restore |
 | G4 `_prisma_migrations` productivo comparado | Pendiente | Requiere acceso específico L5 |
 | G5 Imagen inmutable construida y registrada | Pendiente | Build local validado; requiere commits L2 y registry L3 |
 | G6 Staging verde | Pendiente | Requiere L4 |
@@ -87,7 +87,7 @@ registrada, staging y producción.
 
 ## Riesgos prioritarios P0/P1/P2
 
-- P0: backup y restore siguen en el mismo dominio de fallo hasta completar G3.
+- P0: existe destino temporal fuera del VPS en `F:`, pero está vacío y no reemplaza offsite hasta completar G3.
 - P0: hardening está versionado localmente, pero no fue publicado ni desplegado.
 - P0: historial productivo de migraciones no fue contrastado.
 - P1: faltan constraints compuestas multi-tenant evaluadas y aprobadas; no se agregó RLS.
@@ -109,13 +109,12 @@ Detalle y responsables en `RISK_REGISTER.md`.
 
 ## Próxima acción autorizable
 
-Completar **P0.5-G3**. Requiere que el titular defina:
+Completar **P0.5-G3**. El destino temporal ya fue definido en `F:`. Falta:
 
-- proveedor o destino externo;
-- credenciales;
 - clave pública age;
-- retención definitiva;
-- autorización L3 limitada a upload, descarga y restore de verificación.
+- autorización específica para acceder al VPS y transferir sólo el bundle cifrado;
+- restore local aislado y checksum verificado;
+- retención definitiva y un segundo destino offsite cuando esté disponible.
 
 No se hará push, registry, staging ni acceso al VPS bajo esa autorización salvo
 que se concedan por separado.

@@ -111,3 +111,14 @@ Total de tests ejecutados por el gate: 67.
 - Digest de imagen Pulso en registry.
 - Staging, smokes remotos y producción.
 - Ventana de observación post-deploy.
+
+## Preparación temporal de backup en F — 2026-07-11
+
+- Capacidad libre observada: aproximadamente 908 GiB.
+- Directorio reservado: `F:\Pulso-backups`.
+- Subdirectorios: `incoming`, `verified`, `restore-tests`.
+- Contenido productivo copiado: ninguno.
+- Claves generadas o almacenadas: ninguna.
+- Acceso al VPS: ninguno.
+- Verificador local preparado: `ops/verify-backup-bundle.ps1`.
+- El verificador exige cabecera age v1 y SHA-256 antes de copiar a `verified`.

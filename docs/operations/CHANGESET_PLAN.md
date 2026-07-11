@@ -140,6 +140,22 @@ runner compartido.
 - `package.json`
 - `docs/operations/CHANGESET_PLAN.md`
 
+### Follow-up: `ops(backup): prepare temporary encrypted backup target on F`
+
+La autorización L2 puntual posterior cubre únicamente el verificador local y
+la trazabilidad del destino temporal fuera del VPS:
+
+- `ops/verify-backup-bundle.ps1`
+- `docs/operations/BACKUP_RESTORE.md`
+- `docs/operations/CHANGESET_PLAN.md`
+- `docs/program/PROGRAM_STATUS.md`
+- `docs/program/DECISIONS.md`
+- `docs/program/RISK_REGISTER.md`
+- `docs/program/EVIDENCE.md`
+
+No incluye datos, dumps, claves, manifests reales, los README ajenos, uploads,
+pushes, tags ni acceso al VPS.
+
 ## Verificación previa a cada commit
 
 1. `git diff --cached --name-status` contiene sólo los paths del commit.

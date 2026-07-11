@@ -83,3 +83,15 @@
 - Consecuencias: el hardening puede revisarse/revertirse por dominio; los README
   permanecen exactamente como estaban y fuera del historial.
 - Reversibilidad: alta mediante revert de commits individuales.
+
+## D-010 — Disco F como destino temporal fuera del VPS
+
+- Fecha: 2026-07-11
+- Contexto: todavía no hay segundo servidor ni proveedor externo definido.
+- Decisión: reservar `F:\Pulso-backups` para bundles previamente cifrados y
+  verificados; nunca almacenar dumps planos.
+- Alternativas: dejar la única copia en el VPS o contratar un recurso sin
+  autorización; ambas rechazadas.
+- Consecuencias: mejora la separación respecto del VPS, pero no protege frente
+  a pérdida del equipo/disco local y no completa por sí sola P0.5-G3.
+- Reversibilidad: total; los bundles podrán copiarse a un destino definitivo.

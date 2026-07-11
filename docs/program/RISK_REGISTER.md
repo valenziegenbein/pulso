@@ -2,7 +2,7 @@
 
 | ID | Descripción | Severidad | Probabilidad | Mitigación | Responsable | Estado |
 | --- | --- | --- | --- | --- | --- | --- |
-| R-001 | Backup y servidor comparten dominio de fallo | Crítica | Media | Ejecutar backup cifrado, upload, descarga y restore externo | Titular + SRE | Abierto; bloqueado por L3/destino |
+| R-001 | Backup y servidor comparten dominio de fallo | Crítica | Media | Destino temporal `F:` preparado; transferir bundle cifrado, restaurarlo y luego añadir offsite | Titular + SRE | Abierto; `F:` aún vacío |
 | R-002 | Hardening local no versionado | Alta | Media | Commits atómicos con pathspec y gate posterior | Principal Engineer | Cerrado localmente; 8 commits + docs |
 | R-003 | Historial `_prisma_migrations` productivo no contrastado | Alta | Media | Inspección read-only autorizada y comparación con repo | SRE | Abierto; requiere L5 específico |
 | R-004 | No existe staging validado con la imagen candidata | Alta | Media | Promover digest exacto y ejecutar smokes | SRE | Abierto; requiere L4 |
@@ -15,6 +15,7 @@
 | R-011 | Documentación histórica del repo mezcla SQLite/Desktop y PostgreSQL/server | Media | Media | Actualización coordinada sin reescribir instrucciones de otra rama | Principal + Desktop owner | Abierto |
 | R-012 | Instalación apt del Dockerfile depende del snapshot actual de Debian | Media | Baja | Evaluar pin/snapshot de paquetes en un commit de reproducibilidad | SRE | Abierto |
 | R-013 | Logs de tests muestran errores Prisma esperados de constraints | Baja | Alta | Mantener aserciones explícitas; no confundirlos con fallos del gate | Engineering | Aceptado |
+| R-014 | El disco F no es un destino offsite duradero | Alta | Media | Mantener cifrado, verificar restore y añadir segundo servidor/proveedor | Titular | Abierto, temporalmente aceptado |
 
 ## Riesgos cerrados localmente
 
