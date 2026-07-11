@@ -1,0 +1,21 @@
+# Entorno exclusivamente efímero para tests PostgreSQL. No reutiliza volúmenes.
+services:
+  db-test:
+    image: postgres:16@sha256:be01cf82fc7dbba824acf0a82e150b4b360f3ff93c6631d7844af431e841a95c
+    pull_policy: if_not_present
+    environment:
+      POSTGRES_USER: pulso_test
+      POSTGRES_PASSWORD: pulso_test_only
+      POSTGRES_DB: pulso_test
+    ports:
+      - '127.0.0.1:${PULSO_TEST_DB_PORT:-55432}:5432'
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - .:/workspace:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U pulso_test -d pulso_test']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 3s
