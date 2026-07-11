@@ -19,6 +19,9 @@ const entrypoint = await readFile(new URL('../docker-entrypoint.sh', import.meta
 if (/migrate:deploy|migrate\s+deploy/i.test(entrypoint)) {
   failures.push('docker-entrypoint.sh: las migraciones no deben ejecutarse durante el arranque normal');
 }
+if (!entrypoint.includes('export HOSTNAME=0.0.0.0')) {
+  failures.push('docker-entrypoint.sh: el server standalone debe escuchar en todas las interfaces');
+}
 
 const seed = await readFile(new URL('../packages/database/prisma/seed.ts', import.meta.url), 'utf8');
 const seedSafety = await readFile(new URL('../packages/database/src/seed-safety.ts', import.meta.url), 'utf8');
