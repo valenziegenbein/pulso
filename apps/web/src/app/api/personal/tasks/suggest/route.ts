@@ -3,6 +3,8 @@ import type { NextRequest } from 'next/server';
 import { createLLMProvider, fallbackTaskSuggestion, TaskSuggestionService, type TaskSuggestionInput } from '@pulso/llm';
 import { LocalUrlError, resolveProvider } from '@/lib/personal/resolve-provider';
 import { rateLimit } from '@/lib/rate-limit';
+import { isPersonalApiEnabled } from '@/lib/deployment-features';
+import { PayloadTooLargeError, readJsonBody } from '@/server/http';
 
 const LIMIT = Number(process.env.WORKLOG_RATE_LIMIT ?? 20);
 const WINDOW_MS = Number(process.env.WORKLOG_RATE_WINDOW_MS ?? 60_000);
@@ -18,6 +20,7 @@ interface Body {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  if (!isPersonalApiEnabled()) return NextResponse.json({ error: 'not_found' }, { status: 404 });
   const limit = rateLimit('personal-task-suggest', { limit: LIMIT, windowMs: WINDOW_MS });
   if (!limit.ok) {
     return NextResponse.json(
@@ -26,7 +29,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const body = (await req.json().catch(() => null)) as Body | null;
+  let body: Body | null;
+  try {
+    body = (await readJsonBody(req, 128 * 1024)) as Body | null;
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) return NextResponse.json({ error: 'payload_too_large' }, { status: 413 });
+    throw error;
+  }
   const instruction = typeof body?.instruction === 'string' ? body.instruction.trim() : '';
   const projectName = typeof body?.project?.name === 'string' ? body.project.name.trim() : '';
   const projectContext = typeof body?.project?.context === 'string' ? body.project.context.slice(0, 4000) : undefined;

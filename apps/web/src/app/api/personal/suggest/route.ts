@@ -3,6 +3,8 @@ import type { NextRequest } from 'next/server';
 import { createLLMProvider, WorklogSuggestionService, type LLMProviderResolved } from '@pulso/llm';
 import { LocalUrlError, resolveProvider } from '@/lib/personal/resolve-provider';
 import { rateLimit } from '@/lib/rate-limit';
+import { isPersonalApiEnabled } from '@/lib/deployment-features';
+import { PayloadTooLargeError, readJsonBody } from '@/server/http';
 
 const LIMIT = Number(process.env.WORKLOG_RATE_LIMIT ?? 20);
 const WINDOW_MS = Number(process.env.WORKLOG_RATE_WINDOW_MS ?? 60_000);
@@ -42,6 +44,7 @@ interface SuggestImage {
  * la API key nunca se persiste ni se devuelve. La IA NUNCA publica: es borrador.
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  if (!isPersonalApiEnabled()) return NextResponse.json({ error: 'not_found' }, { status: 404 });
   const limit = rateLimit('personal-suggest', { limit: LIMIT, windowMs: WINDOW_MS });
   if (!limit.ok) {
     return NextResponse.json(
@@ -50,7 +53,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const body = (await req.json().catch(() => null)) as SuggestBody | null;
+  let body: SuggestBody | null;
+  try {
+    body = (await readJsonBody(req, 7_000_000)) as SuggestBody | null;
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) return NextResponse.json({ error: 'payload_too_large' }, { status: 413 });
+    throw error;
+  }
   const note = typeof body?.note === 'string' ? body.note.trim() : '';
   const model = typeof body?.model === 'string' ? body.model : '';
   const providerName = typeof body?.provider === 'string' ? body.provider : '';

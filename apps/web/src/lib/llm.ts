@@ -10,18 +10,7 @@ import {
   type LLMProviderResolved,
 } from '@pulso/llm';
 import type { LLMProviderType } from '@pulso/shared';
-
-function fetchWithTimeout(ms: number): typeof fetch {
-  return async (input, init) => {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), ms);
-    try {
-      return await fetch(input, { ...init, signal: ctrl.signal });
-    } finally {
-      clearTimeout(t);
-    }
-  };
-}
+import { createSafeLlmFetch, resolveProviderBaseUrl } from '@/server/llm-url-policy';
 
 export interface OrganizationLLM {
   provider: LLMProvider;
@@ -42,12 +31,13 @@ export async function getOrganizationLLMProvider(
   }
 
   try {
+    const providerType = row.providerType as LLMProviderType;
     const config: LLMProviderResolved = {
-      type: row.providerType as LLMProviderType,
-      baseUrl: row.baseUrl ?? undefined,
+      type: providerType,
+      baseUrl: await resolveProviderBaseUrl(providerType, row.baseUrl),
       model: row.model,
       apiKey: row.apiKeyEncrypted ? decryptSecret(row.apiKeyEncrypted) : undefined,
-      fetchImpl: fetchWithTimeout(timeoutMs),
+      fetchImpl: createSafeLlmFetch(timeoutMs),
     };
     return { provider: createLLMProvider(config), source: 'db', config };
   } catch {

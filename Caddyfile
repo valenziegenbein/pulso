@@ -4,5 +4,13 @@
 # a este servidor y los puertos 80/443 estén abiertos.
 {$DOMAIN} {
 	encode zstd gzip
+
+	# Defensa adicional: el servidor también falla cerrado mediante feature flags.
+	@blocked_register path /register /register/*
+	respond @blocked_register 404
+
+	@blocked_personal_api path /api/personal /api/personal/*
+	respond @blocked_personal_api 404
+
 	reverse_proxy app:3000
 }

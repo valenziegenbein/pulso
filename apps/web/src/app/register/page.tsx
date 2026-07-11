@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { Fraunces, Hanken_Grotesk, JetBrains_Mono } from 'next/font/google';
 import { getAuthContext } from '@/lib/auth/context';
+import { isPublicRegistrationEnabled } from '@/lib/deployment-features';
 import { RegisterForm } from '@/components/register-form';
 
 const display = Fraunces({ subsets: ['latin'], variable: '--font-display', display: 'swap' });
@@ -9,6 +10,7 @@ const body = Hanken_Grotesk({ subsets: ['latin'], variable: '--font-body', displ
 const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' });
 
 export default async function RegisterPage() {
+  if (!isPublicRegistrationEnabled()) notFound();
   if (await getAuthContext()) redirect('/');
 
   return (

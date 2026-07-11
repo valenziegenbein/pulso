@@ -4,6 +4,7 @@ import { worklogSuggestRequestSchema } from '@pulso/shared';
 import { getAuthContext } from '@/lib/auth/context';
 import { getWorklogSuggestionService } from '@/lib/llm';
 import { rateLimit } from '@/lib/rate-limit';
+import { PayloadTooLargeError, readJsonBody } from '@/server/http';
 
 const LIMIT = Number(process.env.WORKLOG_RATE_LIMIT ?? 10);
 const WINDOW_MS = Number(process.env.WORKLOG_RATE_WINDOW_MS ?? 60_000);
@@ -20,7 +21,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const body = await req.json().catch(() => null);
+  let body: unknown;
+  try {
+    body = await readJsonBody(req, 7_000_000);
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) return NextResponse.json({ error: 'payload_too_large' }, { status: 413 });
+    throw error;
+  }
   const parsed = worklogSuggestRequestSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: 'invalid_input', issues: parsed.error.flatten() }, { status: 400 });

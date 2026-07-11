@@ -3,6 +3,8 @@ import type { NextRequest } from 'next/server';
 import { createLLMProvider, type LLMProviderResolved } from '@pulso/llm';
 import { LocalUrlError, resolveProvider } from '@/lib/personal/resolve-provider';
 import { rateLimit } from '@/lib/rate-limit';
+import { isPersonalApiEnabled } from '@/lib/deployment-features';
+import { PayloadTooLargeError, readJsonBody } from '@/server/http';
 
 const LIMIT = Number(process.env.EMBEDDINGS_RATE_LIMIT ?? 30);
 const WINDOW_MS = Number(process.env.EMBEDDINGS_RATE_WINDOW_MS ?? 60_000);
@@ -28,6 +30,7 @@ interface EmbeddingsBody {
  * Si el proveedor no soporta embeddings (Anthropic, o Mock en tests), 400.
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  if (!isPersonalApiEnabled()) return NextResponse.json({ error: 'not_found' }, { status: 404 });
   const limit = rateLimit('personal-embeddings', { limit: LIMIT, windowMs: WINDOW_MS });
   if (!limit.ok) {
     return NextResponse.json(
@@ -36,7 +39,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const body = (await req.json().catch(() => null)) as EmbeddingsBody | null;
+  let body: EmbeddingsBody | null;
+  try {
+    body = (await readJsonBody(req, 512 * 1024)) as EmbeddingsBody | null;
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) return NextResponse.json({ error: 'payload_too_large' }, { status: 413 });
+    throw error;
+  }
   const texts = Array.isArray(body?.texts) ? body.texts.filter((t): t is string => typeof t === 'string') : [];
   const model = typeof body?.model === 'string' ? body.model : '';
   const providerName = typeof body?.provider === 'string' ? body.provider : '';

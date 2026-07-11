@@ -5,6 +5,7 @@ import { encryptSecret, prisma } from '@pulso/database';
 import { PERMISSIONS } from '@pulso/domain';
 import { configureLLMSchema } from '@pulso/shared';
 import { hasPermission, requireAuth } from '@/lib/auth/context';
+import { resolveProviderBaseUrl } from '@/server/llm-url-policy';
 
 function str(formData: FormData, key: string): string | undefined {
   const v = formData.get(key);
@@ -27,6 +28,7 @@ export async function configureOrganizationLLMAction(formData: FormData): Promis
     model: providerType === 'MOCK' ? 'mock-1' : (str(formData, 'model') ?? 'mock-1'),
     apiKey: str(formData, 'apiKey'),
   });
+  const safeBaseUrl = await resolveProviderBaseUrl(parsed.providerType, parsed.baseUrl);
 
   await prisma.lLMProviderConfig.updateMany({
     where: { organizationId: ctx.organizationId, isActive: true },
@@ -36,7 +38,7 @@ export async function configureOrganizationLLMAction(formData: FormData): Promis
     data: {
       organizationId: ctx.organizationId,
       providerType: parsed.providerType,
-      baseUrl: parsed.providerType === 'MOCK' ? null : (parsed.baseUrl ?? null),
+      baseUrl: safeBaseUrl ?? null,
       model: parsed.model,
       apiKeyEncrypted: parsed.providerType === 'MOCK'
         ? null

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { CLOUD_HOSTS, fetchWithTimeout } from '@/lib/personal/ai-endpoint';
+import { isPersonalApiEnabled } from '@/lib/deployment-features';
+import { PayloadTooLargeError, readJsonBody } from '@/server/http';
 
 /**
  * POST /api/personal/ai/verify
@@ -22,7 +24,14 @@ function isOpenAiChatModel(id: string): boolean {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const body = (await req.json().catch(() => null)) as VerifyBody | null;
+  if (!isPersonalApiEnabled()) return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  let body: VerifyBody | null;
+  try {
+    body = (await readJsonBody(req, 16 * 1024)) as VerifyBody | null;
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) return NextResponse.json({ error: 'payload_too_large' }, { status: 413 });
+    throw error;
+  }
   const provider = body?.provider;
   const apiKey = typeof body?.apiKey === 'string' ? body.apiKey.trim() : '';
   if ((provider !== 'openai' && provider !== 'anthropic') || !apiKey) {

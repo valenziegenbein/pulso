@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { assertLocalBaseUrl, fetchWithTimeout, LocalUrlError } from '@/lib/personal/ai-endpoint';
+import { isPersonalApiEnabled } from '@/lib/deployment-features';
+import { PayloadTooLargeError, readJsonBody } from '@/server/http';
 
 /**
  * POST /api/personal/ai/models
@@ -11,7 +13,14 @@ import { assertLocalBaseUrl, fetchWithTimeout, LocalUrlError } from '@/lib/perso
  * Proxy server-side: evita CORS (Ollama bloquea orígenes del navegador).
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const body = (await req.json().catch(() => null)) as { baseUrl?: unknown } | null;
+  if (!isPersonalApiEnabled()) return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  let body: { baseUrl?: unknown } | null;
+  try {
+    body = (await readJsonBody(req, 4 * 1024)) as { baseUrl?: unknown } | null;
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) return NextResponse.json({ error: 'payload_too_large' }, { status: 413 });
+    throw error;
+  }
   const raw = body?.baseUrl;
   if (typeof raw !== 'string' || raw.length === 0 || raw.length > 300) {
     return NextResponse.json({ error: 'invalid_input' }, { status: 400 });
