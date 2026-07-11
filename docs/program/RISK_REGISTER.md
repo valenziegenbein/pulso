@@ -16,6 +16,7 @@
 | R-012 | Instalación apt del Dockerfile depende del snapshot actual de Debian | Media | Baja | Evaluar pin/snapshot de paquetes en un commit de reproducibilidad | SRE | Abierto |
 | R-013 | Logs de tests muestran errores Prisma esperados de constraints | Baja | Alta | Mantener aserciones explícitas; no confundirlos con fallos del gate | Engineering | Aceptado |
 | R-014 | El disco F no es un destino offsite duradero | Alta | Media | Mantener cifrado, verificar restore y añadir segundo servidor/proveedor | Titular | Abierto, temporalmente aceptado |
+| R-015 | El tag SHA de Docker Hub es mutable por configuración del repositorio | Alta | Baja | Promover y hacer rollback sólo por digest; nunca por tag ni `latest` | SRE | Mitigado por política y evidencia de digest |
 
 ## Riesgos cerrados localmente
 

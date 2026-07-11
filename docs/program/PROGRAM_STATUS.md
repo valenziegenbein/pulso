@@ -4,18 +4,17 @@
 
 ## Fase actual
 
-**P0.5 — Estabilización y hardening**, detenida en **P0.5-G5: imagen
-inmutable construida y registrada**.
+**P0.5 — Estabilización y hardening**, detenida en **P0.5-G6: staging
+verde**.
 
 La implementación, el versionado y el gate local están listos, pero P0.5 no
-está terminada: falta un offsite duradero, imagen registrada, staging y
-producción.
+está terminada: falta un offsite duradero, staging y producción.
 
 ## Estado por fase
 
 | Fase | Estado | Evidencia / próximo gate |
 | --- | --- | --- |
-| P0.5 | En progreso | G1–G4 cumplidos; G5 requiere registry y autorización L3 |
+| P0.5 | En progreso | G1–G5 cumplidos; G6 requiere staging y autorización L4 |
 | P1 | Preparación local implementada, no promovida | G1–G3 locales cumplidos; runbooks listos; staging no autorizado |
 | P2 | No iniciada | Requiere cierre/checkpoint de fase anterior y diseño de migración aprobado |
 | P3 | No iniciada | Depende de P2 |
@@ -30,7 +29,7 @@ producción.
 - Rama: `codex/web-control-plane-hardening`
 - Commit inicial: `e8ac1cf6d98c2163abf6bdcabbceab88b9bc9220`
 - HEAD operativo previo a este documento: `a6e2a0ab55cd0a71ca669aaaa8625c2508cf55ec`
-- Commits locales generados: 11 (8 operativos y 3 checkpoints/follow-ups)
+- Commits locales generados: 12 (8 operativos y 4 checkpoints/follow-ups)
 - Tags generados: ninguno
 - Pushes: ninguno
 - Índice Git: vacío
@@ -40,8 +39,8 @@ producción.
 
 - L0 (lectura/planes): autorizado
 - L1 (cambios locales reversibles): autorizado
-- L2 (commits): autorización puntual consumida por el checkpoint G3/G4; no autoriza nuevos commits, tags, pushes ni reescrituras
-- L3 (secretos, uploads, registry): **no autorizado**
+- L2 (commits): autorización puntual consumida por el checkpoint G5; no autoriza nuevos commits, tags, pushes ni reescrituras
+- L3 (secretos, uploads, registry): autorización puntual de G5 consumida; no autoriza nuevos uploads ni acceso al registry
 - L4 (staging): **no autorizado**
 - L5 (producción/VPS): autorizaciones puntuales de P0.5-G3/G4 consumidas; no autoriza nuevas acciones
 
@@ -53,7 +52,7 @@ producción.
 | G2 Autorización para commits | Cumplido | 8 commits operativos atómicos + checkpoint documental + follow-up de backup |
 | G3 Backup externo subido/descargado/restaurado | Cumplido temporalmente | Bundle cifrado transferido a `F:`, checksum y restore PostgreSQL 16 aislado OK |
 | G4 `_prisma_migrations` productivo comparado | Cumplido | 2 migraciones; nombres, checksums y estados coinciden exactamente |
-| G5 Imagen inmutable construida y registrada | Pendiente | Build local validado; requiere commits L2 y registry L3 |
+| G5 Imagen inmutable construida y registrada | Cumplido | Repositorio privado; tag por SHA y digest remoto verificado por pull |
 | G6 Staging verde | Pendiente | Requiere L4 |
 | G7 Producción autorizada | Pendiente | Requiere L5 |
 
@@ -78,16 +77,14 @@ producción.
 
 ## Gates pendientes
 
-- Push/registry (no autorizado)
 - Segundo destino offsite duradero
-- Imagen Pulso por Git SHA y digest de registry
 - Staging y smokes remotos
 - Producción y ventana de observación
 
 ## Riesgos prioritarios P0/P1/P2
 
 - P0: el backup cifrado restaurable existe en `F:`, pero todavía no reemplaza un offsite duradero.
-- P0: hardening está versionado localmente, pero no fue publicado ni desplegado.
+- P0: hardening está versionado y registrado por digest, pero no fue desplegado.
 - P0: historial productivo de migraciones contrastado sin diferencias.
 - P1: faltan constraints compuestas multi-tenant evaluadas y aprobadas; no se agregó RLS.
 - P1: backup/restore con age fue probado end-to-end contra PostgreSQL 16 aislado.
@@ -108,6 +105,7 @@ Detalle y responsables en `RISK_REGISTER.md`.
 
 ## Próxima acción autorizable
 
-Completar **P0.5-G5** construyendo desde un commit limpio y registrando la imagen
-inmutable por Git SHA y digest real. Requiere definir registry y autorización
-puntual L3 para login/push. No habilita staging ni producción.
+Completar **P0.5-G6** promoviendo exclusivamente
+`docker.io/valenziegenbein/pulso-app@sha256:e4b0c1223612375def6dfebdca948348f46bc2fcb5c60afe3957c69d208bb69d`
+a staging y ejecutando migración previa, health/readiness y smokes. Requiere
+autorización puntual L4; no habilita producción.

@@ -106,7 +106,6 @@ Total de tests ejecutados por el gate: 67.
 
 ## Evidencia aún inexistente
 
-- Digest de imagen Pulso en registry.
 - Staging, smokes remotos y producción.
 - Ventana de observación post-deploy.
 
@@ -142,3 +141,24 @@ Total de tests ejecutados por el gate: 67.
   `4f377ebdb8b45df0709f6f5b5d0be5c0b80c2de0c4839821ebb116fa3c56d8ac`.
 - Migraciones extra, faltantes, duplicadas, inconclusas o revertidas: 0.
 - Escrituras, migraciones, restart y cambios de contenedor: ninguno.
+
+## Imagen inmutable registrada — 2026-07-11
+
+- Registry/repository: `docker.io/valenziegenbein/pulso-app`, privado.
+- Git SHA: `974514256817c7ae02824e2d08ab1b728bf08659`.
+- Tag único publicado:
+  `docker.io/valenziegenbein/pulso-app:974514256817c7ae02824e2d08ab1b728bf08659`.
+- Digest distribuible del índice:
+  `docker.io/valenziegenbein/pulso-app@sha256:e4b0c1223612375def6dfebdca948348f46bc2fcb5c60afe3957c69d208bb69d`.
+- Manifest `linux/amd64`:
+  `sha256:caad8510a43dc136453575d520ac3733b2c72d49eea3c61545f4f1b9da77f787`.
+- Image ID local de build: `sha256:e4b0c1223612375def6dfebdca948348f46bc2fcb5c60afe3957c69d208bb69d`.
+- Build: una ejecución desde worktree detached limpio; worktree retirado.
+- Green gate anterior al push: exit 0; 55 unitarios/servicio, 9 PostgreSQL y
+  3 upgrade, typecheck, lint, build, Electron y production safety.
+- Push autenticado: exit 0; digest informado por Docker coincide con registry.
+- Verificación: referencia local por tag eliminada, pull por digest ejecutado y
+  label OCI `org.opencontainers.image.revision` igual al Git SHA.
+- `latest`: no creado ni publicado.
+- Docker Hub muestra repositorio privado, un único tag y tamaño comprimido
+  aproximado de 782,5 MB.

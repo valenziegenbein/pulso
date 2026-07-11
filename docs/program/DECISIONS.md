@@ -95,3 +95,16 @@
 - Consecuencias: mejora la separación respecto del VPS, pero no protege frente
   a pérdida del equipo/disco local y no completa por sí sola P0.5-G3.
 - Reversibilidad: total; los bundles podrán copiarse a un destino definitivo.
+
+## D-011 — Registry privado y promoción exclusiva por digest
+
+- Fecha: 2026-07-11
+- Contexto: P0.5 requiere un artefacto reproducible y recuperable antes de
+  staging.
+- Decisión: usar `docker.io/valenziegenbein/pulso-app` privado; publicar sólo el
+  tag con Git SHA completo y promover siempre el digest remoto verificado.
+- Alternativas: `latest`, tag corto o build directo en servidores; rechazadas.
+- Consecuencias: el tag de Docker Hub puede ser mutable, pero staging y
+  producción deben referenciar exclusivamente el digest registrado.
+- Reversibilidad: media; una nueva versión requiere otro SHA, build, gate y
+  digest, sin retargetear despliegues existentes.
