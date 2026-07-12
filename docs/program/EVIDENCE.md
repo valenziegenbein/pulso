@@ -325,3 +325,37 @@ Total de tests ejecutados por el gate: 67.
 - Incidente harness: primer intento abortó antes de iniciar la app por API SHA-256
   no disponible en PowerShell; segunda corrida completa verde desde DB vacía.
 - Cleanup: staging y worktree eliminados; imagen local conservada.
+
+## P3 — Seats, ownership y entitlements — 2026-07-12
+
+- Commit operativo: `ece7d4ff27d08035ed2f5cd1f858f1b3f45e2add`.
+- Migración: `20260712070000_entitlements`, transaccional, con catálogo de
+  planes, suscripción mock por organización, ownership y ledger de uso AI.
+- Seats: sólo membresías `ACTIVE`/`SUSPENDED` consumen cupo; una invitación
+  pendiente no lo consume. La aceptación serializa mediante lock de la fila de
+  organización y rechaza la carrera que excedería el límite.
+- Ownership: cada organización tiene owner explícito; no se puede remover ni
+  degradar al último owner y la transferencia exige destino elegible.
+- AI: consumo managed idempotente por clave; BYOK/local queda registrado sin
+  cargar unidades managed. Los planes comerciales conservan cero unidades
+  incluidas hasta que exista una decisión comercial explícita.
+- Green gate: exit 0; 55 unitarios, 28 PostgreSQL, 3 upgrade, cinco migraciones,
+  drift cero, typecheck, lint, build Web (35 rutas), Electron security,
+  production safety y `git diff --check`.
+- Build limpio: worktree detached temporal en `F:`, eliminado al finalizar.
+- Imagen local:
+  `pulso-p3-staging:ece7d4ff27d08035ed2f5cd1f858f1b3f45e2add`.
+- Image ID:
+  `sha256:2e3d4f1a6d33a8408338768ee6075673a9f361108f5e5c11902edef1060797f8`.
+- Label OCI revision: coincide exactamente con el Git SHA; sin push ni `latest`.
+- Staging: PostgreSQL 16 en `tmpfs`, red Docker aislada, Caddy local y secretos
+  exclusivamente sintéticos. Las cinco migraciones se aplicaron desde cero.
+- Conteos `(org,user,orgMembership,teamMembership,team,task,worklog,migrations,plan,subscription,owner)`:
+  `1,2,2,1,1,1,2,5,4,1,1`.
+- Smokes: health/readiness 200, request ID y `nosniff`; `/register` y Personal
+  404; sesión opaca 200 y `/admin` 200. Logs sin fallos fatales.
+- Incidentes del harness: dos intentos previos abortaron por tratamiento de
+  cleanup/escaping de PowerShell y una comprobación de cookie con la propiedad
+  JSON incorrecta. No fueron fallos de la candidata; cada DB efímera fue
+  destruida y la corrida final comenzó desde cero.
+- VPS, registry remoto y producción: no accedidos. Imagen local conservada.

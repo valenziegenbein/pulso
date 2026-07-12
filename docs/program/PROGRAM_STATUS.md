@@ -4,8 +4,9 @@
 
 ## Fase actual
 
-**P2 — Auth, sesiones, multi-org e invitaciones: COMPLETA EN LOCAL/STAGING**.
-G1–G5 están cumplidos; G6 permanece cerrado hasta email real y promoción.
+**P3 — Seats, planes y entitlements: COMPLETA EN LOCAL/STAGING**.
+Los gates P3 están cumplidos sin precios inventados ni billing real. P4 puede
+avanzar con el contrato de billing y un proveedor mock.
 
 El hardening está versionado, respaldado, registrado, validado en staging y
 desplegado en producción. El segundo destino offsite duradero permanece como
@@ -18,8 +19,8 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 | P0.5 | Completa | G1–G7 cumplidos; producción healthy y smoke verde |
 | P1 | Completa | G1–G5 cumplidos; candidata inmutable y staging sintético verdes |
 | P2 | Completa local/staging | G1–G5 verdes; registro público deliberadamente cerrado |
-| P3 | Próxima | Seats, planes y entitlements con billing todavía mock |
-| P4 | No iniciada | Depende de entitlements P3 |
+| P3 | Completa local/staging | Seats transaccionales, ownership, planes y cuotas fail-closed |
+| P4 | Próxima | Contrato de billing y proveedor mock; Mercado Pago requiere checkpoint |
 | P5 | No iniciada | Gmail real bloqueado; outbox se diseña después de P4 o cuando se autorice la fase |
 | P6 | No iniciada | Sin cambios visuales ni rutas públicas nuevas |
 | P7 | No iniciada | Sin analytics ni observabilidad compleja añadida |
@@ -29,8 +30,8 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 - Worktree: `F:\Pulso-codex`
 - Rama: `codex/web-control-plane-hardening`
 - Commit inicial: `e8ac1cf6d98c2163abf6bdcabbceab88b9bc9220`
-- HEAD operativo previo a este documento: `32d6822d6e10245dd4d555d5dd78e78fbf5e9f22`
-- Commits locales generados: 22 (13 operativos y 9 checkpoints/follow-ups)
+- HEAD operativo previo a este documento: `ece7d4ff27d08035ed2f5cd1f858f1b3f45e2add`
+- Commits locales generados: 24 (14 operativos y 10 checkpoints/follow-ups, incluyendo este documento)
 - Tags generados: ninguno
 - Pushes: ninguno
 - Índice Git: vacío
@@ -97,10 +98,21 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 | G5 Staging completo | Cumplido | Imagen `32d6822`; migrate, sesión, revocación y smokes verdes |
 | G6 Abrir registro | Diferido | Requiere outbox/email real y promoción específica |
 
+## Gates P3
+
+| Gate | Estado | Evidencia |
+| --- | --- | --- |
+| G1 Planes y suscripciones | Cumplido | Catálogo persistido y suscripción organizacional mock |
+| G2 Seats y ownership | Cumplido | Lock organizacional, invitaciones pendientes sin seat y último owner protegido |
+| G3 Cuotas AI | Cumplido | Ledger idempotente; BYOK/local no consume cuota managed |
+| G4 Suite PostgreSQL | Cumplido | 28 DB-backed, 3 upgrade, cinco migraciones y drift cero |
+| G5 Staging completo | Cumplido | Imagen `ece7d4f`; migrate, fixture, sesión, admin y smokes verdes |
+| G6 Billing real | Diferido | Requiere precios, moneda, impuestos, política comercial y credenciales |
+
 ## Gates pendientes
 
 - P0.5: ninguno.
-- P3: plan definitions, entitlements y seats transaccionales con billing mock.
+- P4: contrato de billing, eventos idempotentes y proveedor mock.
 - Programa: segundo destino offsite duradero.
 
 ## Riesgos prioritarios P0/P1/P2
@@ -113,6 +125,8 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 - P1: backup/restore con age fue probado end-to-end contra PostgreSQL 16 aislado.
 - P2: auth persistida/revocable está verde en staging; no está desplegada y el
   proveedor mock bloquea deliberadamente la apertura del registro.
+- P3: entitlements están verdes en staging; no están desplegados y las cuotas
+  comerciales permanecen en cero hasta definir precios y unidades.
 
 Detalle y responsables en `RISK_REGISTER.md`.
 
@@ -130,9 +144,10 @@ Detalle y responsables en `RISK_REGISTER.md`.
 10. `5bf0b9c` — `test(db): add current-schema staging fixture`
 11. `919d556` — `feat(auth): add persisted multi-org authentication`
 12. `32d6822` — `test(auth): add synthetic staging login fixture`
+13. `ece7d4f` — `feat(entitlements): enforce seats ownership and AI quotas`
 
 ## Próxima acción autorizable
 
-Iniciar **P3 — Seats, planes y entitlements** localmente con Subscription mock.
-No activar billing real, no abrir registro y no promover migraciones P1/P2 a
-producción durante este gate.
+Iniciar **P4 — Billing contractual** con `BillingProvider` y proveedor mock.
+No activar Mercado Pago, no definir precios por inferencia, no abrir registro y
+no promover migraciones P1/P2/P3 a producción durante este gate.

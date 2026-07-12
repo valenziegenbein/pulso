@@ -85,6 +85,17 @@ La promoción de P2 invalida deliberadamente las cookies HMAC autocontenidas
 anteriores: no se migran secretos de sesión. Todos los usuarios deben volver a
 iniciar sesión para obtener una `AuthSession` opaca y revocable.
 
+La migración P3 (`20260712070000_entitlements`) hace backfill de un owner y una
+suscripción mock por organización existente. Su preflight rechaza planes
+históricos desconocidos y organizaciones sin membresía elegible. Antes de
+promoverla sobre una restauración productiva, comprobar explícitamente:
+
+- exactamente una suscripción por organización;
+- al menos un owner por organización;
+- ninguna suscripción con `planKey` fuera del catálogo;
+- conteos de usuarios, membresías, equipos, tareas y worklogs preservados;
+- ledger vacío para organizaciones históricas, salvo carga aprobada aparte.
+
 ## Smoke y promoción
 
 1. `/api/readiness` devuelve 200.

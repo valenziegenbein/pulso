@@ -22,6 +22,8 @@
 | R-018 | Filas históricas tenant-inconsistentes pueden bloquear la migración P1 | Alta | Baja | Preflight fail-closed, restore aislado y corrección explícita antes de promover | Security/DB | Mitigado y probado localmente; producción no inspeccionada para P1 |
 | R-019 | El deploy P2 invalida todas las cookies HMAC existentes | Media | Alta | Ventana anunciada, smoke de login y soporte de reautenticación; no intentar migrar secretos | Security/SRE | Aceptado; promoción pendiente |
 | R-020 | El proveedor email mock no entrega invitaciones, verificación ni reset | Alta | Alta | Mantener registro público cerrado y completar outbox/Gmail en P5 | Product/Security | Bloqueo intencional de activación pública |
+| R-021 | P1/P2/P3 están validados local/staging pero no desplegados | Alta | Media | Promover sólo por digest tras backup, restore y checkpoint productivo | SRE/Security | Abierto |
+| R-022 | Precios, impuestos, reembolsos y unidad de consumo managed no están definidos | Alta | Alta | Mantener cuotas comerciales en cero y billing mock hasta decisión explícita | Titular + Product | Bloqueo intencional de cobro real |
 
 ## Riesgos cerrados localmente
 

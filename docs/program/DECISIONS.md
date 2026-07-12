@@ -190,3 +190,30 @@
 - Consecuencias: usuarios actuales siguen operando; nuevas altas públicas no se
   habilitan hasta disponer de outbox y proveedor autorizados.
 - Reversibilidad: alta; la feature flag sigue siendo fail-closed.
+
+## D-018 — Seats derivados de membresías y serializados por organización
+
+- Fecha: 2026-07-12
+- Contexto: las invitaciones pendientes no deben ocupar cupo y dos aceptaciones
+  concurrentes no pueden superar el límite contratado.
+- Decisión: contar sólo membresías `ACTIVE`/`SUSPENDED` y bloquear la fila de la
+  organización dentro de la transacción de aceptación. Ownership se modela de
+  forma explícita y nunca se permite eliminar al último owner.
+- Alternativas: reservar seat al invitar o contar sin lock; rechazadas por la
+  política confirmada y por permitir sobreasignación concurrente.
+- Consecuencias: las invitaciones pueden quedar pendientes aunque el cupo se
+  complete; su aceptación falla de forma determinista hasta liberar/aumentar seats.
+- Reversibilidad: media; cambiar la política requiere migración y comunicación.
+
+## D-019 — Cuotas comerciales sin valores inferidos
+
+- Fecha: 2026-07-12
+- Contexto: todavía no están definidos precios, moneda final, impuestos,
+  reembolsos ni la unidad comercial de consumo de modelos administrados.
+- Decisión: persistir capacidades, ledger e idempotencia, pero mantener en cero
+  las unidades managed incluidas de planes comerciales. BYOK/local no consume
+  esa cuota. Mercado Pago no se integra hasta recibir parámetros y credenciales.
+- Alternativas: inventar límites temporales o cobrar directamente por tokens;
+  rechazadas porque alteran el rumbo comercial y pueden producir cobros erróneos.
+- Consecuencias: la arquitectura P4 puede avanzar con mock sin habilitar cobros.
+- Reversibilidad: alta; las definiciones pueden versionarse al aprobar precios.
