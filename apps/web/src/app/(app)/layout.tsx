@@ -6,23 +6,28 @@ import { AuthBridge } from '@/components/auth-bridge';
 import { VersionTag } from '@/components/version-tag';
 import { TeamsNav } from '@/components/teams/teams-nav';
 import { DesktopPersonalLink } from '@/components/desktop-personal-link';
+import { canManageBilling } from '@/server/billing/service';
 
 const display = Fraunces({ subsets: ['latin'], variable: '--font-display', display: 'swap' });
 const body = Hanken_Grotesk({ subsets: ['latin'], variable: '--font-body', display: 'swap' });
 const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' });
 
-const NAV: Array<[string, string, 'all' | 'admin']> = [
+const NAV: Array<[string, string, 'all' | 'admin' | 'owner']> = [
   ['/', 'Resumen', 'all'],
   ['/tasks', 'Tareas', 'all'],
   ['/teams', 'Equipos', 'all'],
   ['/members', 'Miembros', 'admin'],
   ['/admin', 'Admin', 'admin'],
+  ['/billing', 'Facturación', 'owner'],
 ];
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const ctx = await requireAuth();
   const isAdmin = ctx.role === 'ORG_ADMIN' || ctx.role === 'SUPER_ADMIN';
-  const items = NAV.filter(([, , scope]) => scope === 'all' || isAdmin).map(([href, label]) => ({ href, label }));
+  const isOwner = await canManageBilling(ctx);
+  const items = NAV
+    .filter(([, , scope]) => scope === 'all' || (scope === 'admin' && isAdmin) || (scope === 'owner' && isOwner))
+    .map(([href, label]) => ({ href, label }));
   const initials = ctx.user.name
     .split(' ')
     .map((p) => p[0])
