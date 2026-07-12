@@ -3,6 +3,7 @@ import { MercadoPagoConfig, PreApproval } from 'mercadopago';
 
 const ACK = 'create-and-cancel-test-subscription';
 const SANDBOX_AMOUNT_ARS = 100;
+const SMOKE_REASON = 'Pulso sandbox smoke reversible';
 
 async function main(): Promise<void> {
   if (process.env.PULSO_MERCADO_PAGO_SANDBOX_SMOKE_ACK !== ACK) {
@@ -21,7 +22,7 @@ async function main(): Promise<void> {
     await cleanupOrphanedSmokeSubscriptions(client, payerEmail);
     const created = await client.create({
       body: {
-        reason: 'Pulso · smoke sandbox reversible',
+        reason: SMOKE_REASON,
         external_reference: `pulso-sandbox-smoke-${randomUUID()}`,
         payer_email: payerEmail,
         auto_recurring: { frequency: 1, frequency_type: 'months', transaction_amount: SANDBOX_AMOUNT_ARS, currency_id: 'ARS' },
@@ -55,7 +56,7 @@ async function cleanupOrphanedSmokeSubscriptions(client: PreApproval, payerEmail
     const reference = String(item.external_reference ?? '');
     if (
       item.id
-      && item.reason === 'Pulso · smoke sandbox reversible'
+      && (item.reason === SMOKE_REASON || item.reason === 'Pulso · smoke sandbox reversible')
       && reference.startsWith('pulso-sandbox-smoke-')
       && item.status !== 'cancelled'
       && item.status !== 'canceled'
