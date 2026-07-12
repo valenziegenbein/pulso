@@ -1,4 +1,5 @@
 import { prisma } from '@pulso/database';
+import { getEntitlements } from '@/server/entitlements';
 import { buildWorkloadSnapshot, evaluateOverload, isOrgAdmin, type TaskLike } from '@pulso/domain';
 import type { TaskPriority, TaskStatus } from '@pulso/shared';
 import type { AuthContext } from '@/lib/auth/context';
@@ -180,12 +181,8 @@ export async function getAdminDashboard(ctx: AuthContext) {
 }
 
 export async function getOrganizationSettings(ctx: AuthContext) {
-  const [org, usedSeats, llm] = await Promise.all([
-    prisma.organization.findUnique({
-      where: { id: ctx.organizationId },
-      select: { planKey: true, seatLimit: true },
-    }),
-    prisma.orgMembership.count({ where: { organizationId: ctx.organizationId } }),
+  const [entitlements, llm] = await Promise.all([
+    getEntitlements(ctx.organizationId),
     prisma.lLMProviderConfig.findFirst({
       where: { organizationId: ctx.organizationId, isActive: true },
       orderBy: { updatedAt: 'desc' },
@@ -193,9 +190,9 @@ export async function getOrganizationSettings(ctx: AuthContext) {
     }),
   ]);
   return {
-    planKey: org?.planKey ?? 'FREE',
-    seatLimit: org?.seatLimit ?? 5,
-    usedSeats,
+    planKey: entitlements.planKey,
+    seatLimit: entitlements.seatLimit,
+    usedSeats: entitlements.usedSeats,
     llm: llm
       ? {
           providerType: llm.providerType,

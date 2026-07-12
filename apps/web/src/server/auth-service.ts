@@ -1,6 +1,7 @@
 import { Prisma, prisma, hashPassword, verifyPassword } from '@pulso/database';
 import { createOpaqueToken, hashOpaqueToken, normalizeEmail } from '@/lib/auth/session';
 import { SESSION_MAX_AGE } from '@/lib/auth/constants';
+import { assertSeatAvailable } from '@/server/entitlements';
 
 const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
 const RESET_TTL_MS = 60 * 60 * 1000;
@@ -283,6 +284,7 @@ export async function acceptOrganizationInvite(token: string, userId: string): P
     const user = await tx.user.findUnique({ where: { id: userId }, select: { normalizedEmail: true, status: true } });
     if (!user || user.status !== 'ACTIVE' || user.normalizedEmail !== invite.normalizedEmail) return false;
     if (invite.team && invite.team.organizationId !== invite.organizationId) return false;
+    await assertSeatAvailable(tx, invite.organizationId, userId);
     const accepted = await tx.organizationInvite.updateMany({
       where: { id: invite.id, status: 'PENDING', acceptedAt: null, expiresAt: { gt: new Date() } },
       data: { status: 'ACCEPTED', pendingKey: null, acceptedById: userId, acceptedAt: new Date() },
@@ -324,6 +326,7 @@ export async function registerAndAcceptOrganizationInvite(
     if (!invite || invite.status !== 'PENDING' || invite.expiresAt.getTime() <= Date.now()) return null;
     if (invite.team && invite.team.organizationId !== invite.organizationId) return null;
     if (await tx.user.findUnique({ where: { normalizedEmail: invite.normalizedEmail }, select: { id: true } })) return null;
+    await assertSeatAvailable(tx, invite.organizationId, `invite:${invite.id}`);
     const claimed = await tx.organizationInvite.updateMany({
       where: { id: invite.id, status: 'PENDING', acceptedAt: null, expiresAt: { gt: new Date() } },
       data: { status: 'ACCEPTING', pendingKey: null },

@@ -78,6 +78,11 @@ async function main() {
     update: { name: orgName, planKey: selectedPlan, seatLimit: PLAN_SEAT_LIMIT[selectedPlan] },
     create: { name: orgName, slug: orgSlug, planKey: selectedPlan, seatLimit: PLAN_SEAT_LIMIT[selectedPlan] },
   });
+  await prisma.organizationSubscription.upsert({
+    where: { organizationId: org.id },
+    update: { planKey: selectedPlan, status: 'ACTIVE', provider: 'MOCK' },
+    create: { organizationId: org.id, planKey: selectedPlan, status: 'ACTIVE', provider: 'MOCK' },
+  });
 
   // 2) Roles de sistema
   const roleByKey = new Map<RoleKey, string>();
@@ -104,8 +109,8 @@ async function main() {
   });
   await prisma.orgMembership.upsert({
     where: { organizationId_userId: { organizationId: org.id, userId: admin.id } },
-    update: { roleId: roleByKey.get('ORG_ADMIN')! },
-    create: { organizationId: org.id, userId: admin.id, roleId: roleByKey.get('ORG_ADMIN')! },
+    update: { roleId: roleByKey.get('ORG_ADMIN')!, isOwner: true },
+    create: { organizationId: org.id, userId: admin.id, roleId: roleByKey.get('ORG_ADMIN')!, isOwner: true },
   });
 
   // 4) Equipo + admin como TEAM_ADMIN

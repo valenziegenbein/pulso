@@ -41,6 +41,9 @@ model Organization {
   authSessions   AuthSession[]              @relation("ActiveSessionOrganization")
   invites        OrganizationInvite[]
   desktopCodes   DesktopAuthorizationCode[]
+  subscription   OrganizationSubscription?
+  usageLedger    UsageLedger[]
+  aiUsageEvents  AIUsageEvent[]
 }
 
 model User {
@@ -107,6 +110,7 @@ model OrgMembership {
   userId         String
   roleId         String
   status         String   @default("ACTIVE")
+  isOwner        Boolean  @default(false)
   createdAt      DateTime @default(now())
 
   organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -492,4 +496,69 @@ model AuthRateLimitBucket {
 
   @@unique([action, keyHash])
   @@index([blockedUntil])
+}
+
+model PlanDefinition {
+  key                    String   @id
+  name                   String
+  defaultSeatLimit       Int
+  managedAiIncludedUnits Int      @default(0)
+  allowByok              Boolean  @default(true)
+  allowLocalAi           Boolean  @default(true)
+  customizableSeats      Boolean  @default(false)
+  isActive               Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  subscriptions OrganizationSubscription[]
+}
+
+model OrganizationSubscription {
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  planKey        String
+  status         String   @default("ACTIVE")
+  provider       String   @default("MOCK")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan         PlanDefinition @relation(fields: [planKey], references: [key])
+
+  @@index([planKey, status])
+}
+
+model UsageLedger {
+  id             String   @id @default(cuid())
+  organizationId String
+  kind           String
+  units          Int
+  idempotencyKey String   @unique
+  periodStart    DateTime
+  metadata       String?
+  createdAt      DateTime @default(now())
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  aiUsageEvent AIUsageEvent?
+
+  @@index([organizationId, kind, periodStart])
+}
+
+model AIUsageEvent {
+  id             String   @id @default(cuid())
+  organizationId String
+  providerType   String
+  model          String
+  operation      String
+  inputTokens    Int
+  outputTokens   Int
+  managed        Boolean  @default(false)
+  idempotencyKey String   @unique
+  ledgerEntryId  String?  @unique
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ledgerEntry  UsageLedger? @relation(fields: [ledgerEntryId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
 }

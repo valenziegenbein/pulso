@@ -14,6 +14,7 @@ export default defineConfig({
     include: [
       'tests/integration/postgres-security.test.ts',
       'tests/integration/postgres-auth.test.ts',
+      'tests/integration/postgres-entitlements.test.ts',
     ],
     setupFiles: ['tests/integration/test-database-guard.ts'],
     environment: 'node',

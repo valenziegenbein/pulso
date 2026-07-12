@@ -81,11 +81,12 @@ export const ROLE_KEY = [
 ] as const;
 export type RoleKey = (typeof ROLE_KEY)[number];
 
-export const PLAN_KEY = ['FREE', 'TEAM', 'BUSINESS'] as const;
+export const PLAN_KEY = ['FREE', 'TEAM', 'BUSINESS', 'ENTERPRISE'] as const;
 export type PlanKey = (typeof PLAN_KEY)[number];
 
 export const PLAN_SEAT_LIMIT: Record<PlanKey, number> = {
   FREE: 5,
   TEAM: 15,
   BUSINESS: 50,
+  ENTERPRISE: 50,
 };

@@ -43,7 +43,7 @@ export default async function AdminPage() {
           </dl>
           <p className="mt-3 text-xs leading-relaxed text-muted">
             Billing real proximamente. Por ahora los planes solo controlan seats:
-            FREE {PLAN_SEAT_LIMIT.FREE}, TEAM {PLAN_SEAT_LIMIT.TEAM}, BUSINESS {PLAN_SEAT_LIMIT.BUSINESS}.
+            FREE {PLAN_SEAT_LIMIT.FREE}, TEAM {PLAN_SEAT_LIMIT.TEAM}, BUSINESS {PLAN_SEAT_LIMIT.BUSINESS}; ENTERPRISE es configurable.
           </p>
         </Card>
 

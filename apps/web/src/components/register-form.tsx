@@ -10,6 +10,7 @@ const PLAN_LABEL: Record<PlanKey, string> = {
   FREE: 'Gratis',
   TEAM: 'Team',
   BUSINESS: 'Business',
+  ENTERPRISE: 'Enterprise',
 };
 
 export function RegisterForm() {

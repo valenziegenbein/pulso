@@ -25,6 +25,11 @@ async function main() {
     update: { name: 'Pulso Demo', planKey: 'TEAM', seatLimit: PLAN_SEAT_LIMIT.TEAM },
     create: { name: 'Pulso Demo', slug: 'pulso-demo', planKey: 'TEAM', seatLimit: PLAN_SEAT_LIMIT.TEAM },
   });
+  await prisma.organizationSubscription.upsert({
+    where: { organizationId: org.id },
+    update: { planKey: 'TEAM', status: 'ACTIVE', provider: 'MOCK' },
+    create: { organizationId: org.id, planKey: 'TEAM', status: 'ACTIVE', provider: 'MOCK' },
+  });
 
   const roleByKey = new Map<RoleKey, string>();
   for (const key of ROLE_KEY) {
@@ -51,7 +56,7 @@ async function main() {
   const luis = await upsertUser('luis@pulso.local', 'Luis Romero');
   const carla = await upsertUser('carla@pulso.local', 'Carla Medina');
 
-  await upsertOrgMembership(org.id, maria.id, roleByKey.get('ORG_ADMIN')!);
+  await upsertOrgMembership(org.id, maria.id, roleByKey.get('ORG_ADMIN')!, true);
   await upsertOrgMembership(org.id, ana.id, roleByKey.get('MEMBER')!);
   await upsertOrgMembership(org.id, luis.id, roleByKey.get('TEAM_ADMIN')!);
   await upsertOrgMembership(org.id, carla.id, roleByKey.get('MEMBER')!);
@@ -163,11 +168,11 @@ async function upsertUser(email: string, name: string) {
   });
 }
 
-async function upsertOrgMembership(organizationId: string, userId: string, roleId: string) {
+async function upsertOrgMembership(organizationId: string, userId: string, roleId: string, isOwner = false) {
   return prisma.orgMembership.upsert({
     where: { organizationId_userId: { organizationId, userId } },
-    update: { roleId },
-    create: { organizationId, userId, roleId },
+    update: { roleId, ...(isOwner ? { isOwner: true } : {}) },
+    create: { organizationId, userId, roleId, isOwner },
   });
 }
 

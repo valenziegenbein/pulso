@@ -107,6 +107,7 @@ export async function registerOrganizationAction(_prev: RegisterState, formData:
         slug,
         planKey: input.planKey,
         seatLimit: PLAN_SEAT_LIMIT[input.planKey],
+        subscription: { create: { planKey: input.planKey, provider: 'MOCK', status: 'ACTIVE' } },
       },
     });
 
@@ -133,7 +134,7 @@ export async function registerOrganizationAction(_prev: RegisterState, formData:
       },
     });
     await tx.orgMembership.create({
-      data: { organizationId: org.id, userId: user.id, roleId: roleByKey.get('ORG_ADMIN')! },
+      data: { organizationId: org.id, userId: user.id, roleId: roleByKey.get('ORG_ADMIN')!, isOwner: true },
     });
     const team = await tx.team.create({ data: { organizationId: org.id, name: 'General', focus: 'Primer equipo de trabajo' } });
     await tx.teamMembership.create({
