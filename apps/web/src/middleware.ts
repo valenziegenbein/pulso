@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 import { SESSION_COOKIE } from '@/lib/auth/constants';
 
 const MAX_API_BODY_BYTES = 8 * 1024 * 1024;
-const PUBLIC_PATHS = ['/login', '/register', '/select-organization', '/widget', '/welcome', '/personal', '/captura'];
+const PUBLIC_PATHS = ['/login', '/register', '/signup', '/forgot-password', '/reset-password', '/invite', '/select-organization', '/widget', '/welcome', '/personal', '/captura'];
 
 function requestId(req: NextRequest): string {
   const incoming = req.headers.get('x-request-id');
@@ -23,7 +23,10 @@ export function middleware(req: NextRequest): NextResponse {
 
   if (!isPublic(req.nextUrl.pathname) && !req.cookies.has(SESSION_COOKIE)) {
     const url = req.nextUrl.clone();
+    const returnTo = `${req.nextUrl.pathname}${req.nextUrl.search}`;
     url.pathname = '/login';
+    url.search = '';
+    url.searchParams.set('returnTo', returnTo);
     const response = NextResponse.redirect(url);
     response.headers.set('x-request-id', id);
     return response;

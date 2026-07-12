@@ -10,6 +10,12 @@ export interface RegisterState {
   error?: string;
 }
 
+export interface AuthFlowState {
+  status?: 'success' | 'error';
+  message?: string;
+  error?: string;
+}
+
 export interface FormState {
   status?: 'success' | 'error';
   message?: string;
@@ -26,7 +32,4 @@ export interface InviteState {
   message?: string;
   error?: string;
   email?: string;
-  // Solo presente cuando el server generó una contraseña temporal (el admin no
-  // tipeó ninguna). Hay que mostrarla una vez para que el admin la comparta.
-  generatedPassword?: string;
 }

@@ -6,11 +6,12 @@ import type { LoginState } from '@/server/action-types';
 
 const INITIAL: LoginState = {};
 
-export function LoginForm() {
+export function LoginForm({ returnTo = '' }: { returnTo?: string }) {
   const [state, action, pending] = useActionState(loginAction, INITIAL);
 
   return (
     <form action={action} className="space-y-3">
+      <input type="hidden" name="returnTo" value={returnTo} />
       <div>
         <label className="font-meta mb-1 block text-[10px] uppercase tracking-[0.16em] text-muted">Email</label>
         <input

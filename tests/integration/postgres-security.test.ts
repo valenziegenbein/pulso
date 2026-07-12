@@ -74,6 +74,7 @@ beforeAll(async () => {
     data: [ids.member, ids.other, ids.teamAdmin, ids.orgAdmin, ids.memberB].map((id) => ({
       id,
       email: `${id}@integration.invalid`,
+      normalizedEmail: `${id}@integration.invalid`,
       name: id,
       passwordHash: 'synthetic-not-a-real-password',
     })),
@@ -189,7 +190,7 @@ describe('PostgreSQL real: constraints y relaciones existentes', () => {
   it('aplica uniques de organización, usuario y membresías', async () => {
     await expect(prisma.organization.create({ data: { name: 'Duplicada', slug: 'integration-a' } }))
       .rejects.toMatchObject({ code: 'P2002' });
-    await expect(prisma.user.create({ data: { email: `${ids.member}@integration.invalid`, name: 'Duplicado', passwordHash: 'x' } }))
+    await expect(prisma.user.create({ data: { email: `${ids.member}@integration.invalid`, normalizedEmail: `${ids.member}@integration.invalid`, name: 'Duplicado', passwordHash: 'x' } }))
       .rejects.toMatchObject({ code: 'P2002' });
     await expect(prisma.orgMembership.create({ data: { organizationId: ids.orgA, userId: ids.member, roleId: roleId('a', 'MEMBER') } }))
       .rejects.toMatchObject({ code: 'P2002' });
@@ -277,6 +278,7 @@ describe('PostgreSQL real: constraints y relaciones existentes', () => {
       data: {
         id: userId,
         email: `${userId}@integration.invalid`,
+        normalizedEmail: `${userId}@integration.invalid`,
         name: 'Concurrente',
         passwordHash: 'synthetic-not-a-real-password',
       },

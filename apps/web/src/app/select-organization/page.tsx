@@ -3,13 +3,14 @@ import { prisma } from '@pulso/database';
 import { getSessionIdentity } from '@/lib/auth/context';
 import { selectOrganizationAction } from '@/server/actions/auth';
 
-export default async function SelectOrganizationPage() {
+export default async function SelectOrganizationPage({ searchParams }: { searchParams: Promise<{ returnTo?: string }> }) {
+  const { returnTo = '' } = await searchParams;
   const session = await getSessionIdentity();
   if (!session) redirect('/login');
   if (session.activeOrganizationId) redirect('/');
 
   const memberships = await prisma.orgMembership.findMany({
-    where: { userId: session.userId },
+    where: { userId: session.userId, status: 'ACTIVE' },
     select: { organizationId: true, organization: { select: { name: true } } },
     orderBy: [{ createdAt: 'asc' }, { organizationId: 'asc' }],
   });
@@ -24,6 +25,7 @@ export default async function SelectOrganizationPage() {
           {memberships.map((membership) => (
             <form key={membership.organizationId} action={selectOrganizationAction}>
               <input type="hidden" name="organizationId" value={membership.organizationId} />
+              <input type="hidden" name="returnTo" value={returnTo} />
               <button className="w-full rounded-xl border border-border px-4 py-3 text-left transition hover:border-accent">
                 {membership.organization.name}
               </button>

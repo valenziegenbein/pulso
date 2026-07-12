@@ -159,7 +159,7 @@ async function upsertUser(email: string, name: string) {
   return prisma.user.upsert({
     where: { email },
     update: { name },
-    create: { email, name, passwordHash: hashPassword('pulso1234'), timezone: 'America/Argentina/Buenos_Aires' },
+    create: { email, normalizedEmail: email.toLowerCase(), name, passwordHash: hashPassword('pulso1234'), timezone: 'America/Argentina/Buenos_Aires' },
   });
 }
 

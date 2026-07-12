@@ -33,7 +33,7 @@ export async function getAuthContext(): Promise<AuthContext | null> {
     },
     include: { user: true, role: true, organization: true },
   });
-  if (!membership) return null;
+  if (!membership || membership.status !== 'ACTIVE') return null;
 
   const permissions = membership.user.isSuperAdmin
     ? ALL_PERMISSIONS

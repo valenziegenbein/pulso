@@ -10,5 +10,6 @@ contextBridge.exposeInMainWorld('pulso', {
   version: appVersion,
   showTeamsWidget: () => ipcRenderer.send('widget:show', 'teams'),
   authState: (state) => ipcRenderer.send('pulso:auth', state),
+  beginTeamsAuth: () => ipcRenderer.send('pulso:teams-auth'),
   backToPersonal: () => ipcRenderer.send('pulso:back-to-personal'),
 });

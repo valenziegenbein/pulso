@@ -1,78 +1,105 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
+import { prisma } from '@pulso/database';
 import { SESSION_MAX_AGE } from './constants';
 
 export interface VerifiedSession {
+  id: string;
   userId: string;
   activeOrganizationId: string | null;
   expiresAt: number;
-  version: 1 | 2;
+  version: 3;
 }
 
-function secret(): string {
-  const value = process.env.AUTH_SECRET;
-  if (!value) throw new Error('AUTH_SECRET no está configurado.');
-  return value;
+interface CreateSessionInput {
+  userId: string;
+  activeOrganizationId: string | null;
+  securityVersion: number;
+  deviceName?: string | null;
+  userAgent?: string | null;
 }
 
-function sign(payload: string): string {
-  return createHmac('sha256', secret()).update(payload).digest('base64url');
+export function normalizeEmail(value: string): string {
+  return value.trim().toLowerCase();
 }
 
-export function createSessionToken(userId: string, activeOrganizationId: string | null): string {
-  const payload = JSON.stringify({
-    v: 2,
-    sub: userId,
-    org: activeOrganizationId,
-    exp: Date.now() + SESSION_MAX_AGE * 1000,
+export function hashOpaqueToken(token: string): string {
+  return createHash('sha256').update(token, 'utf8').digest('base64url');
+}
+
+export function createOpaqueToken(): string {
+  return randomBytes(32).toString('base64url');
+}
+
+export async function createPersistedSession(input: CreateSessionInput): Promise<{ token: string; session: VerifiedSession }> {
+  const token = createOpaqueToken();
+  const expiresAt = new Date(Date.now() + SESSION_MAX_AGE * 1000);
+  const row = await prisma.authSession.create({
+    data: {
+      tokenHash: hashOpaqueToken(token),
+      userId: input.userId,
+      activeOrganizationId: input.activeOrganizationId,
+      securityVersion: input.securityVersion,
+      deviceName: sanitizeDeviceName(input.deviceName),
+      userAgentHash: input.userAgent ? hashOpaqueToken(input.userAgent) : null,
+      expiresAt,
+    },
+    select: { id: true, userId: true, activeOrganizationId: true, expiresAt: true },
   });
-  const encoded = Buffer.from(payload).toString('base64url');
-  return `${encoded}.${sign(payload)}`;
+  return {
+    token,
+    session: {
+      id: row.id,
+      userId: row.userId,
+      activeOrganizationId: row.activeOrganizationId,
+      expiresAt: row.expiresAt.getTime(),
+      version: 3,
+    },
+  };
 }
 
-export function verifySessionToken(token: string): VerifiedSession | null {
-  const parts = token.split('.');
-  if (parts.length !== 2) return null;
-  const [encoded, signature] = parts;
-  if (!encoded || !signature) return null;
-
-  let payload: string;
-  try {
-    payload = Buffer.from(encoded, 'base64url').toString('utf8');
-  } catch {
-    return null;
-  }
-
-  const expected = sign(payload);
-  const given = Buffer.from(signature);
-  const want = Buffer.from(expected);
-  if (given.length !== want.length || !timingSafeEqual(given, want)) return null;
-
-  const v2 = parseV2(payload);
-  if (v2) return v2;
-  return parseLegacy(payload);
+export async function verifySessionToken(token: string): Promise<VerifiedSession | null> {
+  if (!isOpaqueToken(token)) return null;
+  const row = await prisma.authSession.findUnique({
+    where: { tokenHash: hashOpaqueToken(token) },
+    include: { user: { select: { status: true, securityVersion: true } } },
+  });
+  if (!row || row.revokedAt || row.expiresAt.getTime() <= Date.now()) return null;
+  if (row.user.status !== 'ACTIVE' || row.securityVersion !== row.user.securityVersion) return null;
+  return {
+    id: row.id,
+    userId: row.userId,
+    activeOrganizationId: row.activeOrganizationId,
+    expiresAt: row.expiresAt.getTime(),
+    version: 3,
+  };
 }
 
-function parseV2(payload: string): VerifiedSession | null {
-  try {
-    const parsed = JSON.parse(payload) as { v?: unknown; sub?: unknown; org?: unknown; exp?: unknown };
-    if (parsed.v !== 2 || typeof parsed.sub !== 'string' || !parsed.sub) return null;
-    if (parsed.org !== null && typeof parsed.org !== 'string') return null;
-    if (typeof parsed.exp !== 'number' || !Number.isFinite(parsed.exp) || Date.now() > parsed.exp) return null;
-    return {
-      userId: parsed.sub,
-      activeOrganizationId: parsed.org,
-      expiresAt: parsed.exp,
-      version: 2,
-    };
-  } catch {
-    return null;
-  }
+export async function revokeSessionToken(token: string): Promise<void> {
+  if (!isOpaqueToken(token)) return;
+  await prisma.authSession.updateMany({
+    where: { tokenHash: hashOpaqueToken(token), revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
 }
 
-/** Compatibilidad transitoria con tokens `userId.expiry`; nunca elige tenant. */
-function parseLegacy(payload: string): VerifiedSession | null {
-  const [userId, expiry, extra] = payload.split('.');
-  const expiresAt = Number(expiry);
-  if (!userId || !expiry || extra || !Number.isFinite(expiresAt) || Date.now() > expiresAt) return null;
-  return { userId, activeOrganizationId: null, expiresAt, version: 1 };
+export async function setActiveSessionOrganization(session: VerifiedSession, organizationId: string): Promise<boolean> {
+  const membership = await prisma.orgMembership.findUnique({
+    where: { organizationId_userId: { organizationId, userId: session.userId } },
+    select: { status: true },
+  });
+  if (membership?.status !== 'ACTIVE') return false;
+  const updated = await prisma.authSession.updateMany({
+    where: { id: session.id, userId: session.userId, revokedAt: null, expiresAt: { gt: new Date() } },
+    data: { activeOrganizationId: organizationId, lastSeenAt: new Date() },
+  });
+  return updated.count === 1;
+}
+
+function isOpaqueToken(token: string): boolean {
+  return /^[A-Za-z0-9_-]{43}$/.test(token);
+}
+
+function sanitizeDeviceName(value?: string | null): string | null {
+  const normalized = value?.replace(/[\r\n\t]/g, ' ').trim().slice(0, 120);
+  return normalized || null;
 }

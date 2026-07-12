@@ -26,13 +26,9 @@ export const createTeamSchema = z.object({
 export type CreateTeamInput = z.infer<typeof createTeamSchema>;
 
 export const invitePersonSchema = z.object({
-  email: z.string().email(),
-  name: z.string().min(2).max(120),
+  email: z.string().email().transform((value) => value.trim().toLowerCase()),
   roleKey: z.enum(['ORG_ADMIN', 'TEAM_ADMIN', 'COORDINATOR', 'MEMBER', 'VIEWER']),
   teamId: cuid.optional(),
-  // Opcional: el admin asigna una contraseña inicial. Si se omite, el server
-  // genera una temporal y se la muestra al admin para que la comparta.
-  password: z.string().min(8).max(100).optional(),
 });
 export type InvitePersonInput = z.infer<typeof invitePersonSchema>;
 

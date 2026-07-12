@@ -3,7 +3,7 @@
 // - Widget flotante: /captura (captura personal, local-first, always-on-top).
 // - Empaquetado: levanta el server Next standalone embebido (SQLite) y apunta a él.
 // - En dev: apunta a PULSO_URL.
-const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, screen, shell, dialog, desktopCapturer } = require('electron');
+const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, screen, shell, dialog, desktopCapturer, session } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { spawn } = require('node:child_process');
 const crypto = require('node:crypto');
@@ -19,6 +19,7 @@ const WIDGET_PILL = { width: 188, height: 64 };
 const WIDGET_EDGE_GAP = 12;
 const WIDGET_RIGHT_SAFE_TOP = 72;
 const WIDGET_VIEWS = new Set(['collapsed', 'quick', 'full']);
+const TEAMS_PARTITION = 'persist:pulso-teams';
 let BASE_URL = process.env.PULSO_URL || 'http://localhost:3000';
 
 let mainWindow = null;
@@ -32,6 +33,7 @@ let widgetMode = 'personal';
 let widgetView = 'full';
 // URL del server de Pulso Teams (web). Personal es local; Teams vive en el server.
 let TEAMS_URL = null;
+let teamsAuthInProgress = false;
 
 // --- Configuración del usuario (secretos + DB), persistida en userData ---
 function loadConfig() {
@@ -342,6 +344,100 @@ function widgetUrl() {
   return `${BASE_URL}/captura`;
 }
 
+async function createDesktopCallbackServer(expectedState) {
+  let resolveCode;
+  let rejectCode;
+  const codePromise = new Promise((resolve, reject) => {
+    resolveCode = resolve;
+    rejectCode = reject;
+  });
+  const server = http.createServer((req, res) => {
+    try {
+      const url = new URL(req.url || '/', 'http://127.0.0.1');
+      const code = url.searchParams.get('code') || '';
+      const state = url.searchParams.get('state') || '';
+      if (url.pathname !== '/auth/callback' || state !== expectedState || !/^[A-Za-z0-9_-]{43}$/.test(code)) {
+        res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
+        res.end('Solicitud de autorización inválida.');
+        return;
+      }
+      res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
+      res.end('Pulso Desktop quedó conectado. Ya podés cerrar esta ventana.');
+      resolveCode(code);
+    } catch {
+      res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
+      res.end('Solicitud de autorización inválida.');
+    }
+  });
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    server.close();
+    throw new Error('No se pudo reservar el callback loopback.');
+  }
+  const timer = setTimeout(() => rejectCode(new Error('La autorización Desktop expiró.')), 2 * 60 * 1000);
+  return {
+    redirectUri: `http://127.0.0.1:${address.port}/auth/callback`,
+    codePromise: codePromise.finally(() => {
+      clearTimeout(timer);
+      server.close();
+    }),
+  };
+}
+
+async function authenticateTeams() {
+  if (!TEAMS_URL || teamsAuthInProgress) return;
+  teamsAuthInProgress = true;
+  try {
+    const verifier = crypto.randomBytes(32).toString('base64url');
+    const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
+    const state = crypto.randomBytes(32).toString('base64url');
+    const callback = await createDesktopCallbackServer(state);
+    void callback.codePromise.catch(() => {});
+    const authorizeUrl = new URL('/desktop/authorize', TEAMS_URL);
+    authorizeUrl.searchParams.set('code_challenge', challenge);
+    authorizeUrl.searchParams.set('redirect_uri', callback.redirectUri);
+    authorizeUrl.searchParams.set('state', state);
+    await shell.openExternal(authorizeUrl.toString());
+    const code = await callback.codePromise;
+    const tokenUrl = new URL('/api/desktop/token', TEAMS_URL);
+    const response = await fetch(tokenUrl, {
+      method: 'POST',
+      redirect: 'error',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        code,
+        codeVerifier: verifier,
+        redirectUri: callback.redirectUri,
+        deviceName: `Pulso Desktop ${app.getVersion()}`,
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok || typeof payload.accessToken !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(payload.accessToken)) {
+      throw new Error('El servidor rechazó el intercambio PKCE.');
+    }
+    const teamsSession = session.fromPartition(TEAMS_PARTITION);
+    await teamsSession.cookies.set({
+      url: TEAMS_URL,
+      name: 'pulso_session',
+      value: payload.accessToken,
+      httpOnly: true,
+      secure: new URL(TEAMS_URL).protocol === 'https:',
+      sameSite: 'lax',
+      expirationDate: Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60,
+    });
+    if (teamsWindow && !teamsWindow.isDestroyed()) await teamsWindow.loadURL(TEAMS_URL);
+    else openTeams();
+  } catch (err) {
+    logDesktop(`teams auth failed: ${err == null ? '' : err.message || err}`);
+  } finally {
+    teamsAuthInProgress = false;
+  }
+}
+
 /** Ventana de Pulso Teams: carga el server web remoto (mismo dato que la web, en
  *  vivo). Si no hay URL configurada, avisa al panel para que la pida. */
 function openTeams() {
@@ -365,6 +461,7 @@ function openTeams() {
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload-teams.js'),
+      partition: TEAMS_PARTITION,
       additionalArguments: [`--pulso-version=${app.getVersion()}`],
       contextIsolation: true,
       nodeIntegration: false,
@@ -481,6 +578,7 @@ function createWidgetWindow() {
     hasShadow: false,
     webPreferences: {
       preload: path.join(__dirname, widgetMode === 'teams' ? 'preload-teams.js' : 'preload.js'),
+      partition: widgetMode === 'teams' ? TEAMS_PARTITION : undefined,
       additionalArguments: [`--pulso-version=${app.getVersion()}`],
       contextIsolation: true,
       nodeIntegration: false,
@@ -796,6 +894,9 @@ ipcMain.on('widget:intro', (e, mode) => { if (isLocalRenderer(e)) introWidget(mo
 ipcMain.on('pulso:personal-ready', (e) => { if (isLocalRenderer(e)) openWidgetCollapsed('personal'); });
 ipcMain.on('pulso:auth', (e, s) => {
   if (isTeamsRenderer(e) && s === 'authed') openWidgetCollapsed('teams');
+});
+ipcMain.on('pulso:teams-auth', (e) => {
+  if (isTeamsRenderer(e) || isLocalRenderer(e)) void authenticateTeams();
 });
 
 // Pulso Teams (web): configurar la URL del server y abrir la ventana remota.

@@ -2,9 +2,9 @@
 INSERT INTO "Organization" ("id", "name", "slug")
 VALUES ('staging-org', 'Organización sintética de staging', 'staging-synthetic');
 
-INSERT INTO "User" ("id", "email", "name", "passwordHash") VALUES
-  ('staging-admin', 'staging-admin@integration.invalid', 'Admin sintético', 'not-a-real-password'),
-  ('staging-member', 'staging-member@integration.invalid', 'Miembro sintético', 'not-a-real-password');
+INSERT INTO "User" ("id", "email", "normalizedEmail", "name", "passwordHash", "emailVerifiedAt", "updatedAt") VALUES
+  ('staging-admin', 'staging-admin@integration.invalid', 'staging-admin@integration.invalid', 'Admin sintético', 'not-a-real-password', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+  ('staging-member', 'staging-member@integration.invalid', 'staging-member@integration.invalid', 'Miembro sintético', 'not-a-real-password', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO "Role" ("id", "organizationId", "key", "name", "permissions", "isSystem") VALUES
   ('staging-role-admin', 'staging-org', 'ORG_ADMIN', 'Admin', '[]', true),

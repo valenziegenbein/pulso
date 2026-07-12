@@ -12,6 +12,7 @@ const emptyUrl = `${baseUrl}/pulso_test?schema=public`;
 const shadowUrl = `${baseUrl}/pulso_shadow?schema=public`;
 const upgradeUrl = `${baseUrl}/pulso_upgrade?schema=public`;
 const invalidUpgradeUrl = `${baseUrl}/pulso_invalid_upgrade?schema=public`;
+const invalidAuthUrl = `${baseUrl}/pulso_invalid_auth?schema=public`;
 const pnpmScript = process.env.npm_execpath;
 
 const testEnv = (url) => ({
@@ -79,6 +80,7 @@ try {
   await run('crear base shadow efímera', 'docker', [...compose, 'exec', '-T', 'db-test', 'createdb', '-U', 'pulso_test', 'pulso_shadow']);
   await run('crear base de upgrade efímera', 'docker', [...compose, 'exec', '-T', 'db-test', 'createdb', '-U', 'pulso_test', 'pulso_upgrade']);
   await run('crear base de preflight inválido', 'docker', [...compose, 'exec', '-T', 'db-test', 'createdb', '-U', 'pulso_test', 'pulso_invalid_upgrade']);
+  await run('crear base de preflight auth inválido', 'docker', [...compose, 'exec', '-T', 'db-test', 'createdb', '-U', 'pulso_test', 'pulso_invalid_auth']);
 
   await runPnpm('aplicar migraciones desde base vacía', ['--filter', '@pulso/database', 'run', 'migrate:deploy'], { env: testEnv(emptyUrl) });
   await runPnpm('verificar migrate status en base vacía', ['--filter', '@pulso/database', 'exec', 'prisma', 'migrate', 'status'], { env: testEnv(emptyUrl) });
@@ -132,6 +134,32 @@ try {
     throw new Error('El preflight fallido dejó DDL parcial en TeamMembership.');
   }
   console.log('Preflight tenant: rechazo esperado y rollback transaccional OK');
+
+  await psql('pulso_invalid_auth', '-f', '/workspace/packages/database/prisma/migrations/20260624213924_init/migration.sql');
+  await psql('pulso_invalid_auth', '-f', '/workspace/packages/database/prisma/migrations/20260625010000_org_plans/migration.sql');
+  await psql('pulso_invalid_auth', '-f', '/workspace/packages/database/prisma/migrations/20260712030000_tenant_relational_integrity/migration.sql');
+  for (const migration of ['20260624213924_init', '20260625010000_org_plans', '20260712030000_tenant_relational_integrity']) {
+    await runPnpm(`registrar ${migration} en preflight auth inválido`, [
+      '--filter', '@pulso/database', 'exec', 'prisma', 'migrate', 'resolve', '--applied', migration,
+    ], { env: testEnv(invalidAuthUrl) });
+  }
+  await psql('pulso_invalid_auth', '-f', '/workspace/tests/integration/fixtures/auth-duplicate-invalid.sql');
+  const rejectedAuthMigration = await runPnpm(
+    'comprobar rechazo de emails históricos duplicados',
+    ['--filter', '@pulso/database', 'run', 'migrate:deploy'],
+    { env: testEnv(invalidAuthUrl), allowFailure: true },
+  );
+  if (rejectedAuthMigration.code === 0) {
+    throw new Error('La migración auth aceptó emails case-insensitive duplicados.');
+  }
+  const partialAuthColumn = await psql('pulso_invalid_auth', '-Atc', [
+    "SELECT count(*) FROM information_schema.columns",
+    "WHERE table_schema = 'public' AND table_name = 'User' AND column_name = 'normalizedEmail';",
+  ].join(' '));
+  if (partialAuthColumn.stdout !== '0') {
+    throw new Error('El preflight auth fallido dejó DDL parcial en User.');
+  }
+  console.log('Preflight auth: duplicados rechazados y rollback transaccional OK');
   succeeded = true;
 } finally {
   if (process.env.PULSO_KEEP_TEST_DB === '1') {

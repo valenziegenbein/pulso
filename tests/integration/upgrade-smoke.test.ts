@@ -31,6 +31,11 @@ describe('upgrade sintético equivalente a producción', () => {
     ]);
     expect(organization).toMatchObject({ planKey: 'FREE', seatLimit: 5 });
     expect(teamMembership).toMatchObject({ organizationId: 'upgrade-org' });
+    await expect(prisma.user.findUnique({ where: { id: 'upgrade-member' } })).resolves.toMatchObject({
+      normalizedEmail: 'upgrade-member@integration.invalid',
+      status: 'ACTIVE',
+      securityVersion: 1,
+    });
     expect({ users, memberships, teams, tasks, worklogs }).toEqual({
       users: 2,
       memberships: 2,
@@ -67,6 +72,7 @@ describe('upgrade sintético equivalente a producción', () => {
       '20260624213924_init',
       '20260625010000_org_plans',
       '20260712030000_tenant_relational_integrity',
+      '20260712050000_persisted_auth',
     ]);
   });
 });
