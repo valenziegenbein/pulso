@@ -33,6 +33,11 @@ const compose = await readFile(new URL('../docker-compose.yml', import.meta.url)
 if (!compose.includes('/api/readiness') || !compose.includes("profiles: ['ops']")) {
   failures.push('docker-compose.yml: falta readiness o job de migración explícito');
 }
+if (!compose.includes('PULSO_BILLING_PROVIDER: ${PULSO_BILLING_PROVIDER:-MERCADO_PAGO_MOCK}')
+  || !compose.includes('PULSO_MERCADO_PAGO_LIVE_ENABLED: ${PULSO_MERCADO_PAGO_LIVE_ENABLED:-false}')
+  || !compose.includes('PULSO_MERCADO_PAGO_CHECKOUT_ENABLED: ${PULSO_MERCADO_PAGO_CHECKOUT_ENABLED:-false}')) {
+  failures.push('docker-compose.yml: billing no falla cerrado en mock/live=false');
+}
 if (!/postgres:16@sha256:[0-9a-f]{64}/.test(compose) || !/caddy:2@sha256:[0-9a-f]{64}/.test(compose)) {
   failures.push('docker-compose.yml: las imágenes base no están fijadas por digest');
 }
