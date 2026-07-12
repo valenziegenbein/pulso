@@ -99,3 +99,17 @@ Si el schema no es backward-compatible, usar restauración en DB nueva según
 Para rollback autorizado: restaurar `docker-compose.before.yml` y
 `DEPLOYED_COMMIT.before`, ejecutar `docker compose up -d --no-build app`, esperar
 estado running y repetir `ops/smoke.sh`. No recrear `pulso-db`.
+
+## Checkpoint productivo P5 — 2026-07-12
+
+- Backup cifrado y restaurado: `pulso-20260712T203025Z`; copia verificada en
+  `F:\Pulso-backups\verified\pulso-20260712T203025Z`.
+- Checkpoint remoto: `/var/backups/pulso/deploy-20260712T204705Z-p5`.
+- Imagen activa y worker:
+  `sha256:87e22dd3eb21bb529d8774b409af4d0ca3bd2eb944fbfed68c21f6c5d779238a`.
+- Digest de registry equivalente:
+  `docker.io/valenziegenbein/pulso-app@sha256:87e22dd3eb21bb529d8774b409af4d0ca3bd2eb944fbfed68c21f6c5d779238a`.
+- Rollback inmediato: `pulso-rollback:p5-20260712T204705Z` y archivos
+  `docker-compose.before.yml` / `env.before` dentro del checkpoint.
+- Schema: siete migraciones aplicadas; cambios aditivos verificados contra el
+  backup restaurado. El rollback de aplicación no revierte automáticamente DB.

@@ -4,11 +4,11 @@
 
 ## Fase actual
 
-**P5 — Email transaccional: COMPLETA EN LOCAL/STAGING**.
+**P5 — Email transaccional: COMPLETA EN PRODUCCIÓN**.
 Outbox cifrado, templates, integración atómica con auth, worker, provider Gmail
 OAuth, redirect local, consentimiento, smoke directo y smoke auth → outbox →
-worker aislado y candidata por digest están verdes en staging. Falta promoción;
-registro público continúa cerrado.
+worker aislado, candidata por digest, migraciones y worker Gmail están verdes en
+producción. Registro público continúa cerrado por decisión explícita.
 
 El hardening está versionado, respaldado, registrado, validado en staging y
 desplegado en producción. El segundo destino offsite duradero permanece como
@@ -23,7 +23,7 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 | P2 | Completa local/staging | G1–G5 verdes; registro público deliberadamente cerrado |
 | P3 | Completa local/staging | Seats transaccionales, ownership, planes y cuotas fail-closed |
 | P4 | Completa local/staging (mock) | Provider neutral, webhook inbox y vista owner-only verdes |
-| P5 | Completa local/staging | Gmail real, outbox y candidata por digest verdes; falta promoción |
+| P5 | Completa en producción | Gmail real, outbox, migraciones y worker observados por digest |
 | P6 | No iniciada | Sin cambios visuales ni rutas públicas nuevas |
 | P7 | No iniciada | Sin analytics ni observabilidad compleja añadida |
 
@@ -126,7 +126,7 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 ## Gates pendientes
 
 - P0.5: ninguno.
-- P5: backup/checkpoint y promoción productiva por digest.
+- P5: ninguno; conservar backup/checkpoint durante la ventana de observación.
 - Programa: segundo destino offsite duradero.
 
 ## Riesgos prioritarios P0/P1/P2
@@ -168,5 +168,5 @@ Detalle y responsables en `RISK_REGISTER.md`.
 
 ## Próxima acción autorizable
 
-Promover la candidata P5 sólo tras backup/checkpoint productivo y provisioning
-seguro de secretos Gmail. Mantener registro cerrado hasta smoke productivo.
+Mantener observación P5 y registro cerrado hasta una decisión explícita de
+apertura/onboarding. Continuar Mercado Pago sólo en sandbox/mock.

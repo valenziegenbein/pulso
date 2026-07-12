@@ -429,3 +429,15 @@ Total de tests ejecutados por el gate: 67.
 - Staging efímero por digest: `migrate deploy` de siete migraciones, health 200,
   readiness + headers, `/register` 404 y `/api/personal/suggest` 404.
 - Staging, PostgreSQL tmpfs, red y contenedores destruidos al finalizar.
+- Backup productivo `pulso-20260712T203025Z`: dump PostgreSQL 16, age, SHA-256,
+  transferencia cifrada a `F:` y verificación completa.
+- Restore del backup real + upgrade 2→7 migraciones: conteos preservados
+  `2,6,6,4,6,1`; readiness y superficies cerradas verdes.
+- Producción promovida por Image ID equivalente al digest remoto; app y worker
+  usan `sha256:87e22dd3...`, cero reinicios.
+- Post-deploy: health/readiness 200, `/register` 404,
+  `/api/personal/suggest` 404, cinco batches Gmail `failed=0`.
+- Refresh token recifrado dentro del VPS con la clave productiva; plaintext sólo
+  transitó por stdin y no fue almacenado ni mostrado.
+- Rollback: `/var/backups/pulso/deploy-20260712T204705Z-p5` y tag
+  `pulso-rollback:p5-20260712T204705Z`.
