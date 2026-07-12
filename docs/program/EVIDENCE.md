@@ -417,3 +417,15 @@ Total de tests ejecutados por el gate: 67.
 - Guardas verificadas: ACK literal, `DATABASE_URL === TEST_DATABASE_URL`, host
   loopback y nombre exacto `pulso_email_smoke`.
 - Contenedor, base y volumen destruidos al finalizar. Sin VPS ni producción.
+- Green gate completo posterior: 66 unitarios, 34 DB-backed, 3 upgrade,
+  siete migraciones, drift cero, build, Electron y safety checks verdes.
+- Candidata construida desde worktree detached limpio:
+  `b0f274045042d55d8f164d49064a7b88fa632a61`.
+- Tag SHA completo subido, sin `latest`:
+  `docker.io/valenziegenbein/pulso-app:b0f274045042d55d8f164d49064a7b88fa632a61`.
+- Digest remoto obtenido por push, descargado nuevamente e inspeccionado:
+  `docker.io/valenziegenbein/pulso-app@sha256:87e22dd3eb21bb529d8774b409af4d0ca3bd2eb944fbfed68c21f6c5d779238a`.
+- Label OCI remota `org.opencontainers.image.revision` coincide con el SHA.
+- Staging efímero por digest: `migrate deploy` de siete migraciones, health 200,
+  readiness + headers, `/register` 404 y `/api/personal/suggest` 404.
+- Staging, PostgreSQL tmpfs, red y contenedores destruidos al finalizar.
