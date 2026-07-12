@@ -35,6 +35,7 @@ services:
       WORKLOG_ENCRYPTION_KEY: ${WORKLOG_ENCRYPTION_KEY:?Falta WORKLOG_ENCRYPTION_KEY en .env}
       NODE_ENV: production
       PORT: '3000'
+      PULSO_APP_URL: ${PULSO_APP_URL:?Falta PULSO_APP_URL en .env}
       PULSO_PUBLIC_REGISTRATION_ENABLED: 'false'
       PULSO_PERSONAL_API_ENABLED: 'false'
       LLM_ALLOWED_PUBLIC_HOSTS: ${LLM_ALLOWED_PUBLIC_HOSTS:-}
@@ -61,6 +62,25 @@ services:
       NODE_ENV: production
     command: ['./docker-migrate.sh']
     restart: 'no'
+
+  email-worker:
+    image: ${PULSO_IMAGE:-pulso:local}
+    container_name: pulso-email-worker
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://pulso:${POSTGRES_PASSWORD}@db:5432/pulso?schema=public
+      WORKLOG_ENCRYPTION_KEY: ${WORKLOG_ENCRYPTION_KEY:?Falta WORKLOG_ENCRYPTION_KEY en .env}
+      NODE_ENV: production
+      PULSO_EMAIL_PROVIDER: ${PULSO_EMAIL_PROVIDER:?Falta PULSO_EMAIL_PROVIDER en .env}
+      PULSO_EMAIL_BATCH_SIZE: ${PULSO_EMAIL_BATCH_SIZE:-20}
+      GOOGLE_GMAIL_CLIENT_ID: ${GOOGLE_GMAIL_CLIENT_ID:?Falta GOOGLE_GMAIL_CLIENT_ID en .env}
+      GOOGLE_GMAIL_CLIENT_SECRET: ${GOOGLE_GMAIL_CLIENT_SECRET:?Falta GOOGLE_GMAIL_CLIENT_SECRET en .env}
+      GOOGLE_GMAIL_REFRESH_TOKEN_ENCRYPTED: ${GOOGLE_GMAIL_REFRESH_TOKEN_ENCRYPTED:?Falta GOOGLE_GMAIL_REFRESH_TOKEN_ENCRYPTED en .env}
+      GOOGLE_GMAIL_SENDER: ${GOOGLE_GMAIL_SENDER:?Falta GOOGLE_GMAIL_SENDER en .env}
+    command: ['sh', '-c', 'while true; do pnpm email:worker:once; sleep 15; done']
 
   # Reverse proxy + HTTPS automático (Let's Encrypt). Servís en https://${DOMAIN}.
   caddy:
