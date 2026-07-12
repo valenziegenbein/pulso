@@ -49,6 +49,21 @@ export PULSO_IMAGE_REVISION='<git-sha>'
 sh ./ops/backup-postgres.sh
 ```
 
+Si PostgreSQL corre en el mismo Docker host y el cliente no está instalado en
+el host, el script puede usar las herramientas de PostgreSQL 16 del contenedor:
+
+```sh
+AGE_RECIPIENT='age1...' \
+BACKUP_DIR=/var/backups/pulso \
+PULSO_POSTGRES_CONTAINER=pulso-db \
+PULSO_POSTGRES_USER=pulso \
+PULSO_POSTGRES_DB=pulso \
+sh ./ops/backup-postgres.sh
+```
+
+Este modo usa el socket local del contenedor y no necesita exponer ni imprimir
+la contraseña de la base.
+
 Produce un set:
 
 - `pulso-<UTC>.dump.age`;

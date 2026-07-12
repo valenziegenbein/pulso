@@ -2,13 +2,24 @@
 set -eu
 umask 077
 
-: "${DATABASE_URL:?Falta DATABASE_URL}"
 : "${AGE_RECIPIENT:?Falta AGE_RECIPIENT (clave pública age)}"
 BACKUP_DIR=${BACKUP_DIR:-./backups}
+POSTGRES_CONTAINER=${PULSO_POSTGRES_CONTAINER:-}
 
-for tool in pg_dump psql age sha256sum; do
+for tool in age sha256sum; do
   command -v "$tool" >/dev/null 2>&1 || { echo "Falta herramienta requerida: $tool" >&2; exit 1; }
 done
+if [ -n "$POSTGRES_CONTAINER" ]; then
+  command -v docker >/dev/null 2>&1 || { echo "Falta herramienta requerida: docker" >&2; exit 1; }
+  docker inspect "$POSTGRES_CONTAINER" >/dev/null 2>&1 || { echo "No existe el contenedor PostgreSQL indicado." >&2; exit 1; }
+  POSTGRES_USER=${PULSO_POSTGRES_USER:-pulso}
+  POSTGRES_DB=${PULSO_POSTGRES_DB:-pulso}
+else
+  : "${DATABASE_URL:?Falta DATABASE_URL}"
+  for tool in pg_dump psql; do
+    command -v "$tool" >/dev/null 2>&1 || { echo "Falta herramienta requerida: $tool" >&2; exit 1; }
+  done
+fi
 
 mkdir -p "$BACKUP_DIR"
 tmp_dir=$(mktemp -d)
@@ -23,19 +34,27 @@ manifest_encrypted="$tmp_dir/$base.manifest.age"
 checksum_file="$tmp_dir/$base.sha256"
 
 echo "Creando dump PostgreSQL consistente..."
-pg_dump \
-  --dbname="$DATABASE_URL" \
-  --format=custom \
-  --compress=9 \
-  --no-owner \
-  --no-acl \
-  --file="$dump_plain"
-
-migrations=$(psql "$DATABASE_URL" -Atc \
-  "SELECT coalesce(string_agg(migration_name, ',' ORDER BY migration_name), 'none') FROM \"_prisma_migrations\" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL")
+if [ -n "$POSTGRES_CONTAINER" ]; then
+  docker exec "$POSTGRES_CONTAINER" pg_dump \
+    --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" \
+    --format=custom --compress=9 --no-owner --no-acl > "$dump_plain"
+  migrations=$(docker exec "$POSTGRES_CONTAINER" psql --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" -Atc \
+    "SELECT coalesce(string_agg(migration_name, ',' ORDER BY migration_name), 'none') FROM \"_prisma_migrations\" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL")
+  pg_version=$(docker exec "$POSTGRES_CONTAINER" pg_dump --version | tr '\n' ' ')
+else
+  pg_dump \
+    --dbname="$DATABASE_URL" \
+    --format=custom \
+    --compress=9 \
+    --no-owner \
+    --no-acl \
+    --file="$dump_plain"
+  migrations=$(psql "$DATABASE_URL" -Atc \
+    "SELECT coalesce(string_agg(migration_name, ',' ORDER BY migration_name), 'none') FROM \"_prisma_migrations\" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL")
+  pg_version=$(pg_dump --version | tr '\n' ' ')
+fi
 revision=${PULSO_IMAGE_REVISION:-unknown}
 dump_bytes=$(wc -c < "$dump_plain" | tr -d ' ')
-pg_version=$(pg_dump --version | tr '\n' ' ')
 
 {
   echo "created_at_utc=$timestamp"
