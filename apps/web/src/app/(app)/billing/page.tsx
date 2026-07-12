@@ -1,10 +1,12 @@
+import { notFound } from 'next/navigation';
 import { requireAuth } from '@/lib/auth/context';
 import { getEntitlements } from '@/server/entitlements';
-import { getBillingOverview } from '@/server/billing/service';
+import { canManageBilling, getBillingOverview } from '@/server/billing/service';
 import { Card, PageHeader } from '@/components/teams/ui';
 
 export default async function BillingPage() {
   const ctx = await requireAuth();
+  if (!await canManageBilling(ctx)) notFound();
   const [subscription, entitlements] = await Promise.all([
     getBillingOverview(ctx),
     getEntitlements(ctx.organizationId),
