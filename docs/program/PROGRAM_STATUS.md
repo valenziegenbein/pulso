@@ -5,8 +5,8 @@
 ## Fase actual
 
 **P5 — Email transaccional: EN CURSO LOCAL**.
-Outbox cifrado, templates, integración atómica con auth, worker y provider Gmail
-OAuth están verdes. Falta consentimiento del remitente y smoke real; registro
+Outbox cifrado, templates, integración atómica con auth, worker, provider Gmail
+OAuth y redirect local están verdes. Falta consentimiento y smoke real; registro
 público continúa cerrado.
 
 El hardening está versionado, respaldado, registrado, validado en staging y

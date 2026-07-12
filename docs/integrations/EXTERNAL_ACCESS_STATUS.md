@@ -57,9 +57,9 @@ Este documento no contiene secretos. Los valores reales viven únicamente en
   ("Send email on your behalf", categoría sensitive). Sin lectura, sin
   modificación, sin Drive/Calendar/Contacts.
 - OAuth Client: **Pulso Gmail Sender (server)**, tipo **Web application**,
-  creado 2026-07-12, **sin** JavaScript origins y **sin** redirect URIs: el
-  código todavía no define callback y no se inventó ninguno. GPT Sol deberá
-  agregar el redirect URI exacto cuando implemente el callback P5.
+  creado 2026-07-12, sin JavaScript origins. El redirect local
+  `http://127.0.0.1:53682/oauth/callback` quedó guardado y verificado en la
+  consola el 2026-07-12; corresponde al bootstrap versionado de P5.
 - Client ID y Client Secret: presentes en `.env` como
   `GOOGLE_GMAIL_CLIENT_ID` / `GOOGLE_GMAIL_CLIENT_SECRET`. `GOOGLE_GMAIL_SENDER`
   contiene la casilla remitente (no secreto).
@@ -105,7 +105,7 @@ Este documento no contiene secretos. Los valores reales viven únicamente en
    API de suscripciones (preapproval) usando `MERCADO_PAGO_ACCESS_TOKEN`
    (TEST primero). No usar OAuth de vendedores.
 3. **P5 Email**: outbox, worker y provider Gmail están implementados localmente.
-   Falta preparar el flujo de consentimiento, agregar su redirect URI exacto al
-   cliente OAuth y almacenar el refresh token cifrado antes de cualquier envío.
+   El bootstrap y redirect URI están listos. Falta completar el consentimiento
+   personal y almacenar el refresh token cifrado antes de cualquier envío.
 4. **Producción**: activar credenciales productivas de Mercado Pago y publicar
    la app OAuth solo con checkpoint L5 específico.
