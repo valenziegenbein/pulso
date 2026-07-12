@@ -42,6 +42,11 @@ No guardar nunca un refresh token en claro: se cifra con
 
 Este paso requiere consentimiento personal del titular. No ejecutar desde CI.
 
+El smoke end-to-end usa `pnpm email:smoke:outbox` y está triplemente bloqueado:
+requiere el ACK literal documentado en el script, `DATABASE_URL` idéntica a
+`TEST_DATABASE_URL` y PostgreSQL loopback con base `pulso_email_smoke`. Nunca
+apuntarlo a una base persistente; destruir el contenedor/volumen al terminar.
+
 ## Sandbox vs producción
 
 - Mercado Pago: las credenciales de prueba empiezan con `TEST-`; las
