@@ -2,6 +2,7 @@ import { Prisma, prisma } from '@pulso/database';
 import type { AuthContext } from '@/lib/auth/context';
 import { AuthorizationError } from '@/server/authz';
 import type { BillingProvider, VerifiedBillingEvent } from './provider';
+import { quoteLaunchOffer, type CommercialOfferId, type PriceVersion } from './catalog';
 
 export async function canManageBilling(ctx: AuthContext): Promise<boolean> {
   const membership = await prisma.orgMembership.findUnique({
@@ -31,6 +32,23 @@ export async function createMockCheckout(
   await assertCanManageBilling(ctx);
   const customer = await provider.createCustomer({ organizationId: ctx.organizationId, email: ctx.user.email });
   return provider.createCheckoutSession({ organizationId: ctx.organizationId, customerId: customer.customerId, planKey });
+}
+
+export async function createMercadoPagoMockCheckout(
+  ctx: AuthContext,
+  provider: BillingProvider,
+  offerId: CommercialOfferId,
+  priceVersion: PriceVersion,
+) {
+  await assertCanManageBilling(ctx);
+  const quote = quoteLaunchOffer(offerId, priceVersion);
+  const customer = await provider.createCustomer({ organizationId: ctx.organizationId, email: ctx.user.email });
+  const session = await provider.createCheckoutSession({
+    organizationId: ctx.organizationId,
+    customerId: customer.customerId,
+    planKey: quote.planKey,
+  });
+  return { session, quote };
 }
 
 export async function processBillingWebhook(provider: BillingProvider, rawBody: string, signature: string) {

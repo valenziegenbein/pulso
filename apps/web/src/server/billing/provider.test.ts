@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MockBillingProvider } from './provider';
+import { MercadoPagoMockBillingProvider, MockBillingProvider } from './provider';
 
 const secret = 'synthetic-mock-secret-only';
 
@@ -26,10 +26,10 @@ describe('MockBillingProvider', () => {
   });
 
   it('no simula una URL de cobro o portal real', async () => {
-    const provider = new MockBillingProvider(secret);
+    const provider = new MercadoPagoMockBillingProvider(secret);
     const customer = await provider.createCustomer({ organizationId: 'org-unit', email: 'owner@integration.invalid' });
     await expect(provider.createCheckoutSession({ organizationId: 'org-unit', customerId: customer.customerId, planKey: 'TEAM' }))
-      .resolves.toMatchObject({ provider: 'MOCK', url: null });
-    await expect(provider.createCustomerPortalSession(customer)).resolves.toMatchObject({ provider: 'MOCK', url: null });
+      .resolves.toMatchObject({ provider: 'MERCADO_PAGO_MOCK', url: null });
+    await expect(provider.createCustomerPortalSession(customer)).resolves.toMatchObject({ provider: 'MERCADO_PAGO_MOCK', url: null });
   });
 });

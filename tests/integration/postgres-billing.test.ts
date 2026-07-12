@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { hashPassword, prisma } from '@pulso/database';
 import type { AuthContext } from '@/lib/auth/context';
-import { MockBillingProvider } from '@/server/billing/provider';
-import { createMockCheckout, getBillingOverview, processBillingWebhook } from '@/server/billing/service';
+import { MercadoPagoMockBillingProvider, MockBillingProvider } from '@/server/billing/provider';
+import { createMercadoPagoMockCheckout, createMockCheckout, getBillingOverview, processBillingWebhook } from '@/server/billing/service';
 
 const orgId = 'billing-org';
 const ownerId = 'billing-owner';
@@ -49,6 +49,13 @@ describe('PostgreSQL real: billing control plane', () => {
     const provider = new MockBillingProvider(secret);
     await expect(getBillingOverview(context(memberId, 'MEMBER'))).rejects.toThrow('Recurso no encontrado');
     await expect(createMockCheckout(context(ownerId, 'ORG_ADMIN'), provider, 'TEAM')).resolves.toMatchObject({ provider: 'MOCK', url: null });
+    const mercadoPago = new MercadoPagoMockBillingProvider(secret);
+    await expect(createMercadoPagoMockCheckout(context(ownerId, 'ORG_ADMIN'), mercadoPago, 'teams-5', {
+      id: 'ars-integration', arsCentavosPerUsd: 100_000, validUntil: new Date(Date.now() + 60_000),
+    })).resolves.toMatchObject({
+      session: { provider: 'MERCADO_PAGO_MOCK', url: null },
+      quote: { offerId: 'teams-5', discountBps: 2_500, seats: 5, currency: 'ARS' },
+    });
   });
 
   it('rechaza firma inválida y procesa el webhook válido exactamente una vez', async () => {

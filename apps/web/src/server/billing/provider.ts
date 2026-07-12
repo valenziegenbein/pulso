@@ -43,11 +43,12 @@ export interface BillingProvider {
 
 /** Proveedor sólo para desarrollo/tests. No genera cobros ni URLs externas. */
 export class MockBillingProvider implements BillingProvider {
-  readonly name = 'MOCK';
+  readonly name: string;
   private readonly subscriptions = new Map<string, BillingSubscriptionSnapshot>();
 
-  constructor(private readonly webhookSecret: string) {
+  constructor(private readonly webhookSecret: string, name = 'MOCK') {
     if (webhookSecret.length < 16) throw new Error('El secreto mock debe tener al menos 16 caracteres.');
+    this.name = name;
   }
 
   async createCustomer(input: { organizationId: string; email: string }) {
@@ -86,6 +87,13 @@ export class MockBillingProvider implements BillingProvider {
 
   sign(rawBody: string): string {
     return `sha256=${createHmac('sha256', this.webhookSecret).update(rawBody, 'utf8').digest('hex')}`;
+  }
+}
+
+/** Simula la semántica de Mercado Pago sin red, credenciales ni cobros. */
+export class MercadoPagoMockBillingProvider extends MockBillingProvider {
+  constructor(webhookSecret: string) {
+    super(webhookSecret, 'MERCADO_PAGO_MOCK');
   }
 }
 
