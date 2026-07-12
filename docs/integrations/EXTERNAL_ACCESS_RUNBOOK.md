@@ -125,8 +125,10 @@ Variables nuevas:
 
 El smoke reversible es `pnpm billing:smoke:sandbox`. Exige un comprador de
 prueba `@testuser.com`, retorno HTTPS y el ACK literal definido en el script;
-crea una preapproval mínima de ARS 10, la consulta, la cancela y vuelve a
-consultarla. No usar una cuenta real ni la misma identidad vendedora. Mercado
+crea una preapproval mínima de ARS 100, la consulta, la cancela y vuelve a
+consultarla. Antes y después busca por comprador y cancela exclusivamente
+smokes huérfanos identificados por reason y external reference. No usar una
+cuenta real ni la misma identidad vendedora. Mercado
 Pago requiere al menos vendedor y comprador de prueba separados.
 
 Endpoint implementado: `POST /api/billing/mercado-pago/webhook`. Permanece 404

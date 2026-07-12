@@ -136,3 +136,16 @@ Este documento no contiene secretos. Los valores reales viven únicamente en
   URL HTTPS de staging. El smoke create/get/cancel/get quedó automatizado pero
   fail-closed hasta contar con ambos.
 - Producción permanece en provider mock y `live=false`; no se accedió al VPS.
+
+## Actualización sandbox posterior — 2026-07-12
+
+- Comprador separado `@testuser.com` configurado localmente; el valor no se
+  imprimió ni se versionó.
+- El primer create fue rechazado correctamente porque ARS 10 estaba por debajo
+  del mínimo vigente de ARS 15. El smoke se corrigió a ARS 100.
+- Con el importe válido, Mercado Pago devolvió HTTP 500 después de los
+  reintentos del SDK. La búsqueda autoritativa por comprador funcionó y confirmó
+  cero preapprovals smoke activas; no hubo suscripción ni cobro pendiente.
+- El script ahora sanitiza errores del proveedor y limpia de forma verificable
+  sólo recursos con reason y external reference propios del smoke.
+- Checkout público, provider productivo y `live` permanecen deshabilitados.
