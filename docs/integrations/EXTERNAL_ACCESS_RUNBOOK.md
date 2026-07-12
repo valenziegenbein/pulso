@@ -28,6 +28,20 @@ El worker se ejecuta una vez con `pnpm email:worker:once`. En producción exige
 No guardar nunca un refresh token en claro: se cifra con
 `WORKLOG_ENCRYPTION_KEY` antes de incorporarlo al secret store del entorno.
 
+## Bootstrap OAuth local
+
+1. Agregar exactamente `http://127.0.0.1:53682/oauth/callback` a los redirect
+   URIs autorizados del cliente web en Google Cloud.
+2. Verificar que `.env` contiene client ID, client secret, sender y
+   `WORKLOG_ENCRYPTION_KEY`.
+3. Ejecutar `pnpm email:oauth:configure`. El script abre el navegador del
+   sistema (no un webview), solicita sólo `gmail.send`, valida `state`, bloquea
+   redirects en el intercambio y escribe el refresh token ya cifrado en `.env`.
+4. Confirmar únicamente presencia de `GOOGLE_GMAIL_REFRESH_TOKEN_ENCRYPTED`;
+   nunca imprimir ni copiar su valor.
+
+Este paso requiere consentimiento personal del titular. No ejecutar desde CI.
+
 ## Sandbox vs producción
 
 - Mercado Pago: las credenciales de prueba empiezan con `TEST-`; las
