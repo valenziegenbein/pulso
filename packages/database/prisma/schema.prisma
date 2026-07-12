@@ -45,6 +45,7 @@ model Organization {
   usageLedger    UsageLedger[]
   aiUsageEvents  AIUsageEvent[]
   billingEvents  BillingWebhookEvent[]
+  billingCheckoutAttempts BillingCheckoutAttempt[]
 }
 
 model User {
@@ -76,6 +77,7 @@ model User {
   suggestions         AIWorklogSuggestion[]
   attachments         Attachment[]
   auditEvents         AuditEvent[]
+  billingCheckoutAttempts BillingCheckoutAttempt[] @relation("BillingCheckoutCreatedBy")
   authSessions        AuthSession[]
   verificationTokens  VerificationToken[]
   passwordResetTokens PasswordResetToken[]
@@ -535,6 +537,37 @@ model OrganizationSubscription {
   @@index([planKey, status])
   @@index([provider, providerCustomerId])
   @@unique([provider, providerSubscriptionId])
+}
+
+model BillingCheckoutAttempt {
+  id                     String   @id @default(cuid())
+  organizationId         String
+  createdById            String
+  provider               String
+  offerId                 String
+  priceVersionId          String
+  planKey                 String
+  seats                   Int
+  currency                String
+  listAmountCentavos      Int
+  chargedAmountCentavos   Int
+  discountBps             Int
+  discountMonths          Int
+  status                   String   @default("CREATED")
+  providerCheckoutId       String?
+  providerSubscriptionId   String?
+  expiresAt                DateTime
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("BillingCheckoutCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([provider, providerCheckoutId])
+  @@unique([provider, providerSubscriptionId])
+  @@index([organizationId, status, createdAt])
+  @@index([createdById, createdAt])
+  @@index([expiresAt])
 }
 
 model BillingWebhookEvent {
