@@ -121,3 +121,18 @@ Este documento no contiene secretos. Los valores reales viven únicamente en
    preparar candidata inmutable y promover mediante el runbook autorizado.
 4. **Producción**: activar credenciales productivas de Mercado Pago y publicar
    la app OAuth solo con checkpoint L5 específico.
+
+## Actualización P6 local — 2026-07-12
+
+- Adapter real `MERCADO_PAGO` implementado sobre la API de preapprovals y el
+  SDK oficial 3.2.0; OAuth de vendedores continúa fuera de alcance.
+- Ruta firmada implementada en `/api/billing/mercado-pago/webhook`, cerrada con
+  404 mientras producción use `MERCADO_PAGO_MOCK`.
+- El tenant, plan, seats, moneda y monto se resuelven desde el nuevo
+  `BillingCheckoutAttempt`; una notificación no puede elegir organización.
+- Credencial TEST validada mediante una consulta read-only, sin imprimir
+  identidad ni token. No se crearon suscripciones ni cobros externos.
+- Pendientes externos: comprador de prueba separado y secreto de webhook de una
+  URL HTTPS de staging. El smoke create/get/cancel/get quedó automatizado pero
+  fail-closed hasta contar con ambos.
+- Producción permanece en provider mock y `live=false`; no se accedió al VPS.

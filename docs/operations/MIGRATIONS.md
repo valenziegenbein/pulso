@@ -105,6 +105,18 @@ suscripción y crea el inbox de webhooks vacío. Antes y después de promoverla:
 - verificar el índice único compuesto proveedor/evento y proveedor/suscripción;
 - mantener el proveedor `MOCK` sin endpoint público en producción.
 
+La migración P6 (`20260712230000_billing_checkout_attempts`) también es
+aditiva. Crea únicamente `BillingCheckoutAttempt`, índices, checks y foreign
+keys; no modifica suscripciones ni entitlements existentes. Después de
+aplicarla:
+
+- confirmar que la tabla existe y comienza vacía;
+- comprobar los checks de ARS, monto positivo, descuento y seats;
+- verificar que `(provider, providerCheckoutId)` y
+  `(provider, providerSubscriptionId)` sean únicos;
+- mantener `PULSO_BILLING_PROVIDER=MERCADO_PAGO_MOCK` durante migración y
+  smoke; habilitar sandbox es un paso separado.
+
 ## Smoke y promoción
 
 1. `/api/readiness` devuelve 200.

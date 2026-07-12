@@ -113,3 +113,16 @@ estado running y repetir `ops/smoke.sh`. No recrear `pulso-db`.
   `docker-compose.before.yml` / `env.before` dentro del checkpoint.
 - Schema: siete migraciones aplicadas; cambios aditivos verificados contra el
   backup restaurado. El rollback de aplicación no revierte automáticamente DB.
+
+## Preparación P6 (todavía no desplegada)
+
+- La candidata P6 deberá aplicar ocho migraciones mediante el job `migrate`
+  antes de promover la aplicación.
+- El compose conserva `MERCADO_PAGO_MOCK` y `live=false` por defecto. El primer
+  staging sandbox debe inyectar token TEST, secreto de webhook, versión ARS y
+  URL HTTPS sin modificar producción.
+- El smoke debe comprobar `/billing`, el 404 del webhook cuando está en mock,
+  firma inválida 401 en sandbox, checkout pendiente, callback autoritativo e
+  idempotencia. No promover una credencial `APP_USR-` en esta etapa.
+- Rollback de aplicación: digest P5 anterior. La tabla aditiva de intentos puede
+  permanecer vacía; no improvisar un down migration.

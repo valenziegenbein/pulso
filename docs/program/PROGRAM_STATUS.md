@@ -123,6 +123,19 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 | G6 Staging completo | Cumplido | Imagen `3599fc0`; migrate, sesiones owner/member y smokes verdes |
 | G7 Mercado Pago real | Bloqueado | Requiere decisión comercial y credenciales específicas |
 
+## Gates P6 local
+
+| Gate | Estado | Evidencia |
+| --- | --- | --- |
+| Adapter TEST | Cumplido | Preapproval, consulta, cancel/resume, URL y credencial tipada |
+| Aislamiento checkout | Cumplido | Tenant/plan/monto derivados de `BillingCheckoutAttempt` |
+| Webhook | Cumplido local | Firma oficial, fetch autoritativo, límite 64 KiB e idempotencia |
+| PostgreSQL | Cumplido | 35 DB-backed, 3 upgrade, ocho migraciones, drift cero |
+| Credencial TEST | Cumplido read-only | Consulta autenticada sin exponer token ni identidad |
+| Comprador + webhook staging | Pendiente | Requiere cuenta buyer de prueba y URL HTTPS/secreto |
+| Repricing mes 13 | Bloqueante productivo | Checkout flag false hasta implementar worker/reconciliación |
+| Cobro productivo | Bloqueado | Sin credenciales APP_USR ni opt-in live |
+
 ## Gates pendientes
 
 - P0.5: ninguno.
@@ -169,4 +182,6 @@ Detalle y responsables en `RISK_REGISTER.md`.
 ## Próxima acción autorizable
 
 Mantener observación P5 y registro cerrado hasta una decisión explícita de
-apertura/onboarding. Continuar Mercado Pago sólo en sandbox/mock.
+apertura/onboarding. Continuar Mercado Pago sólo en sandbox: crear comprador de
+prueba separado, publicar endpoint HTTPS de staging y ejecutar el smoke
+reversible. Mantener producción en mock y checkout=false hasta cerrar repricing.

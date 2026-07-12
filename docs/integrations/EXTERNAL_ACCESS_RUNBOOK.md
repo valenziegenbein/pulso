@@ -102,3 +102,39 @@ presencia/ausencia y, si es imprescindible, su prefijo estándar (`TEST-`,
 - Obtener y cifrar el refresh token del remitente (requiere consentimiento interactivo).
 - Enviar emails reales.
 - Todo lo anterior requiere checkpoint L5 explícito del titular.
+
+## Mercado Pago P6: sandbox y promoción controlada
+
+El adapter real usa `POST /preapproval` sin plan externo: el monto mensual ARS
+proviene de una versión interna y el `external_reference` apunta a un
+`BillingCheckoutAttempt` persistido. El webhook nunca acepta organización,
+plan, seats o monto desde el cliente ni desde el cuerpo de la notificación:
+verifica HMAC, consulta `GET /preapproval/{id}` y compara el recurso con el
+intento guardado antes de conceder entitlements.
+
+Variables nuevas:
+
+- `MERCADO_PAGO_MODE=TEST` exige token `TEST-`.
+- `MERCADO_PAGO_MODE=PRODUCTION` exige token `APP_USR-` y además
+  `PULSO_MERCADO_PAGO_LIVE_ENABLED=true`.
+- `PULSO_BILLING_PROVIDER` sigue en `MERCADO_PAGO_MOCK` por defecto, también
+  dentro del contenedor productivo.
+- `PULSO_MERCADO_PAGO_CHECKOUT_ENABLED=true` es un segundo opt-in sólo para
+  sandbox; permanece `false` en producción hasta implementar repricing mes 13.
+- `MERCADO_PAGO_WEBHOOK_SECRET` debe existir antes de mostrar checkout.
+
+El smoke reversible es `pnpm billing:smoke:sandbox`. Exige un comprador de
+prueba `@testuser.com`, retorno HTTPS y el ACK literal definido en el script;
+crea una preapproval mínima de ARS 10, la consulta, la cancela y vuelve a
+consultarla. No usar una cuenta real ni la misma identidad vendedora. Mercado
+Pago requiere al menos vendedor y comprador de prueba separados.
+
+Endpoint implementado: `POST /api/billing/mercado-pago/webhook`. Permanece 404
+mientras el provider sea mock, limita el body a 64 KiB incluso con transferencia
+chunked y sólo acepta `subscription_preapproval` firmado. La URL pública y el
+secreto deben configurarse en un staging HTTPS antes del primer checkout real.
+
+La promoción sigue este orden: crear comprador sandbox → publicar staging por
+digest → configurar URL/secreto de prueba → ejecutar firma simulada → ejecutar
+smoke create/cancel → autorizar manualmente una suscripción de prueba → comprobar
+webhook e idempotencia → recién entonces evaluar credenciales productivas.

@@ -279,3 +279,20 @@
 - Consecuencias: el registro continúa cerrado hasta consentimiento, smoke real y
   promoción explícita. Los fallos del provider reintentan sin exponer respuestas.
 - Reversibilidad: alta; `EmailProvider` permite reemplazar Gmail.
+
+## D-025 — Checkout ligado a cotización persistida y producción bloqueada
+
+- Fecha: 2026-07-12
+- Contexto: Mercado Pago informa IDs y estado, pero un webhook no debe poder
+  elegir tenant, oferta o monto. Además, un monto promocional de preapproval se
+  mantendría indefinidamente si Pulso no lo repricia al terminar el mes 12.
+- Decisión: crear el intento y la cotización en PostgreSQL antes de llamar al
+  proveedor; usar su ID opaco como `external_reference`; verificar firma y
+  volver a consultar la preapproval. El checkout requiere un feature flag
+  adicional y producción continúa cerrada hasta implementar el job de repricing.
+- Alternativas: confiar en metadata del webhook, confirmar por redirect o cobrar
+  el descuento indefinidamente; rechazadas por aislamiento, fraude y divergencia
+  con la oferta publicada.
+- Consecuencias: el sandbox puede validar creación/cancelación sin cobros reales;
+  `APP_USR-` no se promueve todavía y el mes 13 será un sprint explícito.
+- Reversibilidad: alta; el adapter sigue detrás del contrato `BillingProvider`.

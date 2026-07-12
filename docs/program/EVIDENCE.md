@@ -441,3 +441,22 @@ Total de tests ejecutados por el gate: 67.
   transitó por stdin y no fue almacenado ni mostrado.
 - Rollback: `/var/backups/pulso/deploy-20260712T204705Z-p5` y tag
   `pulso-rollback:p5-20260712T204705Z`.
+
+## P6 local — Mercado Pago sandbox fail-closed — 2026-07-12
+
+- Migración aditiva `20260712230000_billing_checkout_attempts`: cotización ARS,
+  oferta, plan, seats, actor, proveedor, expiración y referencias externas con
+  checks monetarios y claves únicas.
+- Cada checkout invalida intentos pendientes anteriores bajo advisory lock por
+  organización. Sólo owner activo puede crearlo.
+- Adapter real con token TEST/APP_USR coherente al modo, timeout, idempotency
+  key, URL de retorno validada y destino de checkout limitado a dominios de
+  Mercado Pago.
+- Webhook: HMAC oficial (`x-signature`, `x-request-id`, `data.id`), body máximo
+  64 KiB, consulta autoritativa de preapproval, monto/moneda/referencia
+  cotejados con PostgreSQL e inbox idempotente.
+- Credencial TEST local verificada read-only. No se creó preapproval externa por
+  faltar comprador sandbox separado; el smoke reversible quedó preparado.
+- PostgreSQL gate: 8 migraciones desde cero, status actualizado, drift cero,
+  35 pruebas DB-backed, 3 pruebas de upgrade y conteos sintéticos preservados.
+- README ajenos continúan intactos fuera del índice. Sin VPS, deploy ni cobros.
