@@ -31,7 +31,7 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 - Rama: `codex/web-control-plane-hardening`
 - Commit inicial: `e8ac1cf6d98c2163abf6bdcabbceab88b9bc9220`
 - HEAD operativo previo a este documento: `3599fc03aa21d7eac1a804d81170dd88b7ede7e0`
-- Commits locales generados: 28 (17 operativos y 11 checkpoints/follow-ups, incluyendo este documento)
+- Commits locales generados: 30 (18 operativos y 12 checkpoints/follow-ups, incluyendo este documento)
 - Tags generados: ninguno
 - Pushes: ninguno
 - Índice Git: vacío
@@ -160,6 +160,7 @@ Detalle y responsables en `RISK_REGISTER.md`.
 14. `5a3573b` — `feat(billing): add provider-neutral subscription control plane`
 15. `3cdec2d` — `feat(web): add owner-only billing overview`
 16. `3599fc0` — `fix(web): return not found for unauthorized billing access`
+17. `3054ddb` — `feat(billing): add versioned ARS launch pricing mock`
 
 ## Próxima acción autorizable
 

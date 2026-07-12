@@ -241,3 +241,27 @@
 - Alternativas: página de pago falsa o URLs `mock://`; rechazadas por ambigüedad.
 - Consecuencias: tests cubren el flujo contractual sin representar facturación.
 - Reversibilidad: total; el provider real reemplaza al mock por configuración.
+
+## D-022 — Lanzamiento con 25% temporal y ARS versionado
+
+- Fecha: 2026-07-12
+- Contexto: los precios de lista se definen en USD, pero Mercado Pago cobrará
+  ARS y la cotización cambia con frecuencia.
+- Decisión: ofrecer 25% OFF durante los primeros 12 meses, no como trial ni
+  descuento perpetuo. El checkout exige una tabla ARS aprobada con ID y vencimiento.
+- Alternativas: consultar una cotización viva en cada render o hardcodear un
+  equivalente; rechazadas porque el precio visible podría diferir del cobrado.
+- Consecuencias: la página puede mostrar USD estable y ARS sólo con versión vigente.
+- Reversibilidad: alta; campañas futuras se agregan como nuevas versiones.
+
+## D-023 — Mercado Pago propio sin OAuth de vendedores
+
+- Fecha: 2026-07-12
+- Contexto: OAuth de Mercado Pago autoriza operar recursos de vendedores
+  terceros; Pulso inicialmente vende suscripciones en una única cuenta propia.
+- Decisión: usar credenciales de la aplicación/cuenta propia cuando se active el
+  provider real. No almacenar refresh tokens de vendedores ni convertir Pulso en marketplace.
+- Alternativas: flujo Authorization Code + PKCE por organización; rechazado por
+  ampliar permisos, superficie de secretos y modelo de negocio sin necesidad.
+- Consecuencias: OAuth queda reservado para Gmail sender/login cuando corresponda.
+- Reversibilidad: media; un marketplace futuro requeriría una fase específica.

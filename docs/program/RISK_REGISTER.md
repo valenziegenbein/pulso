@@ -25,6 +25,7 @@
 | R-021 | P1/P2/P3 están validados local/staging pero no desplegados | Alta | Media | Promover sólo por digest tras backup, restore y checkpoint productivo | SRE/Security | Abierto |
 | R-022 | Precios, impuestos, reembolsos y unidad de consumo managed no están definidos | Alta | Alta | Mantener cuotas comerciales en cero y billing mock hasta decisión explícita | Titular + Product | Bloqueo intencional de cobro real |
 | R-023 | No existe adaptador ni credenciales Mercado Pago y el webhook real aún no fue validado | Alta | Alta | Implementar sólo tras aprobar parámetros comerciales; validar firma/sandbox antes de producción | Titular + Billing | Bloqueo intencional de cobro real |
+| R-024 | Una cotización ARS desactualizada puede erosionar margen o diferir del checkout | Alta | Media | Price version con vencimiento obligatorio; checkout fail-closed | Product + Billing | Mitigado en mock; operación real pendiente |
 
 ## Riesgos cerrados localmente
 

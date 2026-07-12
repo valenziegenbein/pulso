@@ -389,3 +389,21 @@ Total de tests ejecutados por el gate: 67.
 - Artefacto descartado: la primera imagen `3cdec2d` se eliminó al detectar antes
   de staging que el acceso directo MEMBER podía presentar 500. No fue promovida.
 - Cleanup: staging y worktree eliminados; se conserva sólo la candidata correcta.
+
+## P4 follow-up — Precios de lanzamiento y Mercado Pago mock — 2026-07-12
+
+- Commit operativo: `3054ddb`.
+- Ofertas backend: Teams 5 (USD 49 lista), Teams 10 (USD 89) y Business 50
+  (USD 399), mapeadas a plan/seat limit sin acoplar IDs visuales al dominio.
+- Promoción: 25% durante los primeros 12 meses; montos calculados en enteros,
+  nunca floats monetarios persistidos.
+- ARS: exige versión, tasa y vencimiento. Una tabla ausente/vencida bloquea el
+  checkout mock; no se publicó una cotización inventada.
+- Provider: `MERCADO_PAGO_MOCK`, sin red, cobros ni URL de pago ficticia.
+- OAuth Mercado Pago: deliberadamente no implementado; Pulso cobra en cuenta
+  propia y no actúa como marketplace/vendedor tercero.
+- Prototipo visual inspeccionado en `F:\pulso-página web`: precios de lista
+  tachados, 25% OFF, duración y placeholder ARS; lint/build Next 16 verdes y
+  revisión visual local realizada.
+- Green gate control plane: 59 unitarios, 31 PostgreSQL, 3 upgrade, seis
+  migraciones, drift cero, typecheck, lint, build, Electron y safety verdes.
