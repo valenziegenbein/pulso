@@ -149,3 +149,17 @@ Este documento no contiene secretos. Los valores reales viven únicamente en
 - El script ahora sanitiza errores del proveedor y limpia de forma verificable
   sólo recursos con reason y external reference propios del smoke.
 - Checkout público, provider productivo y `live` permanecen deshabilitados.
+
+### Diagnóstico definitivo del HTTP 500
+
+- El comprador actualizado cumple el formato sandbox y la búsqueda de
+  preapprovals continúa en cero.
+- `GET /users/me` con la credencial TEST confirmó sitio `MLA`, país `AR`, email
+  confirmado y cuenta activa; no se registraron identificadores ni datos
+  personales.
+- Mercado Pago informa `billing.allow=false` con código `address_pending` para
+  la identidad vendedora. Éste es el bloqueo previo a crear Preapproval y
+  explica el HTTP 500 del sandbox.
+- Acción humana pendiente: completar/validar la dirección de facturación de la
+  cuenta vendedora en Mercado Pago. Después se repite el smoke reversible.
+- Cero suscripciones smoke activas; checkout y live siguen deshabilitados.
