@@ -6,9 +6,9 @@ const MAX_ATTEMPTS = 5;
 
 export async function enqueueEmail(input: {
   idempotencyKey: string; recipient: string; template: EmailTemplate; payload: Record<string, unknown>;
-}) {
+}, client: Pick<Prisma.TransactionClient, 'emailOutbox'> = prisma) {
   if (!input.idempotencyKey.trim() || !input.recipient.includes('@')) throw new Error('Email de outbox inválido.');
-  return prisma.emailOutbox.upsert({
+  return client.emailOutbox.upsert({
     where: { idempotencyKey: input.idempotencyKey },
     update: {},
     create: {
@@ -49,8 +49,9 @@ async function claimRows(limit: number) {
   return prisma.$transaction(async (tx) => {
     const ids = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       SELECT "id" FROM "EmailOutbox"
-      WHERE (("status" IN ('PENDING','FAILED') AND "nextAttemptAt" <= CURRENT_TIMESTAMP)
-        OR ("status" = 'PROCESSING' AND "lockedAt" < CURRENT_TIMESTAMP - interval '10 minutes'))
+      WHERE ("status" = 'PENDING'
+        OR ("status" = 'FAILED' AND "nextAttemptAt" <= clock_timestamp())
+        OR ("status" = 'PROCESSING' AND "lockedAt" < clock_timestamp() - interval '10 minutes'))
       ORDER BY "createdAt" ASC FOR UPDATE SKIP LOCKED LIMIT ${limit}
     `);
     if (!ids.length) return [];

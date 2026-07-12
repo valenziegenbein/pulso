@@ -2,6 +2,7 @@ import { Prisma, prisma, hashPassword, verifyPassword } from '@pulso/database';
 import { createOpaqueToken, hashOpaqueToken, normalizeEmail } from '@/lib/auth/session';
 import { SESSION_MAX_AGE } from '@/lib/auth/constants';
 import { assertSeatAvailable } from '@/server/entitlements';
+import { enqueueEmail } from '@/server/email/outbox';
 
 const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
 const RESET_TTL_MS = 60 * 60 * 1000;
@@ -28,10 +29,23 @@ export class MockAuthNotificationProvider implements AuthNotificationProvider {
 }
 
 const runtimeAuthNotifications: AuthNotificationProvider = {
-  async send(): Promise<void> {
-    // P2 usa un sink mock: no loguea ni retiene tokens. P5 añadirá outbox real.
+  async send(notification): Promise<void> {
+    await enqueueAuthNotification(notification);
   },
 };
+
+async function enqueueAuthNotification(
+  notification: AuthNotification,
+  client: Pick<Prisma.TransactionClient, 'emailOutbox'> = prisma,
+): Promise<void> {
+  const actionUrl = buildAuthActionUrl(notification.kind, notification.token);
+  await enqueueEmail({
+    idempotencyKey: `auth:${notification.kind}:${hashOpaqueToken(notification.token)}`,
+    recipient: normalizeEmail(notification.recipient),
+    template: notification.kind,
+    payload: { actionUrl, organizationName: notification.organizationName },
+  }, client);
+}
 
 export async function consumeAuthRateLimit(
   action: string,
@@ -82,6 +96,9 @@ export async function issueVerificationToken(
   provider: AuthNotificationProvider = runtimeAuthNotifications,
 ): Promise<void> {
   const token = createOpaqueToken();
+  const notification: AuthNotification = {
+    kind: 'VERIFY_EMAIL', recipient: normalizeEmail(recipient), token,
+  };
   await prisma.$transaction(async (tx) => {
     await tx.verificationToken.deleteMany({ where: { userId, consumedAt: null } });
     await tx.verificationToken.create({
@@ -91,8 +108,9 @@ export async function issueVerificationToken(
         expiresAt: new Date(Date.now() + VERIFICATION_TTL_MS),
       },
     });
+    if (provider === runtimeAuthNotifications) await enqueueAuthNotification(notification, tx);
   });
-  await provider.send({ kind: 'VERIFY_EMAIL', recipient: normalizeEmail(recipient), token });
+  if (provider !== runtimeAuthNotifications) await provider.send(notification);
 }
 
 export async function verifyEmailToken(token: string): Promise<boolean> {
@@ -121,6 +139,7 @@ export async function requestPasswordReset(
   const user = await prisma.user.findUnique({ where: { normalizedEmail } });
   if (!user || user.status !== 'ACTIVE' || !user.emailVerifiedAt) return;
   const token = createOpaqueToken();
+  const notification: AuthNotification = { kind: 'RESET_PASSWORD', recipient: normalizedEmail, token };
   await prisma.$transaction(async (tx) => {
     await tx.passwordResetToken.deleteMany({ where: { userId: user.id, consumedAt: null } });
     await tx.passwordResetToken.create({
@@ -130,8 +149,9 @@ export async function requestPasswordReset(
         expiresAt: new Date(Date.now() + RESET_TTL_MS),
       },
     });
+    if (provider === runtimeAuthNotifications) await enqueueAuthNotification(notification, tx);
   });
-  await provider.send({ kind: 'RESET_PASSWORD', recipient: normalizedEmail, token });
+  if (provider !== runtimeAuthNotifications) await provider.send(notification);
 }
 
 export async function resetPasswordWithToken(token: string, newPassword: string): Promise<boolean> {
@@ -250,7 +270,7 @@ export async function createOrganizationInvite(
       where: { organizationId: input.organizationId, normalizedEmail, status: 'PENDING' },
       data: { status: 'SUPERSEDED', pendingKey: null },
     });
-    return tx.organizationInvite.create({
+    const created = await tx.organizationInvite.create({
       data: {
         organizationId: input.organizationId,
         normalizedEmail,
@@ -263,13 +283,24 @@ export async function createOrganizationInvite(
       },
       select: { id: true, organization: { select: { name: true } } },
     });
+    if (provider === runtimeAuthNotifications) {
+      await enqueueAuthNotification({
+        kind: 'ORGANIZATION_INVITE',
+        recipient: normalizedEmail,
+        token,
+        organizationName: created.organization.name,
+      }, tx);
+    }
+    return created;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
-  await provider.send({
-    kind: 'ORGANIZATION_INVITE',
-    recipient: normalizedEmail,
-    token,
-    organizationName: invite.organization.name,
-  });
+  if (provider !== runtimeAuthNotifications) {
+    await provider.send({
+      kind: 'ORGANIZATION_INVITE',
+      recipient: normalizedEmail,
+      token,
+      organizationName: invite.organization.name,
+    });
+  }
   return { inviteId: invite.id };
 }
 
@@ -445,6 +476,26 @@ function isAllowedDesktopRedirect(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+function buildAuthActionUrl(kind: AuthNotification['kind'], token: string): string {
+  const configured = process.env.PULSO_APP_URL;
+  if (!configured) throw new Error('PULSO_APP_URL es obligatorio para enviar emails de autenticación.');
+  const base = new URL(configured);
+  const production = process.env.NODE_ENV === 'production';
+  const localDevelopment = !production && ['localhost', '127.0.0.1', '[::1]'].includes(base.hostname);
+  if ((base.protocol !== 'https:' && !localDevelopment)
+    || base.username || base.password || base.search || base.hash || base.pathname !== '/') {
+    throw new Error('PULSO_APP_URL debe ser un origen HTTPS sin ruta, credenciales, query ni fragmento.');
+  }
+  const paths: Record<AuthNotification['kind'], string> = {
+    VERIFY_EMAIL: '/api/auth/verify',
+    RESET_PASSWORD: '/reset-password',
+    ORGANIZATION_INVITE: '/invite/accept',
+  };
+  const url = new URL(paths[kind], base);
+  url.searchParams.set('token', token);
+  return url.toString();
 }
 
 async function withSerializableRetry<T>(operation: () => Promise<T>): Promise<T> {

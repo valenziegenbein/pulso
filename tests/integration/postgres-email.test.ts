@@ -3,7 +3,10 @@ import { prisma } from '@pulso/database';
 import { enqueueEmail, processEmailOutboxBatch } from '@/server/email/outbox';
 import { MockEmailProvider } from '@/server/email/provider';
 
-beforeAll(() => { process.env.WORKLOG_ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'; });
+beforeAll(async () => {
+  process.env.WORKLOG_ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+  await prisma.emailOutbox.deleteMany();
+});
 afterAll(async () => prisma.$disconnect());
 
 describe('PostgreSQL real: email outbox', () => {

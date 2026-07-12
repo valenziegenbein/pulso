@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { hashPassword, prisma, verifyPassword } from '@pulso/database';
+import { decryptSecret, hashPassword, prisma, verifyPassword } from '@pulso/database';
 import {
   acceptOrganizationInvite,
   consumeAuthRateLimit,
@@ -37,6 +37,7 @@ const ids = {
 } as const;
 
 beforeAll(async () => {
+  process.env.WORKLOG_ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
   await prisma.organization.createMany({
     data: [
       { id: ids.orgA, name: 'Auth A', slug: 'auth-integration-a' },
@@ -150,6 +151,35 @@ describe('PostgreSQL real: tokens de auth de un solo uso', () => {
     const updated = await prisma.user.findUniqueOrThrow({ where: { id: ids.reset } });
     expect(verifyPassword('new-password-long-enough', updated.passwordHash)).toBe(true);
     expect(updated.securityVersion).toBe(user.securityVersion + 1);
+  });
+
+  it('commits the auth token and encrypted outbox row atomically', async () => {
+    const previousUrl = process.env.PULSO_APP_URL;
+    process.env.PULSO_APP_URL = 'http://127.0.0.1:3000';
+    try {
+      await issueVerificationToken(ids.unverified, 'auth-unverified@integration.invalid');
+      const row = await prisma.emailOutbox.findFirstOrThrow({
+        where: { recipient: 'auth-unverified@integration.invalid', template: 'VERIFY_EMAIL' },
+        orderBy: { createdAt: 'desc' },
+      });
+      const payload = JSON.parse(decryptSecret(row.payloadEncrypted)) as { actionUrl: string };
+      const rawToken = new URL(payload.actionUrl).searchParams.get('token');
+      expect(rawToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(row.payloadEncrypted).not.toContain(rawToken!);
+      await expect(prisma.verificationToken.findUnique({
+        where: { tokenHash: hashOpaqueToken(rawToken!) },
+      })).resolves.toMatchObject({ userId: ids.unverified, consumedAt: null });
+
+      const tokenCount = await prisma.verificationToken.count({ where: { userId: ids.unverified } });
+      process.env.PULSO_APP_URL = 'http://public.example.invalid';
+      await expect(issueVerificationToken(ids.unverified, 'auth-unverified@integration.invalid'))
+        .rejects.toThrow('PULSO_APP_URL');
+      await expect(prisma.verificationToken.count({ where: { userId: ids.unverified } }))
+        .resolves.toBe(tokenCount);
+    } finally {
+      if (previousUrl === undefined) delete process.env.PULSO_APP_URL;
+      else process.env.PULSO_APP_URL = previousUrl;
+    }
   });
 });
 
