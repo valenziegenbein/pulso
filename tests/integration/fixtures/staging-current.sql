@@ -3,8 +3,8 @@ INSERT INTO "Organization" ("id", "name", "slug")
 VALUES ('staging-org', 'Organización sintética de staging', 'staging-synthetic');
 
 INSERT INTO "User" ("id", "email", "normalizedEmail", "name", "passwordHash", "emailVerifiedAt", "updatedAt") VALUES
-  ('staging-admin', 'staging-admin@integration.invalid', 'staging-admin@integration.invalid', 'Admin sintético', 'not-a-real-password', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-  ('staging-member', 'staging-member@integration.invalid', 'staging-member@integration.invalid', 'Miembro sintético', 'not-a-real-password', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+  ('staging-admin', 'staging-admin@integration.invalid', 'staging-admin@integration.invalid', 'Admin sintético', 'scrypt$000102030405060708090a0b0c0d0e0f$c283348fbe9c87c4034ebc5a6b68dfe9b9010edd762ec544225ea292aec86bac49d19282b77341afd7c3a8b16334d24c0e68116033b84d3504f9c1d1d548a70b', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+  ('staging-member', 'staging-member@integration.invalid', 'staging-member@integration.invalid', 'Miembro sintético', 'scrypt$000102030405060708090a0b0c0d0e0f$c283348fbe9c87c4034ebc5a6b68dfe9b9010edd762ec544225ea292aec86bac49d19282b77341afd7c3a8b16334d24c0e68116033b84d3504f9c1d1d548a70b', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO "Role" ("id", "organizationId", "key", "name", "permissions", "isSystem") VALUES
   ('staging-role-admin', 'staging-org', 'ORG_ADMIN', 'Admin', '[]', true),
