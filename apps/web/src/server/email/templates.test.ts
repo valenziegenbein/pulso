@@ -14,4 +14,16 @@ describe('templates transaccionales', () => {
   it('rechaza HTTP en producción', () => {
     expect(() => renderEmail('VERIFY_EMAIL', 'person@integration.invalid', { actionUrl: 'http://example.com/verify' }, true)).toThrow('HTTPS');
   });
+  it('renderiza consultas sin interpretar HTML ni saltos de línea en el asunto', () => {
+    const email = renderEmail('CONTACT_REQUEST', 'owner@integration.invalid', {
+      name: 'Ada\r\nBcc: attacker@example.com',
+      senderEmail: 'ada@example.com',
+      topic: 'teams',
+      message: '<script>alert(1)</script>\nNecesito una demo.',
+    });
+    expect(email.subject).not.toContain('\n');
+    expect(email.html).toContain('&lt;script&gt;');
+    expect(email.html).not.toContain('<script>');
+    expect(email.text).toContain('ada@example.com');
+  });
 });
