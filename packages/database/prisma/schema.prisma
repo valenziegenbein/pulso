@@ -558,6 +558,25 @@ model BillingWebhookEvent {
   @@index([status, createdAt])
 }
 
+model EmailOutbox {
+  id                String    @id @default(cuid())
+  idempotencyKey    String    @unique
+  recipient         String
+  template          String
+  payloadEncrypted  String
+  status            String    @default("PENDING")
+  attempts          Int       @default(0)
+  nextAttemptAt     DateTime  @default(now())
+  lockedAt          DateTime?
+  providerMessageId String?
+  lastError         String?
+  createdAt         DateTime  @default(now())
+  sentAt            DateTime?
+
+  @@index([status, nextAttemptAt])
+  @@index([recipient, createdAt])
+}
+
 model UsageLedger {
   id             String   @id @default(cuid())
   organizationId String
