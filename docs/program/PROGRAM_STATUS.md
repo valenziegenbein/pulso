@@ -6,8 +6,8 @@
 
 **P5 — Email transaccional: EN CURSO LOCAL**.
 Outbox cifrado, templates, integración atómica con auth, worker, provider Gmail
-OAuth y redirect local están verdes. Falta consentimiento y smoke real; registro
-público continúa cerrado.
+OAuth, redirect local, consentimiento y smoke directo están verdes. Falta el
+smoke auth → outbox → worker aislado; registro público continúa cerrado.
 
 El hardening está versionado, respaldado, registrado, validado en staging y
 desplegado en producción. El segundo destino offsite duradero permanece como
@@ -22,7 +22,7 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 | P2 | Completa local/staging | G1–G5 verdes; registro público deliberadamente cerrado |
 | P3 | Completa local/staging | Seats transaccionales, ownership, planes y cuotas fail-closed |
 | P4 | Completa local/staging (mock) | Provider neutral, webhook inbox y vista owner-only verdes |
-| P5 | En curso local | Outbox/worker/provider Gmail verdes; falta refresh token cifrado y smoke real |
+| P5 | En curso local | Provider Gmail real verde; falta smoke end-to-end aislado y promoción |
 | P6 | No iniciada | Sin cambios visuales ni rutas públicas nuevas |
 | P7 | No iniciada | Sin analytics ni observabilidad compleja añadida |
 
@@ -125,7 +125,7 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 ## Gates pendientes
 
 - P0.5: ninguno.
-- P5: consentimiento Gmail, refresh token cifrado, smoke real y promoción.
+- P5: smoke auth → outbox → worker aislado y promoción.
 - Programa: segundo destino offsite duradero.
 
 ## Riesgos prioritarios P0/P1/P2
@@ -167,6 +167,5 @@ Detalle y responsables en `RISK_REGISTER.md`.
 
 ## Próxima acción autorizable
 
-Completar el consentimiento OAuth Gmail del remitente, cifrar el refresh token y
-ejecutar un smoke real controlado. Requiere atención del titular; no abrir registro
-ni promover migraciones a producción antes de ese checkpoint.
+Validar auth → outbox → worker Gmail contra PostgreSQL aislado y promover sólo
+con backup/checkpoint. No abrir registro ni desplegar migraciones antes de eso.

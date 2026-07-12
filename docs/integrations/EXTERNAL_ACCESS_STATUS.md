@@ -63,12 +63,21 @@ Este documento no contiene secretos. Los valores reales viven únicamente en
 - Client ID y Client Secret: presentes en `.env` como
   `GOOGLE_GMAIL_CLIENT_ID` / `GOOGLE_GMAIL_CLIENT_SECRET`. `GOOGLE_GMAIL_SENDER`
   contiene la casilla remitente (no secreto).
-- Refresh token: **pendiente a propósito**. El provider exige
-  `GOOGLE_GMAIL_REFRESH_TOKEN_ENCRYPTED`; aún falta el consentimiento
-  interactivo y almacenar el resultado cifrado, por lo que no se generó token.
-- No se envió ningún email. No se publicó la app. No se inició verificación de
-  marca/dominio. Este OAuth es exclusivo del remitente transaccional y queda
-  separado de cualquier login con Google.
+- Refresh token: configurado localmente tras consentimiento personal y guardado
+  únicamente cifrado como `GOOGLE_GMAIL_REFRESH_TOKEN_ENCRYPTED`.
+- Se envió un único smoke a la propia casilla remitente. No se publicó la app ni
+  se inició verificación de marca/dominio. Este OAuth es exclusivo del remitente
+  transaccional y queda separado de cualquier login con Google.
+
+### Activación local P5 posterior
+
+- Consentimiento personal completado el 2026-07-12 con scope único
+  `gmail.send`; el callback local validó `state`.
+- Refresh token almacenado únicamente cifrado en `.env` como
+  `GOOGLE_GMAIL_REFRESH_TOKEN_ENCRYPTED`; no se imprimió ni documentó su valor.
+- Smoke real controlado: refresh OAuth y `users.messages.send` verdes, con un
+  único correo dirigido a la propia casilla remitente. Sin procesar el outbox.
+- La app continúa en Testing, no publicada y sin cambios de scopes.
 
 ## Archivos locales modificados
 
@@ -105,7 +114,7 @@ Este documento no contiene secretos. Los valores reales viven únicamente en
    API de suscripciones (preapproval) usando `MERCADO_PAGO_ACCESS_TOKEN`
    (TEST primero). No usar OAuth de vendedores.
 3. **P5 Email**: outbox, worker y provider Gmail están implementados localmente.
-   El bootstrap y redirect URI están listos. Falta completar el consentimiento
-   personal y almacenar el refresh token cifrado antes de cualquier envío.
+   Bootstrap, consentimiento, token cifrado y smoke directo están listos. Falta
+   validar auth → outbox → worker en aislamiento antes de promoverlo.
 4. **Producción**: activar credenciales productivas de Mercado Pago y publicar
    la app OAuth solo con checkpoint L5 específico.
