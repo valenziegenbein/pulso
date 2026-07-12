@@ -265,3 +265,17 @@
   ampliar permisos, superficie de secretos y modelo de negocio sin necesidad.
 - Consecuencias: OAuth queda reservado para Gmail sender/login cuando corresponda.
 - Reversibilidad: media; un marketplace futuro requeriría una fase específica.
+
+## D-024 — Gmail OAuth mínimo y refresh token cifrado
+
+- Fecha: 2026-07-12
+- Contexto: los emails transaccionales requieren ejecución desatendida, pero no
+  justifican permisos de lectura ni conservar tokens OAuth en claro.
+- Decisión: usar exclusivamente `gmail.send`, acceso offline, endpoints Google
+  fijos sin redirects y refresh token cifrado AES-GCM. El outbox se confirma en
+  la misma transacción que el token o invitación; producción prohíbe el mock.
+- Alternativas: SMTP con contraseña, token en claro o scopes amplios; rechazadas
+  por mayor exposición y menor capacidad de revocación.
+- Consecuencias: el registro continúa cerrado hasta consentimiento, smoke real y
+  promoción explícita. Los fallos del provider reintentan sin exponer respuestas.
+- Reversibilidad: alta; `EmailProvider` permite reemplazar Gmail.

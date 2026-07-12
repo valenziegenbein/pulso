@@ -61,12 +61,11 @@ Este documento no contiene secretos. Los valores reales viven únicamente en
   código todavía no define callback y no se inventó ninguno. GPT Sol deberá
   agregar el redirect URI exacto cuando implemente el callback P5.
 - Client ID y Client Secret: presentes en `.env` como
-  `GOOGLE_GMAIL_CLIENT_ID` / `GOOGLE_GMAIL_CLIENT_SECRET` (nombres
-  PROVISIONALES; el código no define aún ninguno). `GOOGLE_GMAIL_SENDER`
+  `GOOGLE_GMAIL_CLIENT_ID` / `GOOGLE_GMAIL_CLIENT_SECRET`. `GOOGLE_GMAIL_SENDER`
   contiene la casilla remitente (no secreto).
-- Refresh token: **pendiente a propósito**. No existen en el código el
-  callback OAuth, el intercambio de código ni el cifrado del token, por lo que
-  no se completó ningún consentimiento ni se generó refresh token.
+- Refresh token: **pendiente a propósito**. El provider exige
+  `GOOGLE_GMAIL_REFRESH_TOKEN_ENCRYPTED`; aún falta el consentimiento
+  interactivo y almacenar el resultado cifrado, por lo que no se generó token.
 - No se envió ningún email. No se publicó la app. No se inició verificación de
   marca/dominio. Este OAuth es exclusivo del remitente transaccional y queda
   separado de cualquier login con Google.
@@ -105,9 +104,8 @@ Este documento no contiene secretos. Los valores reales viven únicamente en
 2. **Adapter real de Mercado Pago**: implementar `BillingProvider` contra la
    API de suscripciones (preapproval) usando `MERCADO_PAGO_ACCESS_TOKEN`
    (TEST primero). No usar OAuth de vendedores.
-3. **P5 Email**: definir `EmailProvider`/outbox/worker, callback OAuth y
-   cifrado del refresh token; confirmar o renombrar las variables
-   `GOOGLE_GMAIL_*`; agregar el redirect URI exacto al cliente OAuth; recién
-   entonces completar el consentimiento y almacenar el refresh token cifrado.
+3. **P5 Email**: outbox, worker y provider Gmail están implementados localmente.
+   Falta preparar el flujo de consentimiento, agregar su redirect URI exacto al
+   cliente OAuth y almacenar el refresh token cifrado antes de cualquier envío.
 4. **Producción**: activar credenciales productivas de Mercado Pago y publicar
    la app OAuth solo con checkpoint L5 específico.

@@ -19,13 +19,14 @@ Sin secretos. Última actualización: 2026-07-12 (UTC).
 | `MERCADO_PAGO_ACCESS_TOKEN` | Completa (TEST) | MP Developers → app "Pulso Suscripciones" → Credenciales de prueba |
 | `MERCADO_PAGO_CLIENT_ID` / `MERCADO_PAGO_CLIENT_SECRET` | Vacías | Reservadas en `.env.example`; obtener de la consola si el adapter las requiere |
 | `MERCADO_PAGO_WEBHOOK_SECRET` | Vacía | La genera MP al guardar la URL del webhook (endpoint aún inexistente) |
-| `GOOGLE_GMAIL_CLIENT_ID` / `GOOGLE_GMAIL_CLIENT_SECRET` | Completas (PROVISIONALES) | GCP proyecto `pulso-email-sender` → Auth Platform → Clients → "Pulso Gmail Sender (server)" |
-| `GOOGLE_GMAIL_REFRESH_TOKEN` | Vacía | Bloqueada hasta que exista callback + cifrado (P5) |
+| `GOOGLE_GMAIL_CLIENT_ID` / `GOOGLE_GMAIL_CLIENT_SECRET` | Completas localmente | GCP proyecto `pulso-email-sender` → Auth Platform → Clients → "Pulso Gmail Sender (server)" |
+| `GOOGLE_GMAIL_REFRESH_TOKEN_ENCRYPTED` | Vacía | Pendiente de consentimiento; debe contener sólo el token cifrado AES-GCM |
 | `GOOGLE_GMAIL_SENDER` | Completa (no secreta) | Casilla remitente de prueba |
 
-Los nombres `GOOGLE_GMAIL_*` son provisionales: el código P5 todavía no define
-ninguno. Quien implemente P5 debe confirmarlos o renombrarlos en `.env`,
-`.env.example` y este runbook en el mismo cambio.
+El worker se ejecuta una vez con `pnpm email:worker:once`. En producción exige
+`PULSO_EMAIL_PROVIDER=GMAIL_OAUTH`; el valor `MOCK` aborta de forma explícita.
+No guardar nunca un refresh token en claro: se cifra con
+`WORKLOG_ENCRYPTION_KEY` antes de incorporarlo al secret store del entorno.
 
 ## Sandbox vs producción
 
@@ -79,6 +80,6 @@ presencia/ausencia y, si es imprescindible, su prefijo estándar (`TEST-`,
 - Activar credenciales productivas de Mercado Pago y cualquier cobro real.
 - Configurar webhooks (hasta tener endpoint + URL de pruebas).
 - Publicar la app OAuth de Google, verificación de marca/dominio.
-- Obtener refresh token del remitente (hasta callback + cifrado P5).
+- Obtener y cifrar el refresh token del remitente (requiere consentimiento interactivo).
 - Enviar emails reales.
 - Todo lo anterior requiere checkpoint L5 explícito del titular.

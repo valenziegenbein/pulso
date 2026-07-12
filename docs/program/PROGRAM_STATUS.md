@@ -4,9 +4,10 @@
 
 ## Fase actual
 
-**P4 — Billing contractual: COMPLETA EN LOCAL/STAGING (MOCK)**.
-El control plane, la autorización owner-only y la idempotencia están verdes.
-Mercado Pago real permanece bloqueado por definición comercial y credenciales.
+**P5 — Email transaccional: EN CURSO LOCAL**.
+Outbox cifrado, templates, integración atómica con auth, worker y provider Gmail
+OAuth están verdes. Falta consentimiento del remitente y smoke real; registro
+público continúa cerrado.
 
 El hardening está versionado, respaldado, registrado, validado en staging y
 desplegado en producción. El segundo destino offsite duradero permanece como
@@ -21,7 +22,7 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 | P2 | Completa local/staging | G1–G5 verdes; registro público deliberadamente cerrado |
 | P3 | Completa local/staging | Seats transaccionales, ownership, planes y cuotas fail-closed |
 | P4 | Completa local/staging (mock) | Provider neutral, webhook inbox y vista owner-only verdes |
-| P5 | Próxima | EmailProvider, outbox y templates con transporte mock |
+| P5 | En curso local | Outbox/worker/provider Gmail verdes; falta refresh token cifrado y smoke real |
 | P6 | No iniciada | Sin cambios visuales ni rutas públicas nuevas |
 | P7 | No iniciada | Sin analytics ni observabilidad compleja añadida |
 
@@ -30,8 +31,8 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 - Worktree: `F:\Pulso-codex`
 - Rama: `codex/web-control-plane-hardening`
 - Commit inicial: `e8ac1cf6d98c2163abf6bdcabbceab88b9bc9220`
-- HEAD operativo previo a este documento: `3599fc03aa21d7eac1a804d81170dd88b7ede7e0`
-- Commits locales generados: 30 (18 operativos y 12 checkpoints/follow-ups, incluyendo este documento)
+- HEAD funcional previo a este documento: `8018a5f`
+- Commits locales desde el baseline: 33 antes de este checkpoint documental
 - Tags generados: ninguno
 - Pushes: ninguno
 - Índice Git: vacío
@@ -124,7 +125,7 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 ## Gates pendientes
 
 - P0.5: ninguno.
-- P5: outbox transaccional, templates y proveedor de email mock.
+- P5: consentimiento Gmail, refresh token cifrado, smoke real y promoción.
 - Programa: segundo destino offsite duradero.
 
 ## Riesgos prioritarios P0/P1/P2
@@ -161,9 +162,11 @@ Detalle y responsables en `RISK_REGISTER.md`.
 15. `3cdec2d` — `feat(web): add owner-only billing overview`
 16. `3599fc0` — `fix(web): return not found for unauthorized billing access`
 17. `3054ddb` — `feat(billing): add versioned ARS launch pricing mock`
+18. `7f8bdd1` — `feat(email): add encrypted transactional outbox`
+19. `8018a5f` — `feat(email): connect auth to transactional outbox`
 
 ## Próxima acción autorizable
 
-Iniciar **P5 — Email transaccional** con `EmailProvider`, outbox persistente,
-templates y transporte mock. No configurar Gmail, no activar Mercado Pago, no
-abrir registro y no promover migraciones P1/P2/P3/P4 a producción.
+Completar el consentimiento OAuth Gmail del remitente, cifrar el refresh token y
+ejecutar un smoke real controlado. Requiere atención del titular; no abrir registro
+ni promover migraciones a producción antes de ese checkpoint.
