@@ -126,3 +126,6 @@ estado running y repetir `ops/smoke.sh`. No recrear `pulso-db`.
   idempotencia. No promover una credencial `APP_USR-` en esta etapa.
 - Rollback de aplicación: digest P5 anterior. La tabla aditiva de intentos puede
   permanecer vacía; no improvisar un down migration.
+- Candidata P6 validada en staging efímero:
+  `docker.io/valenziegenbein/pulso-app@sha256:06ec80c59940691564dbaea2550f85ae3dfc29783f2c5c0494d31cd3eec2f7a1`.
+  El VPS y producción no fueron accedidos; el digest P5 sigue activo.

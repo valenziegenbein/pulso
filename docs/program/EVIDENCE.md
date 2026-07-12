@@ -460,3 +460,16 @@ Total de tests ejecutados por el gate: 67.
 - PostgreSQL gate: 8 migraciones desde cero, status actualizado, drift cero,
   35 pruebas DB-backed, 3 pruebas de upgrade y conteos sintéticos preservados.
 - README ajenos continúan intactos fuera del índice. Sin VPS, deploy ni cobros.
+- Candidata construida desde worktree detached limpio:
+  `352e8d8fe620356c30f69087cefbd74187ee356c`.
+- Tag SHA completo, sin `latest`:
+  `docker.io/valenziegenbein/pulso-app:352e8d8fe620356c30f69087cefbd74187ee356c`.
+- Digest remoto verificado mediante push, eliminación del tag local, pull e
+  inspección de label OCI:
+  `docker.io/valenziegenbein/pulso-app@sha256:06ec80c59940691564dbaea2550f85ae3dfc29783f2c5c0494d31cd3eec2f7a1`.
+- Staging efímero local por digest: PostgreSQL 16 tmpfs, ocho migraciones,
+  health/readiness 200, registro/Personal 404, webhook mock 404 y revisión de
+  arranque coincidente. Contenedores, red y DB destruidos al finalizar.
+- Incidente del harness: la primera corrida abortó porque PowerShell elevó el
+  primer `curl` sin respuesta durante el arranque; el `finally` limpió todo y la
+  repetición desde cero quedó verde. No fue un fallo de la candidata.
