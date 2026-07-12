@@ -4,9 +4,9 @@
 
 ## Fase actual
 
-**P3 — Seats, planes y entitlements: COMPLETA EN LOCAL/STAGING**.
-Los gates P3 están cumplidos sin precios inventados ni billing real. P4 puede
-avanzar con el contrato de billing y un proveedor mock.
+**P4 — Billing contractual: COMPLETA EN LOCAL/STAGING (MOCK)**.
+El control plane, la autorización owner-only y la idempotencia están verdes.
+Mercado Pago real permanece bloqueado por definición comercial y credenciales.
 
 El hardening está versionado, respaldado, registrado, validado en staging y
 desplegado en producción. El segundo destino offsite duradero permanece como
@@ -20,8 +20,8 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 | P1 | Completa | G1–G5 cumplidos; candidata inmutable y staging sintético verdes |
 | P2 | Completa local/staging | G1–G5 verdes; registro público deliberadamente cerrado |
 | P3 | Completa local/staging | Seats transaccionales, ownership, planes y cuotas fail-closed |
-| P4 | Próxima | Contrato de billing y proveedor mock; Mercado Pago requiere checkpoint |
-| P5 | No iniciada | Gmail real bloqueado; outbox se diseña después de P4 o cuando se autorice la fase |
+| P4 | Completa local/staging (mock) | Provider neutral, webhook inbox y vista owner-only verdes |
+| P5 | Próxima | EmailProvider, outbox y templates con transporte mock |
 | P6 | No iniciada | Sin cambios visuales ni rutas públicas nuevas |
 | P7 | No iniciada | Sin analytics ni observabilidad compleja añadida |
 
@@ -30,8 +30,8 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 - Worktree: `F:\Pulso-codex`
 - Rama: `codex/web-control-plane-hardening`
 - Commit inicial: `e8ac1cf6d98c2163abf6bdcabbceab88b9bc9220`
-- HEAD operativo previo a este documento: `ece7d4ff27d08035ed2f5cd1f858f1b3f45e2add`
-- Commits locales generados: 24 (14 operativos y 10 checkpoints/follow-ups, incluyendo este documento)
+- HEAD operativo previo a este documento: `3599fc03aa21d7eac1a804d81170dd88b7ede7e0`
+- Commits locales generados: 28 (17 operativos y 11 checkpoints/follow-ups, incluyendo este documento)
 - Tags generados: ninguno
 - Pushes: ninguno
 - Índice Git: vacío
@@ -109,10 +109,22 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 | G5 Staging completo | Cumplido | Imagen `ece7d4f`; migrate, fixture, sesión, admin y smokes verdes |
 | G6 Billing real | Diferido | Requiere precios, moneda, impuestos, política comercial y credenciales |
 
+## Gates P4
+
+| Gate | Estado | Evidencia |
+| --- | --- | --- |
+| G1 Contrato neutral | Cumplido | BillingProvider cubre customer, checkout, portal, cancel/resume, consulta y webhook |
+| G2 Mock seguro | Cumplido | Sin cobros ni URLs ficticias; firma HMAC y payload tipado |
+| G3 Persistencia/idempotencia | Cumplido | Inbox único por proveedor/evento y hash anti-reutilización |
+| G4 Autorización | Cumplido | Sólo owner activo; MEMBER obtiene 404 incluso por acceso directo |
+| G5 Suite PostgreSQL | Cumplido | 31 DB-backed, 3 upgrade, seis migraciones y drift cero |
+| G6 Staging completo | Cumplido | Imagen `3599fc0`; migrate, sesiones owner/member y smokes verdes |
+| G7 Mercado Pago real | Bloqueado | Requiere decisión comercial y credenciales específicas |
+
 ## Gates pendientes
 
 - P0.5: ninguno.
-- P4: contrato de billing, eventos idempotentes y proveedor mock.
+- P5: outbox transaccional, templates y proveedor de email mock.
 - Programa: segundo destino offsite duradero.
 
 ## Riesgos prioritarios P0/P1/P2
@@ -145,9 +157,12 @@ Detalle y responsables en `RISK_REGISTER.md`.
 11. `919d556` — `feat(auth): add persisted multi-org authentication`
 12. `32d6822` — `test(auth): add synthetic staging login fixture`
 13. `ece7d4f` — `feat(entitlements): enforce seats ownership and AI quotas`
+14. `5a3573b` — `feat(billing): add provider-neutral subscription control plane`
+15. `3cdec2d` — `feat(web): add owner-only billing overview`
+16. `3599fc0` — `fix(web): return not found for unauthorized billing access`
 
 ## Próxima acción autorizable
 
-Iniciar **P4 — Billing contractual** con `BillingProvider` y proveedor mock.
-No activar Mercado Pago, no definir precios por inferencia, no abrir registro y
-no promover migraciones P1/P2/P3 a producción durante este gate.
+Iniciar **P5 — Email transaccional** con `EmailProvider`, outbox persistente,
+templates y transporte mock. No configurar Gmail, no activar Mercado Pago, no
+abrir registro y no promover migraciones P1/P2/P3/P4 a producción.

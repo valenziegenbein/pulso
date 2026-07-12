@@ -96,6 +96,15 @@ promoverla sobre una restauración productiva, comprobar explícitamente:
 - conteos de usuarios, membresías, equipos, tareas y worklogs preservados;
 - ledger vacío para organizaciones históricas, salvo carga aprobada aparte.
 
+La migración P4 (`20260712090000_billing_control_plane`) es aditiva: amplía la
+suscripción y crea el inbox de webhooks vacío. Antes y después de promoverla:
+
+- conservar exactamente una suscripción por organización;
+- confirmar que los nuevos IDs externos son nulos para datos históricos;
+- confirmar cero eventos de billing creados por la migración;
+- verificar el índice único compuesto proveedor/evento y proveedor/suscripción;
+- mantener el proveedor `MOCK` sin endpoint público en producción.
+
 ## Smoke y promoción
 
 1. `/api/readiness` devuelve 200.

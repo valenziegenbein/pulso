@@ -217,3 +217,27 @@
   rechazadas porque alteran el rumbo comercial y pueden producir cobros erróneos.
 - Consecuencias: la arquitectura P4 puede avanzar con mock sin habilitar cobros.
 - Reversibilidad: alta; las definiciones pueden versionarse al aprobar precios.
+
+## D-020 — Billing neutral y webhook como fuente de verdad
+
+- Fecha: 2026-07-12
+- Contexto: el lanzamiento inicial considera Mercado Pago, pero aún no existen
+  precios, credenciales ni políticas comerciales aprobadas.
+- Decisión: separar `BillingProvider` del estado persistido y aplicar cambios de
+  suscripción sólo desde eventos firmados e idempotentes. El redirect de checkout
+  nunca confirma pago. IDs externos son únicos dentro del proveedor.
+- Alternativas: acoplar el schema a Mercado Pago o actualizar por redirect;
+  rechazadas por lock-in y riesgo de activar entitlements sin pago confirmado.
+- Consecuencias: el adaptador real puede incorporarse sin cambiar el dominio.
+- Reversibilidad: alta; cada proveedor implementa el mismo contrato.
+
+## D-021 — Mock explícitamente no cobrable
+
+- Fecha: 2026-07-12
+- Contexto: desarrollo necesita probar checkout/portal sin confundir estados
+  simulados con pagos reales.
+- Decisión: el proveedor mock devuelve referencias, nunca una URL ni recibo de
+  pago. La UI informa que cobros están desactivados y sólo el owner la ve.
+- Alternativas: página de pago falsa o URLs `mock://`; rechazadas por ambigüedad.
+- Consecuencias: tests cubren el flujo contractual sin representar facturación.
+- Reversibilidad: total; el provider real reemplaza al mock por configuración.

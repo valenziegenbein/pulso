@@ -24,6 +24,7 @@
 | R-020 | El proveedor email mock no entrega invitaciones, verificación ni reset | Alta | Alta | Mantener registro público cerrado y completar outbox/Gmail en P5 | Product/Security | Bloqueo intencional de activación pública |
 | R-021 | P1/P2/P3 están validados local/staging pero no desplegados | Alta | Media | Promover sólo por digest tras backup, restore y checkpoint productivo | SRE/Security | Abierto |
 | R-022 | Precios, impuestos, reembolsos y unidad de consumo managed no están definidos | Alta | Alta | Mantener cuotas comerciales en cero y billing mock hasta decisión explícita | Titular + Product | Bloqueo intencional de cobro real |
+| R-023 | No existe adaptador ni credenciales Mercado Pago y el webhook real aún no fue validado | Alta | Alta | Implementar sólo tras aprobar parámetros comerciales; validar firma/sandbox antes de producción | Titular + Billing | Bloqueo intencional de cobro real |
 
 ## Riesgos cerrados localmente
 

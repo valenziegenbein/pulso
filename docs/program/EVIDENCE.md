@@ -359,3 +359,33 @@ Total de tests ejecutados por el gate: 67.
   JSON incorrecta. No fueron fallos de la candidata; cada DB efímera fue
   destruida y la corrida final comenzó desde cero.
 - VPS, registry remoto y producción: no accedidos. Imagen local conservada.
+
+## P4 — Billing contractual y mock — 2026-07-12
+
+- Commits operativos: `5a3573b` (control plane), `3cdec2d` (vista) y `3599fc0`
+  (404 explícito para acceso no autorizado).
+- Migración: `20260712090000_billing_control_plane`, transaccional y aditiva.
+- Estado neutral: customer/subscription IDs por proveedor, período, trial y
+  cancelación al fin de período; no se almacenan tarjetas, precios ni secretos.
+- Webhooks: firma verificada antes de parsear, evento único por
+  `(provider, externalEventId)`, SHA-256 anti-reutilización y error sanitizado.
+- Mock: checkout/portal devuelven referencia auditable y `url: null`; nunca
+  aparentan un cobro real.
+- Autorización: sólo la membresía owner activa puede consultar billing o crear
+  checkout. MEMBER falla con la convención 404.
+- Green gate: exit 0; 57 unitarios, 31 PostgreSQL, 3 upgrade, seis migraciones,
+  drift cero, typecheck, lint, build Web (36 rutas), Electron security,
+  production safety y `git diff --check`.
+- Candidata correcta:
+  `pulso-p4-staging:3599fc03aa21d7eac1a804d81170dd88b7ede7e0`.
+- Image ID:
+  `sha256:ebd17a2f6346f93130011b159ffcf57cea254a133edf07a184b73cff04b053fe`.
+- Label OCI revision: coincide con el SHA; sin push, `latest`, VPS ni producción.
+- Staging: PostgreSQL 16 `tmpfs`, seis migraciones y conteos
+  `(org,user,membership,migrations,plans,subscription,owner,billingEvents)` =
+  `1,2,2,6,4,1,1,0`.
+- Smokes: health/readiness 200; registro/Personal 404; owner `/billing` 200 y
+  MEMBER `/billing` 404; logs sin fallos fatales.
+- Artefacto descartado: la primera imagen `3cdec2d` se eliminó al detectar antes
+  de staging que el acceso directo MEMBER podía presentar 500. No fue promovida.
+- Cleanup: staging y worktree eliminados; se conserva sólo la candidata correcta.
