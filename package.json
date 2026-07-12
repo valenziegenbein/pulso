@@ -14,6 +14,7 @@
     "typecheck": "turbo run typecheck",
     "test": "vitest run",
     "test:db": "node scripts/run-postgres-integration.mjs",
+    "email:worker:once": "pnpm --filter @pulso/database exec tsx ../../scripts/process-email-outbox.ts",
     "test:watch": "vitest",
     "check:production-safety": "node scripts/check-production-safety.mjs",
     "green": "pnpm typecheck && pnpm test && pnpm test:db && pnpm lint && pnpm build && pnpm --filter @pulso/desktop security:check && pnpm check:production-safety && git diff --check",
