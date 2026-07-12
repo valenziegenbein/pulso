@@ -76,6 +76,7 @@ describe('upgrade sintético equivalente a producción', () => {
       '20260712030000_tenant_relational_integrity',
       '20260712050000_persisted_auth',
       '20260712070000_entitlements',
+      '20260712090000_billing_control_plane',
     ]);
   });
 });
