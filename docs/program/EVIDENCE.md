@@ -289,3 +289,39 @@ Total de tests ejecutados por el gate: 67.
   de la candidata; cada entorno se eliminó antes de repetir desde base vacía.
 - Cleanup final: sin contenedores, redes, DB, fixture ni secretos temporales;
   sólo se conserva la imagen local reproducible.
+
+## P2 — Auth persistida, invitaciones y Desktop PKCE — 2026-07-12
+
+- Commit principal: `919d556` — auth multi-org persistida.
+- Fixture staging: `32d6822d6e10245dd4d555d5dd78e78fbf5e9f22`.
+- Migración: `20260712050000_persisted_auth`, transaccional.
+- Backfill: email normalizado, cuentas históricas verificadas y estado activo;
+  preflight aborta ante duplicados case-insensitive.
+- Modelos: `AuthSession`, `VerificationToken`, `PasswordResetToken`,
+  `OrganizationInvite`, `DesktopAuthorizationCode`, `AuthRateLimitBucket`.
+- Sesiones: token opaco de 256 bits, sólo hash SHA-256 en DB, revocación,
+  expiración, dispositivo, organización activa y `securityVersion`.
+- Flujos: login/logout, selección multi-org, verificación, forgot/reset, cambio
+  de contraseña, sesiones activas, invitación de un uso y alta sólo por invite.
+- Invitación pendiente: no crea membresía ni ocupa seat; aceptación transaccional.
+- Rate limits: buckets persistidos con sujeto hasheado y aislamiento serializable.
+- Desktop: navegador del sistema, S256 PKCE, state, loopback `127.0.0.1`, code de
+  5 minutos/un uso, sesión dedicada `persist:pulso-teams`; preload remoto mínimo.
+- Registro público: permanece 404. El sink mock no retiene ni loguea tokens.
+- Green gate: exit 0; 55 unitarios, 24 PostgreSQL, 3 upgrade, cuatro migraciones,
+  drift cero, dos preflights negativos, typecheck, lint, build Web (35 rutas),
+  Electron security y production safety.
+- Imagen local:
+  `pulso-p2-staging:32d6822d6e10245dd4d555d5dd78e78fbf5e9f22`.
+- Image ID:
+  `sha256:1364b5e2f0091c3665d3dae8fdd4191e861356e7d93d1a5213e839b4d638a0fd`.
+- Tamaño: 822.123.866 bytes; label OCI coincide con Git SHA; sin push/latest.
+- Staging: PostgreSQL 16 tmpfs, cuatro migraciones, conteos
+  `1,2,2,1,1,1,2,4`, readiness y headers OK.
+- Sesión staging: cookie opaca aceptada por `/api/me`, acceso a seguridad 200,
+  revocada en DB y rechazada inmediatamente después.
+- Smokes: `/register` y Personal 404; forgot/signup 200; Desktop sin sesión 307;
+  grant Desktop inválido 400; logs sin secretos ni errores fatales.
+- Incidente harness: primer intento abortó antes de iniciar la app por API SHA-256
+  no disponible en PowerShell; segunda corrida completa verde desde DB vacía.
+- Cleanup: staging y worktree eliminados; imagen local conservada.

@@ -9,7 +9,7 @@
 | R-005 | Cambio ajeno de README puede entrar por accidente | Media | Media | Índice vacío, prohibir `git add -A`, revisar cached diff | Principal Engineer | Mitigado, no cerrado |
 | R-006 | Backup/restore age no probado end-to-end | Alta | Media | Ensayo con clave/destino autorizados y DB aislada | SRE | Cerrado; restore PostgreSQL 16 verificado |
 | R-007 | Aislamiento multi-tenant no tiene todas las relaciones compuestas en DB | Alta | Baja/Media | FKs compuestas y preflight transaccional P1; validar producción sólo con checkpoint | Security/DB | Mitigado y validado en staging sintético; no desplegado |
-| R-008 | Auth actual no es persistida/revocable para uso comercial | Alta | Media | Diseñar y aprobar P2 antes de abrir registro | Security | Abierto |
+| R-008 | Auth actual no es persistida/revocable para uso comercial | Alta | Media | Sesiones opacas, revocación, tokens de un uso, rate limit y PKCE P2 | Security | Mitigado y validado en staging; no desplegado |
 | R-009 | Registro/Personal podrían reabrirse por cambio de proxy | Alta | Baja | Feature flags fail-closed + Caddy versionado + safety check | Security/SRE | Mitigado en producción por código + Caddy |
 | R-010 | Desktop no tiene release firmada de este hardening | Media | Media | Firma, VM smoke y release sólo con L5 específico | Desktop owner | Abierto |
 | R-011 | Documentación histórica del repo mezcla SQLite/Desktop y PostgreSQL/server | Media | Media | Actualización coordinada sin reescribir instrucciones de otra rama | Principal + Desktop owner | Abierto |
@@ -20,6 +20,8 @@
 | R-016 | Next standalone queda ligado al hostname y falla healthcheck loopback | Crítica | Alta | Forzar `HOSTNAME=0.0.0.0`, test runtime, nuevo SHA/digest y repetir staging | Engineering + SRE | Cerrado; health y smoke verdes con nuevo digest |
 | R-017 | VPS sin token read-only del registry | Media | Media | Conservar candidata/rollback verificados en `F:`; crear pull token separado después | Titular + SRE | Abierto; no bloquea rollback inmediato |
 | R-018 | Filas históricas tenant-inconsistentes pueden bloquear la migración P1 | Alta | Baja | Preflight fail-closed, restore aislado y corrección explícita antes de promover | Security/DB | Mitigado y probado localmente; producción no inspeccionada para P1 |
+| R-019 | El deploy P2 invalida todas las cookies HMAC existentes | Media | Alta | Ventana anunciada, smoke de login y soporte de reautenticación; no intentar migrar secretos | Security/SRE | Aceptado; promoción pendiente |
+| R-020 | El proveedor email mock no entrega invitaciones, verificación ni reset | Alta | Alta | Mantener registro público cerrado y completar outbox/Gmail en P5 | Product/Security | Bloqueo intencional de activación pública |
 
 ## Riesgos cerrados localmente
 

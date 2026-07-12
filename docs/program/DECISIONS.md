@@ -162,3 +162,31 @@
 - Consecuencias: el programa avanza por evidencia y gates, manteniendo puntos de
   atención sólo donde el impacto lo justifica.
 - Reversibilidad: total; el titular puede restringir nuevamente el alcance.
+
+## D-016 — Sesiones opacas persistidas y tokens de un solo uso
+
+- Fecha: 2026-07-12
+- Contexto: las cookies HMAC no podían revocarse, listar dispositivos ni rotar
+  inmediatamente después de un cambio de contraseña.
+- Decisión: almacenar sólo SHA-256 de tokens opacos aleatorios; persistir
+  sesiones, verification/reset/invite codes y authorization codes Desktop;
+  invalidar sesiones por revocación, expiración y `securityVersion`.
+- Alternativas: conservar JWT/HMAC con denylist; descartada por duplicar estado
+  y mantener dos fuentes de verdad.
+- Consecuencias: el primer deploy P2 fuerza nuevo login; los secretos nunca se
+  almacenan en claro y los tokens son de un solo uso.
+- Reversibilidad: media; volver a la app anterior requiere restaurar el schema
+  anterior o aceptar que las nuevas sesiones no sean interpretables.
+
+## D-017 — Activación pública de auth diferida hasta outbox real
+
+- Fecha: 2026-07-12
+- Contexto: P2 tiene proveedor mock que no retiene ni loguea tokens, por lo que
+  es seguro para pruebas pero no entrega verificación/reset/invitaciones reales.
+- Decisión: completar P2 local/staging y mantener `/register` cerrado; avanzar a
+  entitlements/billing mock sin abrir registro. La activación se hará después de
+  P5 y de una promoción productiva específica.
+- Alternativas: exponer tokens mock o abrir registro sin email; rechazadas.
+- Consecuencias: usuarios actuales siguen operando; nuevas altas públicas no se
+  habilitan hasta disponer de outbox y proveedor autorizados.
+- Reversibilidad: alta; la feature flag sigue siendo fail-closed.

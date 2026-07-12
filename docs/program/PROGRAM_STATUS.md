@@ -4,8 +4,8 @@
 
 ## Fase actual
 
-**P1 — Migraciones y PostgreSQL: COMPLETA**. Los gates G1–G5 están cumplidos
-con datos sintéticos; la migración no fue aplicada a producción.
+**P2 — Auth, sesiones, multi-org e invitaciones: COMPLETA EN LOCAL/STAGING**.
+G1–G5 están cumplidos; G6 permanece cerrado hasta email real y promoción.
 
 El hardening está versionado, respaldado, registrado, validado en staging y
 desplegado en producción. El segundo destino offsite duradero permanece como
@@ -17,8 +17,8 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 | --- | --- | --- |
 | P0.5 | Completa | G1–G7 cumplidos; producción healthy y smoke verde |
 | P1 | Completa | G1–G5 cumplidos; candidata inmutable y staging sintético verdes |
-| P2 | Próxima | Iniciar diseño local de auth persistida, tokens e invitaciones |
-| P3 | No iniciada | Depende de P2 |
+| P2 | Completa local/staging | G1–G5 verdes; registro público deliberadamente cerrado |
+| P3 | Próxima | Seats, planes y entitlements con billing todavía mock |
 | P4 | No iniciada | Depende de entitlements P3 |
 | P5 | No iniciada | Gmail real bloqueado; outbox se diseña después de P4 o cuando se autorice la fase |
 | P6 | No iniciada | Sin cambios visuales ni rutas públicas nuevas |
@@ -29,8 +29,8 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 - Worktree: `F:\Pulso-codex`
 - Rama: `codex/web-control-plane-hardening`
 - Commit inicial: `e8ac1cf6d98c2163abf6bdcabbceab88b9bc9220`
-- HEAD operativo previo a este documento: `5bf0b9ca67d9895a47b918a4908bf816d1022e0c`
-- Commits locales generados: 19 (11 operativos y 8 checkpoints/follow-ups)
+- HEAD operativo previo a este documento: `32d6822d6e10245dd4d555d5dd78e78fbf5e9f22`
+- Commits locales generados: 22 (13 operativos y 9 checkpoints/follow-ups)
 - Tags generados: ninguno
 - Pushes: ninguno
 - Índice Git: vacío
@@ -86,10 +86,21 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 | G4 Runbook probado localmente | Cumplido | Preflight inválido rechazado sin DDL parcial |
 | G5 Migración de staging | Cumplido | Imagen `5bf0b9c`; migrate, fixture, readiness y smokes verdes |
 
+## Gates P2
+
+| Gate | Estado | Evidencia |
+| --- | --- | --- |
+| G1 Modelo y migración | Cumplido localmente | Migración transaccional, backfill y preflight |
+| G2 Auth local + mock email | Cumplido | Flujos completos; sink mock no conserva tokens |
+| G3 Aislamiento y tokens | Cumplido | 24 DB-backed; replay/revocación/rate limit/invites |
+| G4 Desktop PKCE | Cumplido | S256 + state + loopback + sesión particionada |
+| G5 Staging completo | Cumplido | Imagen `32d6822`; migrate, sesión, revocación y smokes verdes |
+| G6 Abrir registro | Diferido | Requiere outbox/email real y promoción específica |
+
 ## Gates pendientes
 
 - P0.5: ninguno.
-- P2: diseño y migración local de auth persistida, revocable y multi-org.
+- P3: plan definitions, entitlements y seats transaccionales con billing mock.
 - Programa: segundo destino offsite duradero.
 
 ## Riesgos prioritarios P0/P1/P2
@@ -100,7 +111,8 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 - P1: constraints tenant-críticas implementadas localmente; relaciones opcionales
   con `SET NULL` permanecen bajo authz y se revisarán sin introducir RLS automático.
 - P1: backup/restore con age fue probado end-to-end contra PostgreSQL 16 aislado.
-- P2: auth actual no es todavía el modelo persistido/revocable definido para auth comercial.
+- P2: auth persistida/revocable está verde en staging; no está desplegada y el
+  proveedor mock bloquea deliberadamente la apertura del registro.
 
 Detalle y responsables en `RISK_REGISTER.md`.
 
@@ -116,10 +128,11 @@ Detalle y responsables en `RISK_REGISTER.md`.
 8. `a6e2a0a` — `ops(deploy): add immutable promotion smoke and rollback workflow`
 9. `06058d4` — `feat(db): enforce tenant relational integrity`
 10. `5bf0b9c` — `test(db): add current-schema staging fixture`
+11. `919d556` — `feat(auth): add persisted multi-org authentication`
+12. `32d6822` — `test(auth): add synthetic staging login fixture`
 
 ## Próxima acción autorizable
 
-Iniciar **P2 — Auth, sesiones, multi-org e invitaciones** localmente. Diseñar la
-migración de forma aditiva, mantener registro público cerrado y usar email mock.
-La migración P1 y cualquier apertura de auth productiva siguen requiriendo un
-checkpoint sensible separado.
+Iniciar **P3 — Seats, planes y entitlements** localmente con Subscription mock.
+No activar billing real, no abrir registro y no promover migraciones P1/P2 a
+producción durante este gate.

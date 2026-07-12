@@ -28,6 +28,11 @@ tercera base con una relación cross-tenant deliberadamente inválida. El deploy
 debe rechazarla y el test comprueba que la transacción no deja ni siquiera la
 columna nueva. Esto valida el comportamiento fail-closed del preflight.
 
+Desde `20260712050000_persisted_auth` se crea además una base histórica con dos
+emails que sólo colisionan al normalizar mayúsculas/minúsculas. La migración auth
+debe abortar y revertir todas sus columnas/tablas. Usuarios históricos válidos
+reciben `normalizedEmail = lower(trim(email))` y `emailVerifiedAt = createdAt`.
+
 `PULSO_KEEP_TEST_DB=1` puede conservarlo sólo para diagnóstico local.
 
 ## Antes de producción
@@ -75,6 +80,10 @@ en una copia aislada, marcarla como rolled back con `prisma migrate resolve
 --rolled-back 20260712030000_tenant_relational_integrity` sólo en el entorno
 afectado y volver a ejecutar `migrate deploy`. Nunca marcarla como aplicada si
 el SQL no terminó.
+
+La promoción de P2 invalida deliberadamente las cookies HMAC autocontenidas
+anteriores: no se migran secretos de sesión. Todos los usuarios deben volver a
+iniciar sesión para obtener una `AuthSession` opaca y revocable.
 
 ## Smoke y promoción
 
