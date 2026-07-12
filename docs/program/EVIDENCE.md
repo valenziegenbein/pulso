@@ -203,3 +203,37 @@ Total de tests ejecutados por el gate: 67.
 - Logs: revisión esperada presente; sin marcadores de secretos ni URLs DB.
 - Cleanup: cero contenedores, redes, volúmenes, fixtures o secretos temporales.
 - Imagen anterior `sha256:e4b0c122...` conservada en registry y no promovida.
+
+## Producción P0.5 — 2026-07-11
+
+- URL: `https://pulso.syswarm.com`.
+- Baseline previo: `/api/health` y `/api/readiness` devolvían 404; registro y
+  Personal ya devolvían 404 por Caddy.
+- Candidata canónica:
+  `docker.io/valenziegenbein/pulso-app@sha256:ccb32ed56d8f9d381675196de7c9a342b67f9d3e4d58ef82fdc177b6d2bc6ab6`.
+- Transporte: `docker save` verificado, sin token Docker Hub en el VPS; image ID
+  cargado `sha256:ccb32ed56d8f9d381675196de7c9a342b67f9d3e4d58ef82fdc177b6d2bc6ab6`.
+- Rollback productivo previo: image ID
+  `sha256:ed73a67e266515d3fae1ce5c916beceebf897cd5744b0e906d4c1161077711f4`,
+  tag local `pulso-rollback:ed73a67e266515d3`.
+- Archivo rollback en VPS y `F:`: 817.066.863 bytes, SHA-256
+  `6cc7581c0e42c51fac03e90f80713c6dcf283053845344fb0f05edd9684b0fdf`.
+- Backup DB cifrado: checksum remoto/local y restore previo verificados.
+- Primer intento de promoción: abortó por quoting del chequeo de conteos; trap
+  restauró compose/commit anteriores bit a bit antes de migrar o recrear app.
+- Promoción definitiva: migration job informó `No pending migrations to apply`.
+- Invariantes productivas antes/después: 2 organizaciones y 2 migraciones.
+- Contenedor `pulso-db`: mismo ID durante la promoción; nunca recreado.
+- `pulso-app`: image ID candidato, revisión
+  `14bf70a64d2316a34f8010e16f931c49cbc0b82d`, health `healthy`.
+- Feature flags productivas: registro `false`, Personal API `false`.
+- Caddy compartido: no modificado; bloqueos adicionales permanecen.
+- Smoke público inicial y final: OK; health/readiness 200, request ID/headers y
+  bloqueos 404 verificados.
+- Observación: 6 muestras cada ~30 s entre 23:48:47Z y 23:51:30Z; readiness 200
+  y app/DB healthy en todas.
+- Logs: 0 errores, sin marcadores sensibles.
+- Otros sistemas: sin contenedores unhealthy/restarting; sólo jobs históricos
+  terminados con exit 0.
+- Disco VPS post-deploy: 18 GiB / 96 GiB (19%).
+- Rollback manifest: `/var/backups/pulso/deploy-20260711T234734Z`, checksum OK.

@@ -80,3 +80,22 @@ Si el schema no es backward-compatible, usar restauración en DB nueva según
 - Un fallo de migración detiene el job y bloquea promoción.
 - Caddy espera que la app esté healthy mediante readiness.
 - Conservar backup, imagen anterior y manifest hasta cerrar la observación.
+
+## Checkpoint productivo 2026-07-11
+
+- Compose: `/opt/pulso/docker-compose.yml`.
+- Caddy compartido: `/opt/account/deploy/caddy/edge.prod.Caddyfile`; no fue
+  modificado durante la promoción.
+- Imagen activa:
+  `docker.io/valenziegenbein/pulso-app@sha256:ccb32ed56d8f9d381675196de7c9a342b67f9d3e4d58ef82fdc177b6d2bc6ab6`.
+- El VPS la referencia por el mismo image ID `sha256:ccb32ed...` con
+  `pull_policy: never`, porque no almacena credenciales del registry.
+- Rollback inmediato: `pulso-rollback:ed73a67e266515d3`.
+- Compose/commit previos y manifest:
+  `/var/backups/pulso/deploy-20260711T234734Z`.
+- Archivo portable rollback verificado en VPS y
+  `F:\Pulso-backups\rollback-images\pulso-image-rollback-ed73a67e266515d3`.
+
+Para rollback autorizado: restaurar `docker-compose.before.yml` y
+`DEPLOYED_COMMIT.before`, ejecutar `docker compose up -d --no-build app`, esperar
+estado running y repetir `ops/smoke.sh`. No recrear `pulso-db`.

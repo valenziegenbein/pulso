@@ -121,3 +121,17 @@
 - Consecuencias: staging y producción usan
   `sha256:ccb32ed56d8f9d381675196de7c9a342b67f9d3e4d58ef82fdc177b6d2bc6ab6`.
 - Reversibilidad: alta; cada digest permanece independiente y auditable.
+
+## D-013 — Producción sin credencial de registry en el VPS
+
+- Fecha: 2026-07-11
+- Contexto: el repositorio Docker Hub es privado y todavía no existe token
+  productivo read-only autorizado.
+- Decisión: transportar la candidata mediante `docker save`, checksum y copia
+  controlada; cargarla por image ID igual al digest remoto y usar
+  `pull_policy: never`.
+- Alternativas: token personal/write en VPS o build productivo; rechazadas por
+  exceso de privilegios y falta de reproducibilidad.
+- Consecuencias: el VPS no almacena credenciales Docker Hub; la recuperación
+  depende del archivo verificado en `F:` hasta crear un pull token read-only.
+- Reversibilidad: alta; un token read-only separado puede incorporarse después.

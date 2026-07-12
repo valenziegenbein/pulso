@@ -1,20 +1,21 @@
 # Estado del programa Pulso
 
-Última actualización: 2026-07-11 (America/Buenos_Aires)
+Última actualización: 2026-07-12 (America/Buenos_Aires)
 
 ## Fase actual
 
-**P0.5 — Estabilización y hardening**, detenida en **P0.5-G7:
-autorización explícita de producción**.
+**P0.5 — Estabilización y hardening: COMPLETA**. El programa queda detenido
+antes de iniciar formalmente P1.
 
-La implementación, el versionado, el registry y el staging efímero están
-listos, pero P0.5 no está terminada: falta un offsite duradero y producción.
+El hardening está versionado, respaldado, registrado, validado en staging y
+desplegado en producción. El segundo destino offsite duradero permanece como
+riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 
 ## Estado por fase
 
 | Fase | Estado | Evidencia / próximo gate |
 | --- | --- | --- |
-| P0.5 | En progreso | G1–G6 cumplidos; G7 requiere autorización explícita L5 |
+| P0.5 | Completa | G1–G7 cumplidos; producción healthy y smoke verde |
 | P1 | Preparación local implementada, no promovida | G1–G3 locales cumplidos; runbooks listos; staging no autorizado |
 | P2 | No iniciada | Requiere cierre/checkpoint de fase anterior y diseño de migración aprobado |
 | P3 | No iniciada | Depende de P2 |
@@ -29,7 +30,7 @@ listos, pero P0.5 no está terminada: falta un offsite duradero y producción.
 - Rama: `codex/web-control-plane-hardening`
 - Commit inicial: `e8ac1cf6d98c2163abf6bdcabbceab88b9bc9220`
 - HEAD operativo previo a este documento: `a6e2a0ab55cd0a71ca669aaaa8625c2508cf55ec`
-- Commits locales generados: 14 (9 operativos y 5 checkpoints/follow-ups)
+- Commits locales generados: 15 (9 operativos y 6 checkpoints/follow-ups)
 - Tags generados: ninguno
 - Pushes: ninguno
 - Índice Git: vacío
@@ -39,10 +40,10 @@ listos, pero P0.5 no está terminada: falta un offsite duradero y producción.
 
 - L0 (lectura/planes): autorizado
 - L1 (cambios locales reversibles): autorizado
-- L2 (commits): autorización puntual consumida por el fix y checkpoint G6; no autoriza nuevos commits, tags, pushes ni reescrituras
+- L2 (commits): autorización puntual consumida por el checkpoint documental de cierre P0.5; no autoriza nuevos commits, tags, pushes ni reescrituras
 - L3 (secretos, uploads, registry): autorización puntual consumida por la imagen corregida; no autoriza nuevos uploads
 - L4 (staging): autorización puntual consumida; staging efímero verde
-- L5 (producción/VPS): autorizaciones puntuales de P0.5-G3/G4 consumidas; no autoriza nuevas acciones
+- L5 (producción/VPS): autorización puntual G7 consumida; no autoriza nuevas acciones productivas
 
 ## Gates P0.5
 
@@ -54,7 +55,7 @@ listos, pero P0.5 no está terminada: falta un offsite duradero y producción.
 | G4 `_prisma_migrations` productivo comparado | Cumplido | 2 migraciones; nombres, checksums y estados coinciden exactamente |
 | G5 Imagen inmutable construida y registrada | Cumplido | Imagen corregida `14bf70a` y digest remoto verificado por pull |
 | G6 Staging verde | Cumplido | Migrate, fixture sintético, health/readiness, Caddy y smoke verdes |
-| G7 Producción autorizada | Pendiente | Requiere L5 |
+| G7 Producción autorizada | Cumplido | Digest corregido desplegado; rollback, readiness, smoke y observación verdes |
 
 ## Gates locales superados
 
@@ -77,13 +78,13 @@ listos, pero P0.5 no está terminada: falta un offsite duradero y producción.
 
 ## Gates pendientes
 
-- Segundo destino offsite duradero
-- Producción y ventana de observación
+- P0.5: ninguno.
+- Programa: segundo destino offsite duradero y autorización para iniciar P1.
 
 ## Riesgos prioritarios P0/P1/P2
 
 - P0: el backup cifrado restaurable existe en `F:`, pero todavía no reemplaza un offsite duradero.
-- P0: hardening está versionado y registrado por digest, pero no fue desplegado.
+- P0: hardening desplegado por digest; producción healthy y smoke verde.
 - P0: historial productivo de migraciones contrastado sin diferencias.
 - P1: faltan constraints compuestas multi-tenant evaluadas y aprobadas; no se agregó RLS.
 - P1: backup/restore con age fue probado end-to-end contra PostgreSQL 16 aislado.
@@ -104,11 +105,7 @@ Detalle y responsables en `RISK_REGISTER.md`.
 
 ## Próxima acción autorizable
 
-Completar **P0.5-G7** sólo con autorización explícita L5. La candidata es:
-
-`docker.io/valenziegenbein/pulso-app@sha256:ccb32ed56d8f9d381675196de7c9a342b67f9d3e4d58ef82fdc177b6d2bc6ab6`
-
-Antes de promover se debe conservar una referencia o artefacto verificable de
-la imagen productiva actual para rollback, reverificar el backup cifrado,
-ejecutar el migration job (esperado no-op), readiness/smokes y una ventana de
-observación. No hay autorización productiva vigente.
+Autorizar el inicio formal de **P1 — Migraciones y PostgreSQL**. Antes de crear
+nuevas migraciones se debe revisar lo ya implementado, cerrar el checkpoint de
+runbook y decidir por separado constraints multi-tenant aditivas. Esta acción
+no autoriza auth, billing, producción ni nuevas migraciones productivas.
