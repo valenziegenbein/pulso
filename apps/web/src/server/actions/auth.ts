@@ -100,7 +100,7 @@ export async function registerOrganizationAction(_prev: RegisterState, formData:
     });
     const team = await tx.team.create({ data: { organizationId: org.id, name: 'General', focus: 'Primer equipo de trabajo' } });
     await tx.teamMembership.create({
-      data: { teamId: team.id, userId: user.id, roleId: roleByKey.get('TEAM_ADMIN')! },
+      data: { organizationId: org.id, teamId: team.id, userId: user.id, roleId: roleByKey.get('TEAM_ADMIN')! },
     });
     return { userId: user.id, organizationId: org.id };
   });

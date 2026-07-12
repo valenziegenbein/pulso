@@ -69,9 +69,9 @@ async function main() {
     description: 'Resolución de consultas y documentación de soporte.',
   });
 
-  await upsertTeamMembership(producto.id, ana.id, roleByKey.get('MEMBER')!);
-  await upsertTeamMembership(operaciones.id, luis.id, roleByKey.get('TEAM_ADMIN')!);
-  await upsertTeamMembership(soporte.id, carla.id, roleByKey.get('MEMBER')!);
+  await upsertTeamMembership(org.id, producto.id, ana.id, roleByKey.get('MEMBER')!);
+  await upsertTeamMembership(org.id, operaciones.id, luis.id, roleByKey.get('TEAM_ADMIN')!);
+  await upsertTeamMembership(org.id, soporte.id, carla.id, roleByKey.get('MEMBER')!);
 
   const t1 = await upsertTask(org.id, {
     teamId: producto.id,
@@ -179,11 +179,11 @@ async function upsertTeam(organizationId: string, name: string, data: { focus: s
   return prisma.team.create({ data: { organizationId, name, ...data } });
 }
 
-async function upsertTeamMembership(teamId: string, userId: string, roleId: string) {
+async function upsertTeamMembership(organizationId: string, teamId: string, userId: string, roleId: string) {
   return prisma.teamMembership.upsert({
     where: { teamId_userId: { teamId, userId } },
     update: { roleId },
-    create: { teamId, userId, roleId },
+    create: { organizationId, teamId, userId, roleId },
   });
 }
 

@@ -115,7 +115,7 @@ async function main() {
   await prisma.teamMembership.upsert({
     where: { teamId_userId: { teamId: team.id, userId: admin.id } },
     update: { roleId: roleByKey.get('TEAM_ADMIN')! },
-    create: { teamId: team.id, userId: admin.id, roleId: roleByKey.get('TEAM_ADMIN')! },
+    create: { organizationId: org.id, teamId: team.id, userId: admin.id, roleId: roleByKey.get('TEAM_ADMIN')! },
   });
 
   // 5) Miembro (vos), opcional
@@ -134,7 +134,7 @@ async function main() {
     await prisma.teamMembership.upsert({
       where: { teamId_userId: { teamId: team.id, userId: m.id } },
       update: { roleId: roleByKey.get('MEMBER')! },
-      create: { teamId: team.id, userId: m.id, roleId: roleByKey.get('MEMBER')! },
+      create: { organizationId: org.id, teamId: team.id, userId: m.id, roleId: roleByKey.get('MEMBER')! },
     });
     member = { email: memberEmail };
   }

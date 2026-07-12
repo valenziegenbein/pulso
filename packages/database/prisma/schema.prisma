@@ -81,6 +81,7 @@ model Role {
   teamMemberships TeamMembership[]
 
   @@unique([organizationId, key])
+  @@unique([id, organizationId])
   @@index([organizationId])
 }
 
@@ -91,9 +92,10 @@ model OrgMembership {
   roleId         String
   createdAt      DateTime @default(now())
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role         Role         @relation(fields: [roleId], references: [id])
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role            Role             @relation(fields: [roleId, organizationId], references: [id, organizationId])
+  teamMemberships TeamMembership[]
 
   @@unique([organizationId, userId])
   @@index([userId])
@@ -117,22 +119,26 @@ model Team {
   decisions      DecisionRequest[]
   worklogEntries WorklogEntry[]
 
+  @@unique([id, organizationId])
   @@index([organizationId])
   @@index([parentTeamId])
 }
 
 model TeamMembership {
-  id        String   @id @default(cuid())
-  teamId    String
-  userId    String
-  roleId    String
-  createdAt DateTime @default(now())
+  id             String   @id @default(cuid())
+  organizationId String
+  teamId         String
+  userId         String
+  roleId         String
+  createdAt      DateTime @default(now())
 
-  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role Role @relation(fields: [roleId], references: [id])
+  team          Team          @relation(fields: [teamId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role          Role          @relation(fields: [roleId, organizationId], references: [id, organizationId])
+  orgMembership OrgMembership @relation(fields: [organizationId, userId], references: [organizationId, userId], onDelete: Cascade)
 
   @@unique([teamId, userId])
+  @@index([organizationId, userId])
   @@index([userId])
 }
 
@@ -156,7 +162,7 @@ model Task {
   updatedAt        DateTime  @updatedAt
 
   organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  team           Team                  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team           Team                  @relation(fields: [teamId, organizationId], references: [id, organizationId], onDelete: Cascade)
   parent         Task?                 @relation("TaskSubtasks", fields: [parentTaskId], references: [id], onDelete: SetNull)
   subtasks       Task[]                @relation("TaskSubtasks")
   assignee       User?                 @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
@@ -169,6 +175,7 @@ model Task {
   worklogEntries WorklogEntry[]
   suggestions    AIWorklogSuggestion[]
 
+  @@unique([id, organizationId])
   @@index([organizationId, status])
   @@index([assigneeId, status])
   @@index([teamId])
@@ -210,7 +217,7 @@ model DecisionRequest {
   resolvedAt     DateTime?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  team         Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team         Team         @relation(fields: [teamId, organizationId], references: [id, organizationId], onDelete: Cascade)
   task         Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
   requestedBy  User         @relation(fields: [requestedById], references: [id], onDelete: Cascade)
 
@@ -280,6 +287,7 @@ model WorklogEntry {
   suggestion   AIWorklogSuggestion?
   attachments  Attachment[]
 
+  @@unique([id, organizationId])
   @@index([authorId, status])
   @@index([teamId, createdAt])
   @@index([organizationId, status])
@@ -323,8 +331,8 @@ model Attachment {
 
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   uploadedBy   User          @relation(fields: [uploadedById], references: [id])
-  task         Task?         @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  worklogEntry WorklogEntry? @relation(fields: [worklogEntryId], references: [id], onDelete: Cascade)
+  task         Task?         @relation(fields: [taskId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  worklogEntry WorklogEntry? @relation(fields: [worklogEntryId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
   @@index([taskId])
   @@index([worklogEntryId])

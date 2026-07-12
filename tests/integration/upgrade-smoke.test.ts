@@ -18,15 +18,19 @@ afterAll(async () => {
 
 describe('upgrade sintético equivalente a producción', () => {
   it('preserva conteos y aplica defaults de las migraciones posteriores', async () => {
-    const [organization, users, memberships, teams, tasks, worklogs] = await Promise.all([
+    const [organization, users, memberships, teamMembership, teams, tasks, worklogs] = await Promise.all([
       prisma.organization.findUnique({ where: { id: 'upgrade-org' } }),
       prisma.user.count(),
       prisma.orgMembership.count(),
+      prisma.teamMembership.findUnique({
+        where: { teamId_userId: { teamId: 'upgrade-team', userId: 'upgrade-member' } },
+      }),
       prisma.team.count(),
       prisma.task.count(),
       prisma.worklogEntry.count(),
     ]);
     expect(organization).toMatchObject({ planKey: 'FREE', seatLimit: 5 });
+    expect(teamMembership).toMatchObject({ organizationId: 'upgrade-org' });
     expect({ users, memberships, teams, tasks, worklogs }).toEqual({
       users: 2,
       memberships: 2,
@@ -62,6 +66,7 @@ describe('upgrade sintético equivalente a producción', () => {
     expect(rows.map((row) => row.migration_name)).toEqual([
       '20260624213924_init',
       '20260625010000_org_plans',
+      '20260712030000_tenant_relational_integrity',
     ]);
   });
 });

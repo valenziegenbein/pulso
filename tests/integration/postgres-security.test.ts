@@ -99,11 +99,11 @@ beforeAll(async () => {
   });
   await prisma.teamMembership.createMany({
     data: [
-      { id: 'it-tm-member-a', teamId: ids.teamA, userId: ids.member, roleId: roleId('a', 'MEMBER') },
-      { id: 'it-tm-member-b', teamId: ids.teamB, userId: ids.member, roleId: roleId('b', 'VIEWER') },
-      { id: 'it-tm-other-a', teamId: ids.teamA, userId: ids.other, roleId: roleId('a', 'MEMBER') },
-      { id: 'it-tm-admin-a', teamId: ids.teamA, userId: ids.teamAdmin, roleId: roleId('a', 'TEAM_ADMIN') },
-      { id: 'it-tm-native-b', teamId: ids.teamB, userId: ids.memberB, roleId: roleId('b', 'MEMBER') },
+      { id: 'it-tm-member-a', organizationId: ids.orgA, teamId: ids.teamA, userId: ids.member, roleId: roleId('a', 'MEMBER') },
+      { id: 'it-tm-member-b', organizationId: ids.orgB, teamId: ids.teamB, userId: ids.member, roleId: roleId('b', 'VIEWER') },
+      { id: 'it-tm-other-a', organizationId: ids.orgA, teamId: ids.teamA, userId: ids.other, roleId: roleId('a', 'MEMBER') },
+      { id: 'it-tm-admin-a', organizationId: ids.orgA, teamId: ids.teamA, userId: ids.teamAdmin, roleId: roleId('a', 'TEAM_ADMIN') },
+      { id: 'it-tm-native-b', organizationId: ids.orgB, teamId: ids.teamB, userId: ids.memberB, roleId: roleId('b', 'MEMBER') },
     ],
   });
 
@@ -193,7 +193,7 @@ describe('PostgreSQL real: constraints y relaciones existentes', () => {
       .rejects.toMatchObject({ code: 'P2002' });
     await expect(prisma.orgMembership.create({ data: { organizationId: ids.orgA, userId: ids.member, roleId: roleId('a', 'MEMBER') } }))
       .rejects.toMatchObject({ code: 'P2002' });
-    await expect(prisma.teamMembership.create({ data: { teamId: ids.teamA, userId: ids.member, roleId: roleId('a', 'MEMBER') } }))
+    await expect(prisma.teamMembership.create({ data: { organizationId: ids.orgA, teamId: ids.teamA, userId: ids.member, roleId: roleId('a', 'MEMBER') } }))
       .rejects.toMatchObject({ code: 'P2002' });
   });
 
@@ -207,6 +207,93 @@ describe('PostgreSQL real: constraints y relaciones existentes', () => {
         createdById: ids.member,
       },
     })).rejects.toSatisfy((error: unknown) => error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003');
+  });
+
+  it('rechaza roles y equipos de otra organización en membresías', async () => {
+    await expect(prisma.orgMembership.create({
+      data: {
+        organizationId: ids.orgA,
+        userId: ids.memberB,
+        roleId: roleId('b', 'MEMBER'),
+      },
+    })).rejects.toMatchObject({ code: 'P2003' });
+
+    await expect(prisma.teamMembership.create({
+      data: {
+        organizationId: ids.orgA,
+        teamId: ids.teamB,
+        userId: ids.other,
+        roleId: roleId('a', 'MEMBER'),
+      },
+    })).rejects.toMatchObject({ code: 'P2003' });
+
+    await expect(prisma.teamMembership.create({
+      data: {
+        organizationId: ids.orgA,
+        teamId: ids.teamA,
+        userId: ids.memberB,
+        roleId: roleId('a', 'MEMBER'),
+      },
+    })).rejects.toMatchObject({ code: 'P2003' });
+  });
+
+  it('rechaza recursos que mezclan organización y equipo', async () => {
+    await expect(prisma.task.create({
+      data: {
+        id: 'it-cross-tenant-task',
+        organizationId: ids.orgA,
+        teamId: ids.teamB,
+        title: 'Cross tenant',
+        createdById: ids.orgAdmin,
+      },
+    })).rejects.toMatchObject({ code: 'P2003' });
+
+    await expect(prisma.decisionRequest.create({
+      data: {
+        id: 'it-cross-tenant-decision',
+        organizationId: ids.orgA,
+        teamId: ids.teamB,
+        requestedById: ids.orgAdmin,
+        title: 'Cross tenant',
+        context: 'Sintético',
+      },
+    })).rejects.toMatchObject({ code: 'P2003' });
+
+    await expect(prisma.attachment.create({
+      data: {
+        id: 'it-cross-tenant-attachment',
+        organizationId: ids.orgA,
+        uploadedById: ids.orgAdmin,
+        kind: 'LINK',
+        url: 'https://integration.invalid/evidence',
+        taskId: ids.taskB,
+      },
+    })).rejects.toMatchObject({ code: 'P2003' });
+  });
+
+  it('serializa la carrera de alta de una membresía organizacional', async () => {
+    const userId = 'it-user-concurrent-membership';
+    await prisma.user.create({
+      data: {
+        id: userId,
+        email: `${userId}@integration.invalid`,
+        name: 'Concurrente',
+        passwordHash: 'synthetic-not-a-real-password',
+      },
+    });
+
+    const attempts = await Promise.allSettled([
+      prisma.orgMembership.create({
+        data: { organizationId: ids.orgA, userId, roleId: roleId('a', 'MEMBER') },
+      }),
+      prisma.orgMembership.create({
+        data: { organizationId: ids.orgA, userId, roleId: roleId('a', 'MEMBER') },
+      }),
+    ]);
+
+    expect(attempts.filter((attempt) => attempt.status === 'fulfilled')).toHaveLength(1);
+    expect(attempts.filter((attempt) => attempt.status === 'rejected')).toHaveLength(1);
+    await expect(prisma.orgMembership.count({ where: { organizationId: ids.orgA, userId } })).resolves.toBe(1);
   });
 
   it('conserva cascadas existentes al eliminar una organización', async () => {

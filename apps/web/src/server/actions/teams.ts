@@ -138,7 +138,7 @@ export async function invitePersonAction(_prev: InviteState, formData: FormData)
       await prisma.teamMembership.upsert({
         where: { teamId_userId: { teamId: team.id, userId: user.id } },
         update: { roleId: role.id },
-        create: { teamId: team.id, userId: user.id, roleId: role.id },
+        create: { organizationId: ctx.organizationId, teamId: team.id, userId: user.id, roleId: role.id },
       });
     }
 

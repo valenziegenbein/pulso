@@ -11,6 +11,7 @@ const baseUrl = `postgresql://pulso_test:pulso_test_only@127.0.0.1:${port}`;
 const emptyUrl = `${baseUrl}/pulso_test?schema=public`;
 const shadowUrl = `${baseUrl}/pulso_shadow?schema=public`;
 const upgradeUrl = `${baseUrl}/pulso_upgrade?schema=public`;
+const invalidUpgradeUrl = `${baseUrl}/pulso_invalid_upgrade?schema=public`;
 const pnpmScript = process.env.npm_execpath;
 
 const testEnv = (url) => ({
@@ -77,6 +78,7 @@ try {
   await docker('up', '-d', '--wait');
   await run('crear base shadow efímera', 'docker', [...compose, 'exec', '-T', 'db-test', 'createdb', '-U', 'pulso_test', 'pulso_shadow']);
   await run('crear base de upgrade efímera', 'docker', [...compose, 'exec', '-T', 'db-test', 'createdb', '-U', 'pulso_test', 'pulso_upgrade']);
+  await run('crear base de preflight inválido', 'docker', [...compose, 'exec', '-T', 'db-test', 'createdb', '-U', 'pulso_test', 'pulso_invalid_upgrade']);
 
   await runPnpm('aplicar migraciones desde base vacía', ['--filter', '@pulso/database', 'run', 'migrate:deploy'], { env: testEnv(emptyUrl) });
   await runPnpm('verificar migrate status en base vacía', ['--filter', '@pulso/database', 'exec', 'prisma', 'migrate', 'status'], { env: testEnv(emptyUrl) });
@@ -104,6 +106,32 @@ try {
   }
   console.log(`Conteos preservados (org,user,membership,team,task,worklog): ${after.stdout}`);
   await runPnpm('ejecutar smoke DB-backed posterior al upgrade', ['exec', 'vitest', 'run', '--config', 'vitest.upgrade.config.ts'], { env: testEnv(upgradeUrl) });
+
+  await psql('pulso_invalid_upgrade', '-f', '/workspace/packages/database/prisma/migrations/20260624213924_init/migration.sql');
+  await psql('pulso_invalid_upgrade', '-f', '/workspace/packages/database/prisma/migrations/20260625010000_org_plans/migration.sql');
+  await runPnpm('registrar migraciones previas del preflight inválido', [
+    '--filter', '@pulso/database', 'exec', 'prisma', 'migrate', 'resolve', '--applied', '20260624213924_init',
+  ], { env: testEnv(invalidUpgradeUrl) });
+  await runPnpm('registrar segunda migración del preflight inválido', [
+    '--filter', '@pulso/database', 'exec', 'prisma', 'migrate', 'resolve', '--applied', '20260625010000_org_plans',
+  ], { env: testEnv(invalidUpgradeUrl) });
+  await psql('pulso_invalid_upgrade', '-f', '/workspace/tests/integration/fixtures/tenant-integrity-invalid.sql');
+  const rejectedMigration = await runPnpm(
+    'comprobar rechazo transaccional de datos cross-tenant',
+    ['--filter', '@pulso/database', 'run', 'migrate:deploy'],
+    { env: testEnv(invalidUpgradeUrl), allowFailure: true },
+  );
+  if (rejectedMigration.code === 0) {
+    throw new Error('La migración tenant aceptó un fixture cross-tenant deliberadamente inválido.');
+  }
+  const partialColumn = await psql('pulso_invalid_upgrade', '-Atc', [
+    "SELECT count(*) FROM information_schema.columns",
+    "WHERE table_schema = 'public' AND table_name = 'TeamMembership' AND column_name = 'organizationId';",
+  ].join(' '));
+  if (partialColumn.stdout !== '0') {
+    throw new Error('El preflight fallido dejó DDL parcial en TeamMembership.');
+  }
+  console.log('Preflight tenant: rechazo esperado y rollback transaccional OK');
   succeeded = true;
 } finally {
   if (process.env.PULSO_KEEP_TEST_DB === '1') {
