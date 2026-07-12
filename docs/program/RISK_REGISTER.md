@@ -8,7 +8,7 @@
 | R-004 | No existe staging validado con la imagen candidata | Alta | Media | Promover digest exacto y ejecutar smokes | SRE | Cerrado; staging efímero verde por digest |
 | R-005 | Cambio ajeno de README puede entrar por accidente | Media | Media | Índice vacío, prohibir `git add -A`, revisar cached diff | Principal Engineer | Mitigado, no cerrado |
 | R-006 | Backup/restore age no probado end-to-end | Alta | Media | Ensayo con clave/destino autorizados y DB aislada | SRE | Cerrado; restore PostgreSQL 16 verificado |
-| R-007 | Aislamiento multi-tenant no tiene todas las relaciones compuestas en DB | Alta | Baja/Media | FKs compuestas y preflight transaccional P1; validar staging antes de producción | Security/DB | Mitigado localmente; staging pendiente |
+| R-007 | Aislamiento multi-tenant no tiene todas las relaciones compuestas en DB | Alta | Baja/Media | FKs compuestas y preflight transaccional P1; validar producción sólo con checkpoint | Security/DB | Mitigado y validado en staging sintético; no desplegado |
 | R-008 | Auth actual no es persistida/revocable para uso comercial | Alta | Media | Diseñar y aprobar P2 antes de abrir registro | Security | Abierto |
 | R-009 | Registro/Personal podrían reabrirse por cambio de proxy | Alta | Baja | Feature flags fail-closed + Caddy versionado + safety check | Security/SRE | Mitigado en producción por código + Caddy |
 | R-010 | Desktop no tiene release firmada de este hardening | Media | Media | Firma, VM smoke y release sólo con L5 específico | Desktop owner | Abierto |

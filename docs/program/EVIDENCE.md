@@ -260,3 +260,32 @@ Total de tests ejecutados por el gate: 67.
   columna nueva no quedó creada, confirmando rollback transaccional.
 - Datos utilizados: exclusivamente sintéticos bajo `integration.invalid`.
 - VPS, staging remoto y producción: no accedidos durante este bloque.
+
+## P1 — Candidata inmutable y staging sintético — 2026-07-12
+
+- Fixture actual versionado: commit
+  `5bf0b9ca67d9895a47b918a4908bf816d1022e0c`.
+- Build: worktree detached limpio en `F:`, luego eliminado.
+- Imagen local:
+  `pulso-p1-staging:5bf0b9ca67d9895a47b918a4908bf816d1022e0c`.
+- Image ID local:
+  `sha256:0c25ee6f7282c58e8b73db3ab87d2cd9e0b704eacbec49e7ef15d789bf56a5a0`.
+- Tamaño informado por Docker: 820.558.946 bytes.
+- Label OCI revision: coincide exactamente con el Git SHA.
+- Registry/push/tag `latest`: ninguno.
+- Staging: red Docker aislada, PostgreSQL 16 en `tmpfs`, secretos y datos
+  exclusivamente sintéticos, Caddy publicado sólo en `127.0.0.1:43100`.
+- Migration job: 3/3 migraciones aplicadas desde base vacía.
+- Conteos `(org,user,orgMembership,teamMembership,team,task,worklog,migrations)`:
+  `1,2,2,1,1,1,2,3`.
+- App readiness: OK.
+- Smoke público: health/readiness OK; request ID, nosniff y CSP presentes;
+  `/register` y `/api/personal/suggest` devolvieron 404.
+- Logs: sin connection strings, nombres de secretos, errores fatales ni errores
+  de inicialización Prisma.
+- Incidentes del harness: tres corridas previas aplicaron migraciones pero el
+  verificador local falló por escaping SQL, ausencia de `.State.Health` al usar
+  `docker run` y parsing de headers/labels en PowerShell. Ninguno fue un fallo
+  de la candidata; cada entorno se eliminó antes de repetir desde base vacía.
+- Cleanup final: sin contenedores, redes, DB, fixture ni secretos temporales;
+  sólo se conserva la imagen local reproducible.

@@ -4,8 +4,8 @@
 
 ## Fase actual
 
-**P1 — Migraciones y PostgreSQL: EN CURSO**. Los gates locales G1–G4 están
-cumplidos; falta validar la candidata en staging para cerrar la fase.
+**P1 — Migraciones y PostgreSQL: COMPLETA**. Los gates G1–G5 están cumplidos
+con datos sintéticos; la migración no fue aplicada a producción.
 
 El hardening está versionado, respaldado, registrado, validado en staging y
 desplegado en producción. El segundo destino offsite duradero permanece como
@@ -16,8 +16,8 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 | Fase | Estado | Evidencia / próximo gate |
 | --- | --- | --- |
 | P0.5 | Completa | G1–G7 cumplidos; producción healthy y smoke verde |
-| P1 | En curso | G1–G4 cumplidos localmente; G5 staging pendiente |
-| P2 | No iniciada | Requiere cierre/checkpoint de fase anterior y diseño de migración aprobado |
+| P1 | Completa | G1–G5 cumplidos; candidata inmutable y staging sintético verdes |
+| P2 | Próxima | Iniciar diseño local de auth persistida, tokens e invitaciones |
 | P3 | No iniciada | Depende de P2 |
 | P4 | No iniciada | Depende de entitlements P3 |
 | P5 | No iniciada | Gmail real bloqueado; outbox se diseña después de P4 o cuando se autorice la fase |
@@ -29,8 +29,8 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 - Worktree: `F:\Pulso-codex`
 - Rama: `codex/web-control-plane-hardening`
 - Commit inicial: `e8ac1cf6d98c2163abf6bdcabbceab88b9bc9220`
-- HEAD operativo previo a este documento: `06058d4b88d546bc568f0e960a31a34004ff9fb1`
-- Commits locales generados: 17 (10 operativos y 7 checkpoints/follow-ups)
+- HEAD operativo previo a este documento: `5bf0b9ca67d9895a47b918a4908bf816d1022e0c`
+- Commits locales generados: 19 (11 operativos y 8 checkpoints/follow-ups)
 - Tags generados: ninguno
 - Pushes: ninguno
 - Índice Git: vacío
@@ -84,12 +84,12 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 | G2 Upgrade sintético | Cumplido | Conteos y relaciones preservados |
 | G3 Suite PostgreSQL | Cumplido | 12 DB-backed + 3 upgrade; drift cero |
 | G4 Runbook probado localmente | Cumplido | Preflight inválido rechazado sin DDL parcial |
-| G5 Migración de staging | Pendiente | Requiere candidata inmutable posterior al commit |
+| G5 Migración de staging | Cumplido | Imagen `5bf0b9c`; migrate, fixture, readiness y smokes verdes |
 
 ## Gates pendientes
 
 - P0.5: ninguno.
-- P1: build inmutable, staging sintético y cierre de G5.
+- P2: diseño y migración local de auth persistida, revocable y multi-org.
 - Programa: segundo destino offsite duradero.
 
 ## Riesgos prioritarios P0/P1/P2
@@ -115,9 +115,11 @@ Detalle y responsables en `RISK_REGISTER.md`.
 7. `99f07b3` — `ops(db): enforce safe migration backup and restore workflows`
 8. `a6e2a0a` — `ops(deploy): add immutable promotion smoke and rollback workflow`
 9. `06058d4` — `feat(db): enforce tenant relational integrity`
+10. `5bf0b9c` — `test(db): add current-schema staging fixture`
 
 ## Próxima acción autorizable
 
-Crear commits atómicos P1, construir una imagen inmutable desde worktree limpio
-y validar la migración con datos sintéticos en staging. No aplicar la migración
-a producción ni abrir auth/billing durante este gate.
+Iniciar **P2 — Auth, sesiones, multi-org e invitaciones** localmente. Diseñar la
+migración de forma aditiva, mantener registro público cerrado y usar email mock.
+La migración P1 y cualquier apertura de auth productiva siguen requiriendo un
+checkpoint sensible separado.
