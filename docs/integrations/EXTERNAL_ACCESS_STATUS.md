@@ -76,7 +76,10 @@ Este documento no contiene secretos. Los valores reales viven únicamente en
 - Refresh token almacenado únicamente cifrado en `.env` como
   `GOOGLE_GMAIL_REFRESH_TOKEN_ENCRYPTED`; no se imprimió ni documentó su valor.
 - Smoke real controlado: refresh OAuth y `users.messages.send` verdes, con un
-  único correo dirigido a la propia casilla remitente. Sin procesar el outbox.
+  único correo directo dirigido a la propia casilla remitente.
+- Smoke end-to-end posterior: PostgreSQL efímero migrado desde cero, identidad
+  sintética, auth → outbox cifrado → worker → Gmail → estado `SENT`, con un
+  segundo correo a la propia casilla. Contenedor y volumen destruidos al final.
 - La app continúa en Testing, no publicada y sin cambios de scopes.
 
 ## Archivos locales modificados
@@ -114,7 +117,7 @@ Este documento no contiene secretos. Los valores reales viven únicamente en
    API de suscripciones (preapproval) usando `MERCADO_PAGO_ACCESS_TOKEN`
    (TEST primero). No usar OAuth de vendedores.
 3. **P5 Email**: outbox, worker y provider Gmail están implementados localmente.
-   Bootstrap, consentimiento, token cifrado y smoke directo están listos. Falta
-   validar auth → outbox → worker en aislamiento antes de promoverlo.
+   Bootstrap, consentimiento, token cifrado y ambos smokes están listos. Falta
+   preparar candidata inmutable y promover mediante el runbook autorizado.
 4. **Producción**: activar credenciales productivas de Mercado Pago y publicar
    la app OAuth solo con checkpoint L5 específico.

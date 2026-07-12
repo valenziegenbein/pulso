@@ -407,3 +407,13 @@ Total de tests ejecutados por el gate: 67.
   revisión visual local realizada.
 - Green gate control plane: 59 unitarios, 31 PostgreSQL, 3 upgrade, seis
   migraciones, drift cero, typecheck, lint, build, Electron y safety verdes.
+# Evidencia P5 Gmail OAuth y outbox end-to-end — 2026-07-12
+
+- Consentimiento personal Google OAuth con scope único `gmail.send`.
+- Refresh token guardado únicamente cifrado en `.env`; valor no expuesto.
+- Smoke directo `verifyConnection` + `users.messages.send`: OK, destinatario propio.
+- Smoke aislado: PostgreSQL 16 efímero, siete migraciones desde cero, identidad
+  sintética, auth → outbox cifrado → worker Gmail → `SENT`: OK.
+- Guardas verificadas: ACK literal, `DATABASE_URL === TEST_DATABASE_URL`, host
+  loopback y nombre exacto `pulso_email_smoke`.
+- Contenedor, base y volumen destruidos al finalizar. Sin VPS ni producción.
