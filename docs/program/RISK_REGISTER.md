@@ -8,7 +8,7 @@
 | R-004 | No existe staging validado con la imagen candidata | Alta | Media | Promover digest exacto y ejecutar smokes | SRE | Cerrado; staging efímero verde por digest |
 | R-005 | Cambio ajeno de README puede entrar por accidente | Media | Media | Índice vacío, prohibir `git add -A`, revisar cached diff | Principal Engineer | Mitigado, no cerrado |
 | R-006 | Backup/restore age no probado end-to-end | Alta | Media | Ensayo con clave/destino autorizados y DB aislada | SRE | Cerrado; restore PostgreSQL 16 verificado |
-| R-007 | Aislamiento multi-tenant no tiene todas las relaciones compuestas en DB | Alta | Baja/Media | Evaluar constraints aditivas en P1, sin migración automática | Security/DB | Abierto |
+| R-007 | Aislamiento multi-tenant no tiene todas las relaciones compuestas en DB | Alta | Baja/Media | FKs compuestas y preflight transaccional P1; validar staging antes de producción | Security/DB | Mitigado localmente; staging pendiente |
 | R-008 | Auth actual no es persistida/revocable para uso comercial | Alta | Media | Diseñar y aprobar P2 antes de abrir registro | Security | Abierto |
 | R-009 | Registro/Personal podrían reabrirse por cambio de proxy | Alta | Baja | Feature flags fail-closed + Caddy versionado + safety check | Security/SRE | Mitigado en producción por código + Caddy |
 | R-010 | Desktop no tiene release firmada de este hardening | Media | Media | Firma, VM smoke y release sólo con L5 específico | Desktop owner | Abierto |
@@ -19,6 +19,7 @@
 | R-015 | El tag SHA de Docker Hub es mutable por configuración del repositorio | Alta | Baja | Promover y hacer rollback sólo por digest; nunca por tag ni `latest` | SRE | Mitigado por política y evidencia de digest |
 | R-016 | Next standalone queda ligado al hostname y falla healthcheck loopback | Crítica | Alta | Forzar `HOSTNAME=0.0.0.0`, test runtime, nuevo SHA/digest y repetir staging | Engineering + SRE | Cerrado; health y smoke verdes con nuevo digest |
 | R-017 | VPS sin token read-only del registry | Media | Media | Conservar candidata/rollback verificados en `F:`; crear pull token separado después | Titular + SRE | Abierto; no bloquea rollback inmediato |
+| R-018 | Filas históricas tenant-inconsistentes pueden bloquear la migración P1 | Alta | Baja | Preflight fail-closed, restore aislado y corrección explícita antes de promover | Security/DB | Mitigado y probado localmente; producción no inspeccionada para P1 |
 
 ## Riesgos cerrados localmente
 

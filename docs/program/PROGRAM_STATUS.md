@@ -4,8 +4,8 @@
 
 ## Fase actual
 
-**P0.5 — Estabilización y hardening: COMPLETA**. El programa queda detenido
-antes de iniciar formalmente P1.
+**P1 — Migraciones y PostgreSQL: EN CURSO**. Los gates locales G1–G4 están
+cumplidos; falta validar la candidata en staging para cerrar la fase.
 
 El hardening está versionado, respaldado, registrado, validado en staging y
 desplegado en producción. El segundo destino offsite duradero permanece como
@@ -16,7 +16,7 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 | Fase | Estado | Evidencia / próximo gate |
 | --- | --- | --- |
 | P0.5 | Completa | G1–G7 cumplidos; producción healthy y smoke verde |
-| P1 | Preparación local implementada, no promovida | G1–G3 locales cumplidos; runbooks listos; staging no autorizado |
+| P1 | En curso | G1–G4 cumplidos localmente; G5 staging pendiente |
 | P2 | No iniciada | Requiere cierre/checkpoint de fase anterior y diseño de migración aprobado |
 | P3 | No iniciada | Depende de P2 |
 | P4 | No iniciada | Depende de entitlements P3 |
@@ -29,8 +29,8 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 - Worktree: `F:\Pulso-codex`
 - Rama: `codex/web-control-plane-hardening`
 - Commit inicial: `e8ac1cf6d98c2163abf6bdcabbceab88b9bc9220`
-- HEAD operativo previo a este documento: `a6e2a0ab55cd0a71ca669aaaa8625c2508cf55ec`
-- Commits locales generados: 15 (9 operativos y 6 checkpoints/follow-ups)
+- HEAD operativo previo a este documento: `06058d4b88d546bc568f0e960a31a34004ff9fb1`
+- Commits locales generados: 17 (10 operativos y 7 checkpoints/follow-ups)
 - Tags generados: ninguno
 - Pushes: ninguno
 - Índice Git: vacío
@@ -39,11 +39,11 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 ## Autorización vigente
 
 - L0 (lectura/planes): autorizado
-- L1 (cambios locales reversibles): autorizado
-- L2 (commits): autorización puntual consumida por el checkpoint documental de cierre P0.5; no autoriza nuevos commits, tags, pushes ni reescrituras
-- L3 (secretos, uploads, registry): autorización puntual consumida por la imagen corregida; no autoriza nuevos uploads
-- L4 (staging): autorización puntual consumida; staging efímero verde
-- L5 (producción/VPS): autorización puntual G7 consumida; no autoriza nuevas acciones productivas
+- L1 (cambios locales reversibles): autorización continua
+- L2 (commits): autorización continua para commits atómicos; sin tags, pushes ni reescrituras innecesarias
+- L3 (secretos, uploads, registry): permitido sólo sin nuevos secretos/costos; detenerse si requiere credenciales
+- L4 (staging): autorizado para entornos reversibles con datos sintéticos
+- L5 (producción/VPS): requiere checkpoint ante migraciones, credenciales o acciones productivas sensibles
 
 ## Gates P0.5
 
@@ -76,17 +76,29 @@ riesgo operativo aceptado; la copia cifrada y restaurada existe en `F:`.
 - `git diff --check`
 - Build inmutable local desde worktree limpio en `a6e2a0a`; imagen eliminada tras validar
 
+## Gates P1
+
+| Gate | Estado | Evidencia |
+| --- | --- | --- |
+| G1 Migraciones desde cero | Cumplido | 3 migraciones aplicadas; status actualizado |
+| G2 Upgrade sintético | Cumplido | Conteos y relaciones preservados |
+| G3 Suite PostgreSQL | Cumplido | 12 DB-backed + 3 upgrade; drift cero |
+| G4 Runbook probado localmente | Cumplido | Preflight inválido rechazado sin DDL parcial |
+| G5 Migración de staging | Pendiente | Requiere candidata inmutable posterior al commit |
+
 ## Gates pendientes
 
 - P0.5: ninguno.
-- Programa: segundo destino offsite duradero y autorización para iniciar P1.
+- P1: build inmutable, staging sintético y cierre de G5.
+- Programa: segundo destino offsite duradero.
 
 ## Riesgos prioritarios P0/P1/P2
 
 - P0: el backup cifrado restaurable existe en `F:`, pero todavía no reemplaza un offsite duradero.
 - P0: hardening desplegado por digest; producción healthy y smoke verde.
 - P0: historial productivo de migraciones contrastado sin diferencias.
-- P1: faltan constraints compuestas multi-tenant evaluadas y aprobadas; no se agregó RLS.
+- P1: constraints tenant-críticas implementadas localmente; relaciones opcionales
+  con `SET NULL` permanecen bajo authz y se revisarán sin introducir RLS automático.
 - P1: backup/restore con age fue probado end-to-end contra PostgreSQL 16 aislado.
 - P2: auth actual no es todavía el modelo persistido/revocable definido para auth comercial.
 
@@ -102,10 +114,10 @@ Detalle y responsables en `RISK_REGISTER.md`.
 6. `59ee460` — `test(db): validate PostgreSQL isolation and migration upgrades`
 7. `99f07b3` — `ops(db): enforce safe migration backup and restore workflows`
 8. `a6e2a0a` — `ops(deploy): add immutable promotion smoke and rollback workflow`
+9. `06058d4` — `feat(db): enforce tenant relational integrity`
 
 ## Próxima acción autorizable
 
-Autorizar el inicio formal de **P1 — Migraciones y PostgreSQL**. Antes de crear
-nuevas migraciones se debe revisar lo ya implementado, cerrar el checkpoint de
-runbook y decidir por separado constraints multi-tenant aditivas. Esta acción
-no autoriza auth, billing, producción ni nuevas migraciones productivas.
+Crear commits atómicos P1, construir una imagen inmutable desde worktree limpio
+y validar la migración con datos sintéticos en staging. No aplicar la migración
+a producción ni abrir auth/billing durante este gate.

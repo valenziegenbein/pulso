@@ -135,3 +135,30 @@
 - Consecuencias: el VPS no almacena credenciales Docker Hub; la recuperación
   depende del archivo verificado en `F:` hasta crear un pull token read-only.
 - Reversibilidad: alta; un token read-only separado puede incorporarse después.
+
+## D-014 — Integridad tenant mediante FKs compuestas y preflight transaccional
+
+- Fecha: 2026-07-12
+- Contexto: la autorización web impedía cruces tenant, pero PostgreSQL todavía
+  aceptaba combinaciones de organización, rol, equipo, tarea y adjunto incoherentes.
+- Decisión: añadir `TeamMembership.organizationId`, backfill desde `Team` y FKs
+  compuestas para relaciones tenant-críticas; abortar antes de reemplazar FKs si
+  existen filas históricas inconsistentes y envolver todo el DDL en transacción.
+- Alternativas: confiar sólo en la aplicación o activar RLS; rechazadas porque
+  la primera deja la DB sin defensa y la segunda cambia el modelo operativo.
+- Consecuencias: una inconsistencia histórica bloquea promoción de forma segura;
+  las relaciones opcionales con semántica `SET NULL` siguen evaluándose aparte.
+- Reversibilidad: media; antes de producción se vuelve al digest anterior. Tras
+  aplicar el schema, el rollback de datos requiere restauración en base nueva.
+
+## D-015 — Autorización operativa continua con checkpoints sensibles
+
+- Fecha: 2026-07-12
+- Contexto: el titular tendrá menor disponibilidad durante el desarrollo.
+- Decisión: continuar sin solicitudes rutinarias para lectura, cambios locales,
+  tests, commits atómicos y staging reversible; detenerse ante credenciales,
+  costos, decisiones de rumbo, acciones destructivas o promoción productiva sensible.
+- Alternativas: pedir autorización en cada gate menor; descartada por fricción.
+- Consecuencias: el programa avanza por evidencia y gates, manteniendo puntos de
+  atención sólo donde el impacto lo justifica.
+- Reversibilidad: total; el titular puede restringir nuevamente el alcance.

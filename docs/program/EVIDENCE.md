@@ -237,3 +237,26 @@ Total de tests ejecutados por el gate: 67.
   terminados con exit 0.
 - Disco VPS post-deploy: 18 GiB / 96 GiB (19%).
 - Rollback manifest: `/var/backups/pulso/deploy-20260711T234734Z`, checksum OK.
+
+## P1 — Integridad relacional PostgreSQL local — 2026-07-12
+
+- Commit operativo: `06058d4b88d546bc568f0e960a31a34004ff9fb1`.
+- Migración: `20260712030000_tenant_relational_integrity`.
+- Cambios: `TeamMembership.organizationId`, backfill desde `Team`, índices y FKs
+  compuestas para roles, membresías, equipos, tareas, decisiones y adjuntos.
+- Preflight: valida filas históricas antes de reemplazar constraints; todo el
+  archivo usa una única transacción explícita.
+- `prisma validate`: schema válido.
+- Typecheck global: 5 paquetes, exit 0.
+- `pnpm test:db`: exit 0.
+- Migraciones desde base vacía: 3/3 aplicadas.
+- `prisma migrate status`: schema actualizado.
+- Drift migraciones ↔ schema: ninguno.
+- Suite PostgreSQL: 12/12 tests; incluye cruces de rol/equipo/organización,
+  recursos cross-tenant y carrera concurrente de membresía.
+- Upgrade sintético: 3/3 tests; conteos `1,2,2,1,1,2` preservados y
+  `TeamMembership.organizationId` derivado correctamente.
+- Ensayo negativo: fixture cross-tenant rechazado por `migrate deploy`; la
+  columna nueva no quedó creada, confirmando rollback transaccional.
+- Datos utilizados: exclusivamente sintéticos bajo `integration.invalid`.
+- VPS, staging remoto y producción: no accedidos durante este bloque.

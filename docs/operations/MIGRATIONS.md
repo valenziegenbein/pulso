@@ -23,6 +23,11 @@ El runner:
 9. comprueba conteos, relaciones, defaults, aislamiento y migration history;
 10. elimina contenedores y `tmpfs`.
 
+Desde `20260712030000_tenant_relational_integrity` el runner también crea una
+tercera base con una relación cross-tenant deliberadamente inválida. El deploy
+debe rechazarla y el test comprueba que la transacción no deja ni siquiera la
+columna nueva. Esto valida el comportamiento fail-closed del preflight.
+
 `PULSO_KEEP_TEST_DB=1` puede conservarlo sólo para diagnóstico local.
 
 ## Antes de producción
@@ -37,6 +42,22 @@ El runner:
    - requiere mantenimiento;
    - destructiva (no promover sin plan específico).
 
+### Preflight de integridad tenant
+
+La migración P1 deriva `TeamMembership.organizationId` desde el equipo y aborta
+si encuentra cualquiera de estas condiciones:
+
+- membresía organizacional con un rol de otra organización;
+- membresía de equipo sin membresía organizacional equivalente;
+- rol o equipo de otra organización en una membresía de equipo;
+- tarea o decisión asociada a un equipo de otra organización;
+- adjunto asociado a una tarea o bitácora de otra organización.
+
+El backfill, los chequeos y el reemplazo de FKs están dentro de un único
+`BEGIN/COMMIT`. Ante un fallo no corregir datos dentro de la migración: conservar
+la versión activa, identificar las filas mediante consultas read-only, acordar
+la corrección y repetir primero sobre una restauración aislada.
+
 ## Aplicación
 
 La migración es un job previo, no un efecto secundario del arranque:
@@ -48,6 +69,12 @@ docker compose --profile ops run --rm migrate
 
 Si falla, no ejecutar `docker compose up` para la nueva aplicación. Conservar la
 versión actual y diagnosticar sobre logs sanitizados.
+
+Una migración fallida queda registrada por Prisma. Después de corregir la causa
+en una copia aislada, marcarla como rolled back con `prisma migrate resolve
+--rolled-back 20260712030000_tenant_relational_integrity` sólo en el entorno
+afectado y volver a ejecutar `migrate deploy`. Nunca marcarla como aplicada si
+el SQL no terminó.
 
 ## Smoke y promoción
 
