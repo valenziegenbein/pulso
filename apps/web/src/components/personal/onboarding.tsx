@@ -6,6 +6,7 @@ import { ENTRY_LABEL, usePersonal, type AiMode, type StorageTarget } from '@/lib
 import { PersonalWidget } from './personal-widget';
 import { LocalAiSetup } from './local-ai-setup';
 import { CloudAiSetup } from './cloud-ai-setup';
+import { AccountAiSetup } from './account-ai-setup';
 
 const STEPS = ['intro', 'mode', 'name', 'project', 'storage', 'ai', 'widget', 'snap', 'done'] as const;
 
@@ -272,11 +273,17 @@ export function Onboarding() {
           <div>
             <h1 className="font-display text-4xl sm:text-5xl">¿Cómo querés usar la IA?</h1>
             <p className="mt-3 text-muted">La IA propone la bitácora. Vos siempre aprobás.</p>
-            <div className="mt-8 grid gap-3 sm:grid-cols-3">
+            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+              <OptionCard small title="Con mi cuenta Pulso" desc="IA administrada. Acceso de prueba cerrado." badge="Personal AI" selected={ai === 'account'} onClick={() => setAiLocal('account')} />
               <OptionCard small title="API key propia" desc="OpenAI, Anthropic, etc." selected={ai === 'byok'} onClick={() => setAiLocal('byok')} />
               <OptionCard small title="IA local" desc="Ollama, LM Studio, vLLM." selected={ai === 'local'} onClick={() => setAiLocal('local')} />
               <OptionCard small title="Sin IA por ahora" desc="Bitácora manual." selected={ai === 'none'} onClick={() => setAiLocal('none')} />
             </div>
+            {ai === 'account' && (
+              <div className="pulso-reveal mt-6">
+                <AccountAiSetup />
+              </div>
+            )}
             {ai === 'local' && (
               <div className="pulso-reveal mt-6">
                 <LocalAiSetup />

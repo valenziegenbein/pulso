@@ -1,5 +1,5 @@
 // Cliente del pipeline de IA en modo Personal. Decide a dónde generar la
-// bitácora según la config del usuario (IA local, sin IA, o fallback mock).
+// bitácora según la config del usuario (cuenta Pulso, IA local, BYOK o manual).
 import type { AiConfig, AiMode, AiProvider, EntryType, TaskPriority } from './store';
 
 export interface ProviderPreset {
@@ -81,8 +81,39 @@ export class AiError extends Error {
   }
 }
 
+type AccountAiResult<T> = { ok: true; data: T } | { ok: false; status?: number; error?: string };
+
+type PersonalAccountBridge = {
+  isDesktop?: boolean;
+  accountAiRequest?: (payload: Record<string, unknown>) => Promise<AccountAiResult<unknown>>;
+};
+
+function personalAccountBridge(): PersonalAccountBridge | undefined {
+  return typeof window !== 'undefined'
+    ? (window as unknown as { pulso?: PersonalAccountBridge }).pulso
+    : undefined;
+}
+
+async function requestAccountAi<T>(payload: Record<string, unknown>): Promise<T> {
+  const bridge = personalAccountBridge();
+  if (!bridge?.isDesktop || !bridge.accountAiRequest) throw new AiError('unavailable');
+  let result: AccountAiResult<unknown>;
+  try {
+    result = await bridge.accountAiRequest(payload);
+  } catch {
+    throw new AiError('network');
+  }
+  if (!result.ok) {
+    if (result.status === 401 || result.status === 403) throw new AiError('unauthorized');
+    if (result.status === 429) throw new AiError('rate_limited');
+    throw new AiError(result.status ? 'unavailable' : 'network');
+  }
+  return result.data as T;
+}
+
 /** ¿La config alcanza para generar? (cloud necesita además la API key). */
 export function aiReady(ai: AiMode, config: AiConfig | null): boolean {
+  if (ai === 'account') return Boolean(personalAccountBridge()?.accountAiRequest);
   if (ai === 'none' || !config?.baseUrl || !config?.model) return false;
   if (isCloudProvider(config.provider) && !config.apiKey) return false;
   return true;
@@ -272,6 +303,23 @@ export async function generateDraft(params: {
 }): Promise<DraftSuggestion> {
   const { note, task, projectContext, notesContext, attachmentsHint, images, ai, config, onDelta } = params;
   if (ai === 'none') return manualDraft(note);
+  if (ai === 'account') {
+    const data = await requestAccountAi<{ suggestion?: DraftSuggestion }>({
+      operation: 'draft',
+      note,
+      task,
+      projectContext,
+      notesContext,
+      attachmentsHint,
+      images,
+    });
+    if (!data.suggestion) throw new AiError('unavailable');
+    return {
+      type: coerceType(data.suggestion.type),
+      title: data.suggestion.title,
+      content: data.suggestion.content,
+    };
+  }
   if (aiReady(ai, config) && config) {
     const body = {
       note,
@@ -321,6 +369,15 @@ export async function generatePersonalTask(params: {
   config: AiConfig | null;
 }): Promise<PersonalTaskSuggestion> {
   const { instruction, project, activeTasks, ai, config } = params;
+  if (ai === 'account') {
+    const data = await requestAccountAi<{ suggestion?: PersonalTaskSuggestion }>({
+      operation: 'task',
+      instruction,
+      project,
+      activeTasks,
+    });
+    return data.suggestion ?? fallbackPersonalTask(instruction);
+  }
   if (!aiReady(ai, config) || !config) return fallbackPersonalTask(instruction);
 
   let res: Response;

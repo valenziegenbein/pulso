@@ -7,6 +7,7 @@ import { LocalAiSetup } from '@/components/personal/local-ai-setup';
 import { CloudAiSetup } from '@/components/personal/cloud-ai-setup';
 import { SemanticSearchSetup } from '@/components/personal/semantic-search-setup';
 import { TeamsConnect } from '@/components/personal/teams-connect';
+import { AccountAiSetup } from '@/components/personal/account-ai-setup';
 
 type ShellBridge = { isDesktop?: boolean; chooseFolder?: () => Promise<string | null> };
 function shell(): ShellBridge | undefined {
@@ -66,11 +67,17 @@ export default function AjustesPage() {
       </Section>
 
       <Section title="Inteligencia artificial" hint="La IA propone la bitácora. Vos siempre aprobás.">
-        <Choice<AiMode> value={ai} onChange={setAi} options={[
+        <Choice<AiMode> value={ai} onChange={setAi} columns={2} options={[
+          ['account', 'Con mi cuenta Pulso', 'IA administrada. Prueba cerrada.'],
           ['byok', 'API key propia', 'OpenAI, Anthropic, etc.'],
           ['local', 'IA local', 'Ollama, LM Studio, vLLM.'],
           ['none', 'Sin IA', 'Bitácora manual.'],
         ]} />
+        {ai === 'account' && (
+          <div className="mt-4">
+            <AccountAiSetup />
+          </div>
+        )}
         {ai === 'local' && (
           <div className="mt-4">
             <LocalAiSetup />
@@ -115,13 +122,15 @@ function Choice<T extends string | null>({
   value,
   onChange,
   options,
+  columns = 3,
 }: {
   value: T;
   onChange: (v: T) => void;
   options: Array<[NonNullable<T>, string, string]>;
+  columns?: 2 | 3;
 }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
+    <div className={`grid gap-3 ${columns === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
       {options.map(([key, title, desc]) => (
         <button
           key={key}

@@ -10,7 +10,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 export type EntryType = 'PROGRESS' | 'RESEARCH' | 'DECISION' | 'BLOCKER' | 'NOTE' | 'DELIVERY' | 'TASK';
 export type TaskPriority = 'high' | 'medium' | 'low';
 export type StorageTarget = 'pulso' | 'markdown' | 'notion' | null;
-export type AiMode = 'byok' | 'local' | 'none' | null;
+export type AiMode = 'account' | 'byok' | 'local' | 'none' | null;
 export type AiProvider = 'lmstudio' | 'ollama' | 'openai' | 'anthropic' | 'custom';
 
 /** Conexión concreta a un proveedor LLM (local OpenAI-compatible o cloud BYOK). */
