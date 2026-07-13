@@ -1,7 +1,7 @@
 import process from 'node:process';
 import { prisma } from '@pulso/database';
 import { normalizeEmail } from '../apps/web/src/lib/auth/session';
-import { recordEarlyAccessRequest } from '../apps/web/src/server/early-access';
+import { bootstrapSuperAdminAccount, recordEarlyAccessRequest } from '../apps/web/src/server/early-access';
 
 const command = process.argv[2];
 const args = parseArgs(process.argv.slice(3));
@@ -15,17 +15,19 @@ try {
 }
 
 async function promoteSuperAdmin(args: Map<string, string>): Promise<void> {
-  requireAck(args, 'promote-existing-user');
   const email = requiredEmail(args);
-  const user = await prisma.user.findUnique({
-    where: { normalizedEmail: email },
-    include: { _count: { select: { orgMemberships: true } } },
-  });
-  if (!user || user.status !== 'ACTIVE' || !user.emailVerifiedAt || user._count.orgMemberships < 1) {
-    throw new Error('El superadmin debe ser una cuenta existente, activa, verificada y con membresía.');
+  const ack = args.get('ack');
+  const createIfMissing = ack === 'create-superadmin-account';
+  if (!createIfMissing && ack !== 'promote-existing-user') {
+    throw new Error('Falta --ack promote-existing-user o --ack create-superadmin-account.');
   }
-  await prisma.user.update({ where: { id: user.id }, data: { isSuperAdmin: true } });
-  process.stdout.write(`Superadmin habilitado: ${email}\n`);
+  const result = await bootstrapSuperAdminAccount({
+    email,
+    name: args.get('name'),
+    createIfMissing,
+    sendPasswordReset: createIfMissing,
+  });
+  process.stdout.write(`Superadmin habilitado: ${email}; cuenta creada=${result.created}; reset encolado=${createIfMissing}\n`);
 }
 
 async function importRequest(args: Map<string, string>): Promise<void> {

@@ -1,8 +1,10 @@
+import { randomBytes } from 'node:crypto';
 import { Prisma, hashPassword, prisma } from '@pulso/database';
 import { DEFAULT_ROLE_PERMISSIONS } from '@pulso/domain';
 import { PLAN_SEAT_LIMIT, ROLE_KEY, type RoleKey } from '@pulso/shared';
 import { createOpaqueToken, hashOpaqueToken, normalizeEmail } from '@/lib/auth/session';
 import { enqueueEmail } from '@/server/email/outbox';
+import { requestPasswordReset } from '@/server/auth-service';
 
 export const EARLY_ACCESS_PRODUCT = {
   PERSONAL_AI: 'PERSONAL_AI',
@@ -108,6 +110,51 @@ export async function hasApprovedPersonalAiAccess(email: string): Promise<boolea
     select: { status: true },
   });
   return request?.status === EARLY_ACCESS_STATUS.APPROVED;
+}
+
+export async function bootstrapSuperAdminAccount(input: {
+  email: string;
+  name?: string;
+  createIfMissing: boolean;
+  sendPasswordReset: boolean;
+}) {
+  const normalizedEmail = normalizeEmail(input.email);
+  if (!normalizedEmail) throw new Error('Email inválido.');
+  const result = await prisma.$transaction(async (tx) => {
+    const existing = await tx.user.findUnique({
+      where: { normalizedEmail },
+      include: { _count: { select: { orgMemberships: true } } },
+    });
+    if (existing) {
+      if (existing.status !== 'ACTIVE' || !existing.emailVerifiedAt || existing._count.orgMemberships < 1) {
+        throw new Error('El superadmin existente debe estar activo, verificado y tener una membresía.');
+      }
+      const user = await tx.user.update({ where: { id: existing.id }, data: { isSuperAdmin: true } });
+      return { user, created: false };
+    }
+    if (!input.createIfMissing) throw new Error('La cuenta indicada todavía no existe.');
+    const name = input.name?.trim().slice(0, 120);
+    if (!name || name.length < 2) throw new Error('Falta un nombre válido para crear la cuenta.');
+    const user = await tx.user.create({
+      data: {
+        email: normalizedEmail,
+        normalizedEmail,
+        name,
+        passwordHash: hashPassword(randomBytes(48).toString('base64url')),
+        emailVerifiedAt: new Date(),
+        isSuperAdmin: true,
+      },
+    });
+    await createWorkspace(tx, {
+      slug: `pulso-operations-${hashOpaqueToken(normalizedEmail).slice(0, 16)}`,
+      name: 'Pulso Operaciones',
+      userId: user.id,
+      seatLimit: 1,
+    });
+    return { user, created: true };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  if (input.sendPasswordReset) await requestPasswordReset(result.user.normalizedEmail);
+  return { userId: result.user.id, email: result.user.normalizedEmail, created: result.created };
 }
 
 export async function approveEarlyAccessRequest(requestId: string, actorId: string, decisionNote?: string) {
@@ -245,12 +292,24 @@ async function createPersonalWorkspace(
   name: string,
   userId: string,
 ): Promise<string> {
+  return createWorkspace(tx, {
+    name: `Pulso Personal · ${name.trim().slice(0, 80)}`,
+    slug: `personal-${requestId}`,
+    userId,
+    seatLimit: Math.min(1, PLAN_SEAT_LIMIT.FREE),
+  });
+}
+
+async function createWorkspace(
+  tx: Prisma.TransactionClient,
+  input: { name: string; slug: string; userId: string; seatLimit: number },
+): Promise<string> {
   const organization = await tx.organization.create({
     data: {
-      name: `Pulso Personal · ${name.trim().slice(0, 80)}`,
-      slug: `personal-${requestId}`,
+      name: input.name,
+      slug: input.slug,
       planKey: 'FREE',
-      seatLimit: Math.min(1, PLAN_SEAT_LIMIT.FREE),
+      seatLimit: input.seatLimit,
       roles: {
         create: ROLE_KEY.map((key) => ({
           key,
@@ -265,7 +324,7 @@ async function createPersonalWorkspace(
   const ownerRole = organization.roles.find((role) => role.key === 'ORG_ADMIN');
   if (!ownerRole) throw new Error('No se pudo crear el rol propietario.');
   await tx.orgMembership.create({
-    data: { organizationId: organization.id, userId, roleId: ownerRole.id, status: 'ACTIVE', isOwner: true },
+    data: { organizationId: organization.id, userId: input.userId, roleId: ownerRole.id, status: 'ACTIVE', isOwner: true },
   });
   return organization.id;
 }

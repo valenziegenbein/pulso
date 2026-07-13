@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { decryptSecret, hashPassword, prisma } from '@pulso/database';
 import {
   approveEarlyAccessRequest,
+  bootstrapSuperAdminAccount,
   claimEarlyAccessRequest,
   EARLY_ACCESS_STATUS,
   hasApprovedPersonalAiAccess,
@@ -48,6 +49,26 @@ afterAll(async () => {
 });
 
 describe('PostgreSQL real: panel de acceso anticipado Personal', () => {
+  it('crea el primer superadmin sin exponer una contraseña temporal', async () => {
+    const result = await bootstrapSuperAdminAccount({
+      email: 'bootstrap-superadmin@integration.invalid',
+      name: 'Bootstrap Admin',
+      createIfMissing: true,
+      sendPasswordReset: true,
+    });
+    expect(result.created).toBe(true);
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { normalizedEmail: result.email },
+      include: { orgMemberships: true },
+    });
+    expect(user).toMatchObject({ isSuperAdmin: true, status: 'ACTIVE' });
+    expect(user.orgMemberships).toHaveLength(1);
+    expect(user.orgMemberships[0]).toMatchObject({ isOwner: true });
+    await expect(prisma.emailOutbox.count({
+      where: { recipient: result.email, template: 'RESET_PASSWORD' },
+    })).resolves.toBe(1);
+  });
+
   it('registra, responde, aprueba, da de alta y revoca sin editar variables de entorno', async () => {
     await enqueueContactRequest({
       topic: 'personal-ai',

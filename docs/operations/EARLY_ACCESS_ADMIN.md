@@ -25,8 +25,8 @@ siendo un secreto server-side en `PULSO_PERSONAL_ACCOUNT_AI_GEMINI_API_KEY`.
 
 ## Bootstrap del primer superadmin
 
-El comando es deliberadamente genérico y sólo promueve una cuenta ya existente,
-activa, verificada y con al menos una membresía:
+El comando es deliberadamente genérico. Para una cuenta ya existente sólo la
+promueve si está activa, verificada y tiene al menos una membresía:
 
 ```powershell
 $env:DATABASE_URL='<destino explícito>'
@@ -36,6 +36,19 @@ pnpm --filter @pulso/database exec tsx --tsconfig ../../apps/web/tsconfig.json .
 
 No hardcodear emails en migraciones ni seeds y no ejecutar el seed en
 producción.
+
+Si el primer superadmin todavía no existe, el modo bootstrap exige un ACK más
+fuerte. Crea un workspace operativo mínimo, una contraseña aleatoria que nunca
+se muestra ni persiste en claro y encola un enlace de restablecimiento de un
+solo uso. La persona elige su contraseña desde el email:
+
+```powershell
+$env:DATABASE_URL='<destino explícito>'
+$env:WORKLOG_ENCRYPTION_KEY='<secret store>'
+$env:PULSO_APP_URL='https://app.example.com'
+pnpm --filter @pulso/database exec tsx --tsconfig ../../apps/web/tsconfig.json ../../scripts/manage-early-access.ts `
+  promote-superadmin --email admin@example.com --name 'Nombre' --ack create-superadmin-account
+```
 
 ## Importar una solicitud histórica confirmada
 
