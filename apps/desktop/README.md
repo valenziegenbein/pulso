@@ -26,6 +26,18 @@ pnpm --filter @pulso/desktop start
 El shell espera a que el server responda antes de abrir las ventanas, así que el
 orden de arranque no importa.
 
+## Personal AI con cuenta Pulso
+
+El modo `Con mi cuenta Pulso` mantiene los datos de Personal en el server local,
+pero envía cada solicitud de IA administrada al SaaS mediante una sesión Desktop
+PKCE revocable. La cookie queda en la partición `persist:pulso-teams`; el preload
+local no recibe el token y el preload remoto no expone este IPC.
+
+El origen por defecto es `https://pulsoapp.syswarm.com`. Las instalaciones que
+conservaron el valor anterior exacto `https://pulso.syswarm.com` lo normalizan al
+subdominio SaaS nuevo al arrancar. La habilitación y allowlist se documentan en
+`docs/integrations/PERSONAL_WHITELIST.md`.
+
 ## Empaquetar a `.exe` (instalador NSIS)
 
 ```bash

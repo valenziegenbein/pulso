@@ -20,6 +20,8 @@ const WIDGET_EDGE_GAP = 12;
 const WIDGET_RIGHT_SAFE_TOP = 72;
 const WIDGET_VIEWS = new Set(['collapsed', 'quick', 'full']);
 const TEAMS_PARTITION = 'persist:pulso-teams';
+const LEGACY_PULSO_SERVER_URL = 'https://pulso.syswarm.com';
+const DEFAULT_PULSO_SERVER_URL = 'https://pulsoapp.syswarm.com';
 let BASE_URL = process.env.PULSO_URL || 'http://localhost:3000';
 
 let mainWindow = null;
@@ -79,7 +81,8 @@ function normalizeTeamsUrl(raw) {
   if (url.username || url.password) throw new Error('La URL de Teams no puede incluir credenciales.');
   url.search = '';
   url.hash = '';
-  return `${url.origin}${url.pathname}`.replace(/\/$/, '');
+  const normalized = `${url.origin}${url.pathname}`.replace(/\/$/, '');
+  return normalized === LEGACY_PULSO_SERVER_URL ? DEFAULT_PULSO_SERVER_URL : normalized;
 }
 
 function sameOrigin(candidate, trustedBase) {
@@ -388,8 +391,9 @@ async function createDesktopCallbackServer(expectedState) {
   };
 }
 
-async function authenticateTeams() {
-  if (!TEAMS_URL || teamsAuthInProgress) return;
+async function authenticatePulsoAccount(openTeamsAfter) {
+  if (!TEAMS_URL) return { ok: false, error: 'server_not_configured' };
+  if (teamsAuthInProgress) return { ok: false, error: 'authentication_in_progress' };
   teamsAuthInProgress = true;
   try {
     const verifier = crypto.randomBytes(32).toString('base64url');
@@ -429,12 +433,60 @@ async function authenticateTeams() {
       sameSite: 'lax',
       expirationDate: Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60,
     });
-    if (teamsWindow && !teamsWindow.isDestroyed()) await teamsWindow.loadURL(TEAMS_URL);
-    else openTeams();
+    if (openTeamsAfter) {
+      if (teamsWindow && !teamsWindow.isDestroyed()) await teamsWindow.loadURL(TEAMS_URL);
+      else openTeams();
+    }
+    return { ok: true };
   } catch (err) {
     logDesktop(`teams auth failed: ${err == null ? '' : err.message || err}`);
+    return { ok: false, error: 'authentication_failed' };
   } finally {
     teamsAuthInProgress = false;
+  }
+}
+
+async function authenticateTeams() {
+  return authenticatePulsoAccount(true);
+}
+
+async function accountAiFetch(method, payload) {
+  if (!TEAMS_URL) return { ok: false, status: 0, error: 'server_not_configured' };
+  const target = new URL('/api/desktop/personal-ai', TEAMS_URL);
+  let body;
+  if (payload !== undefined) {
+    try {
+      body = JSON.stringify(payload);
+    } catch {
+      return { ok: false, status: 400, error: 'invalid_input' };
+    }
+    if (body.length > 7_000_000) return { ok: false, status: 413, error: 'payload_too_large' };
+  }
+  try {
+    const response = await session.fromPartition(TEAMS_PARTITION).fetch(target.toString(), {
+      method,
+      redirect: 'error',
+      credentials: 'include',
+      headers: {
+        accept: 'application/json',
+        ...(body ? { 'content-type': 'application/json' } : {}),
+      },
+      body,
+      signal: AbortSignal.timeout(35_000),
+    });
+    const text = await response.text();
+    if (text.length > 1_000_000) return { ok: false, status: 502, error: 'invalid_response' };
+    let data = {};
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      return { ok: false, status: 502, error: 'invalid_response' };
+    }
+    return response.ok
+      ? { ok: true, status: response.status, data }
+      : { ok: false, status: response.status, error: typeof data.error === 'string' ? data.error : 'request_failed' };
+  } catch {
+    return { ok: false, status: 0, error: 'network' };
   }
 }
 
@@ -901,6 +953,21 @@ ipcMain.on('pulso:teams-auth', (e) => {
 
 // Pulso Teams (web): configurar la URL del server y abrir la ventana remota.
 ipcMain.handle('pulso:get-teams-url', (e) => { requireLocalRenderer(e); return TEAMS_URL; });
+ipcMain.handle('pulso:connect-account', (e) => {
+  requireLocalRenderer(e);
+  return authenticatePulsoAccount(false);
+});
+ipcMain.handle('pulso:account-ai-status', (e) => {
+  requireLocalRenderer(e);
+  return accountAiFetch('GET');
+});
+ipcMain.handle('pulso:account-ai-request', (e, payload) => {
+  requireLocalRenderer(e);
+  if (!payload || typeof payload !== 'object' || !['draft', 'task'].includes(payload.operation)) {
+    return { ok: false, status: 400, error: 'invalid_input' };
+  }
+  return accountAiFetch('POST', payload);
+});
 ipcMain.on('pulso:set-teams-url', (e, url) => {
   if (!isLocalRenderer(e)) return;
   try {

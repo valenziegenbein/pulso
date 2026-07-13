@@ -34,6 +34,11 @@ contextBridge.exposeInMainWorld('pulso', {
   getTeamsUrl: () => ipcRenderer.invoke('pulso:get-teams-url'),
   setTeamsUrl: (url) => ipcRenderer.send('pulso:set-teams-url', url),
   openTeams: () => ipcRenderer.send('pulso:open-teams'),
+  // Personal AI con cuenta: la cookie remota queda en la partición segura de
+  // Electron. El renderer local nunca recibe el token ni la API key administrada.
+  connectAccount: () => ipcRenderer.invoke('pulso:connect-account'),
+  accountAiStatus: () => ipcRenderer.invoke('pulso:account-ai-status'),
+  accountAiRequest: (payload) => ipcRenderer.invoke('pulso:account-ai-request', payload),
   // "Ir a Personal": cierra la ventana Teams y vuelve al espacio Personal.
   backToPersonal: () => ipcRenderer.send('pulso:back-to-personal'),
   // Carpeta Markdown (Personal): elegir carpeta destino y agregar entradas .md.
