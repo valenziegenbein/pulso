@@ -11,7 +11,7 @@
 | R-007 | Aislamiento multi-tenant no tiene todas las relaciones compuestas en DB | Alta | Baja/Media | FKs compuestas y preflight transaccional P1; validar producción sólo con checkpoint | Security/DB | Mitigado y validado en staging sintético; no desplegado |
 | R-008 | Auth actual no es persistida/revocable para uso comercial | Alta | Media | Sesiones opacas, revocación, tokens de un uso, rate limit y PKCE P2 | Security | Mitigado y validado en staging; no desplegado |
 | R-009 | Registro/Personal podrían reabrirse por cambio de proxy | Alta | Baja | Feature flags fail-closed + Caddy versionado + safety check | Security/SRE | Mitigado en producción por código + Caddy |
-| R-010 | Desktop no tiene release firmada de este hardening | Media | Media | Firma, VM smoke y release sólo con L5 específico | Desktop owner | Abierto |
+| R-010 | Desktop no tiene release firmada de este hardening; el candidato 0.1.24 usa icono genérico y el auto-updater aún apunta a `valenziegenbein/pulso` | Media | Media | Icono versionado, identidad/canal confirmados, firma Authenticode válida, VM smoke y publicación explícita | Desktop owner | Abierto; candidato local empaquetado y no publicado |
 | R-011 | Documentación histórica del repo mezcla SQLite/Desktop y PostgreSQL/server | Media | Media | Actualización coordinada sin reescribir instrucciones de otra rama | Principal + Desktop owner | Abierto |
 | R-012 | Instalación apt del Dockerfile depende del snapshot actual de Debian | Media | Baja | Evaluar pin/snapshot de paquetes en un commit de reproducibilidad | SRE | Abierto |
 | R-013 | Logs de tests muestran errores Prisma esperados de constraints | Baja | Alta | Mantener aserciones explícitas; no confundirlos con fallos del gate | Engineering | Aceptado |
