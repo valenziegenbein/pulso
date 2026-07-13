@@ -163,3 +163,53 @@ Este documento no contiene secretos. Los valores reales viven únicamente en
 - Acción humana pendiente: completar/validar la dirección de facturación de la
   cuenta vendedora en Mercado Pago. Después se repite el smoke reversible.
 - Cero suscripciones smoke activas; checkout y live siguen deshabilitados.
+
+## Actualización — 2026-07-13 01:51 UTC: vendedor de prueba en vez de KYC real
+
+El titular avanzó la inscripción real de Monotributo en ARCA para destrabar
+`address_pending` y llegó hasta ver la cuota real (Categoría A, ~$42.387/mes +
+~$9.845/mes de componente provincial/municipal). Decisión tomada: **no activar
+el compromiso impositivo real solo para destrabar un smoke test**. El trámite
+de ARCA queda a criterio del titular para cuando Pulso facture de verdad; no
+se completó ni se abandonó, simplemente no se usa como bloqueante del smoke.
+
+En su lugar se creó una **cuenta vendedora de prueba (Test User)** de Mercado
+Pago, identidad 100% sintética sin CUIT/condición fiscal real:
+
+- Cuenta de prueba: "Pulso vendedor de prueba" (rol Vendedor), User ID
+  `3535802823`, creada dentro de la app real "Pulso Suscripciones"
+  (`2297043642763609`) desde Developers → Cuentas de prueba.
+- Dentro de esa identidad de prueba se creó una aplicación propia, "Pulso
+  vendedor prueba app" (número `7468104067183669`), integración Suscripciones.
+- Su Access Token (prefijo `APP_USR-`, es la particularidad de MP: dentro de un
+  Test User las credenciales "de producción" de esa identidad ficticia actúan
+  como credenciales de sandbox) quedó guardado en `.env` como
+  `MERCADO_PAGO_TEST_SELLER_ACCESS_TOKEN`. Placeholder agregado en
+  `.env.example`.
+- Nota operativa: iniciar sesión como este Test User reemplaza la sesión de
+  Mercado Pago en **todas las pestañas del navegador** (cookies por dominio).
+  El titular deberá volver a loguearse con su cuenta real cuando lo necesite.
+
+**Pendiente para GPT Sol**: adaptar `scripts/smoke-mercado-pago-sandbox.ts`
+(y cualquier lugar que use `MERCADO_PAGO_ACCESS_TOKEN` para el smoke) a usar
+`MERCADO_PAGO_TEST_SELLER_ACCESS_TOKEN` en su lugar. El comprador de prueba ya
+usado sigue siendo válido; falta crear o confirmar que exista también su
+propio par vendedor-comprador dentro de la misma identidad de prueba si el SDK
+lo requiere (Mercado Pago exige que comprador y vendedor de un mismo test
+scenario sean cuentas de prueba distintas del mismo país). Con esto, el flujo
+create → get → cancel → get debería completarse sin tocar KYC/fiscal real.
+
+### Resultado de adaptación
+
+- El smoke usa exclusivamente `MERCADO_PAGO_TEST_SELLER_ACCESS_TOKEN`; no tiene
+  fallback al token de la cuenta real y aborta si ambos valores coinciden.
+- Preflight de `/users/me`: vendedor sintético `MLA/AR`, activo,
+  `billing.allow=true` y `sell.allow=true`. No se registraron datos personales.
+- Mercado Pago volvió a responder HTTP 500 al crear la preapproval y la
+  limpieza autoritativa confirmó cero smokes activos.
+- La documentación oficial exige Vendedor y Comprador distintos y del mismo
+  país; no publica un requisito de pertenecer a la misma aplicación. Para
+  eliminar una incompatibilidad no documentada del sandbox, el próximo intento
+  debe usar un Comprador AR recién creado desde el mismo contexto de cuentas de
+  prueba del nuevo escenario vendedor.
+- Checkout, provider live y credenciales reales permanecen fuera del smoke.

@@ -16,7 +16,8 @@ Sin secretos. Última actualización: 2026-07-12 (UTC).
 
 | Variable | Estado | Fuente |
 | --- | --- | --- |
-| `MERCADO_PAGO_ACCESS_TOKEN` | Completa (TEST) | MP Developers → app "Pulso Suscripciones" → Credenciales de prueba |
+| `MERCADO_PAGO_ACCESS_TOKEN` | Completa (TEST) | MP Developers → app "Pulso Suscripciones" (cuenta real del titular) → Credenciales de prueba |
+| `MERCADO_PAGO_TEST_SELLER_ACCESS_TOKEN` | Completa (`APP_USR-`) | Test User "Pulso vendedor de prueba" (identidad 100% sintética, sin KYC/fiscal real) → app "Pulso vendedor prueba app" → Credenciales de producción de esa identidad. Preferir esta variable para smokes de suscripciones: evita bloqueos KYC de la cuenta real |
 | `MERCADO_PAGO_CLIENT_ID` / `MERCADO_PAGO_CLIENT_SECRET` | Vacías | Reservadas en `.env.example`; obtener de la consola si el adapter las requiere |
 | `MERCADO_PAGO_WEBHOOK_SECRET` | Vacía | La genera MP al guardar la URL del webhook (endpoint aún inexistente) |
 | `GOOGLE_GMAIL_CLIENT_ID` / `GOOGLE_GMAIL_CLIENT_SECRET` | Completas localmente | GCP proyecto `pulso-email-sender` → Auth Platform → Clients → "Pulso Gmail Sender (server)" |
@@ -124,12 +125,15 @@ Variables nuevas:
 - `MERCADO_PAGO_WEBHOOK_SECRET` debe existir antes de mostrar checkout.
 
 El smoke reversible es `pnpm billing:smoke:sandbox`. Exige un comprador de
-prueba `@testuser.com`, retorno HTTPS y el ACK literal definido en el script;
+prueba `@testuser.com`, el token `APP_USR-` del vendedor sintético en
+`MERCADO_PAGO_TEST_SELLER_ACCESS_TOKEN`, retorno HTTPS y el ACK literal definido
+en el script. No existe fallback al token de la cuenta real;
 crea una preapproval mínima de ARS 100, la consulta, la cancela y vuelve a
 consultarla. Antes y después busca por comprador y cancela exclusivamente
 smokes huérfanos identificados por reason y external reference. No usar una
 cuenta real ni la misma identidad vendedora. Mercado
-Pago requiere al menos vendedor y comprador de prueba separados.
+Pago requiere al menos vendedor y comprador de prueba separados y del mismo
+país. La documentación oficial no exige que pertenezcan a la misma aplicación.
 
 Endpoint implementado: `POST /api/billing/mercado-pago/webhook`. Permanece 404
 mientras el provider sea mock, limita el body a 64 KiB incluso con transferencia
