@@ -33,6 +33,10 @@ pero envía cada solicitud de IA administrada al SaaS mediante una sesión Deskt
 PKCE revocable. La cookie queda en la partición `persist:pulso-teams`; el preload
 local no recibe el token y el preload remoto no expone este IPC.
 
+Las keys BYOK de OpenAI/Anthropic se guardan cifradas en
+`%APPDATA%\Pulso\personal-ai-secrets.json` mediante `safeStorage` (DPAPI en
+Windows). No se persisten en `localStorage` ni en `pulso.config.json`.
+
 El origen por defecto es `https://pulsoapp.syswarm.com`. Las instalaciones que
 conservaron el valor anterior exacto `https://pulso.syswarm.com` lo normalizan al
 subdominio SaaS nuevo al arrancar. La habilitación y allowlist se documentan en

@@ -27,6 +27,10 @@ const requirements = [
   [!remotePreload.includes('accountAiRequest'), 'preload remoto no debe exponer Personal AI'],
   [main.includes("new URL('/api/desktop/personal-ai', TEAMS_URL)"), 'Personal AI debe usar una ruta remota fija'],
   [main.includes("LEGACY_PULSO_SERVER_URL = 'https://pulso.syswarm.com'") && main.includes("DEFAULT_PULSO_SERVER_URL = 'https://pulsoapp.syswarm.com'"), 'Desktop debe migrar el dominio SaaS anterior'],
+  [main.includes('safeStorage.encryptString') && main.includes('safeStorage.decryptString'), 'BYOK debe usar safeStorage del sistema operativo'],
+  [main.includes("ipcMain.handle('pulso:personal-ai-key-store'") && main.includes('requireLocalRenderer(e);'), 'BYOK debe exigir renderer local'],
+  [localPreload.includes('storePersonalAiKey') && localPreload.includes('loadPersonalAiKey'), 'preload local debe exponer el vault BYOK mínimo'],
+  [!remotePreload.includes('PersonalAiKey'), 'preload remoto no debe exponer el vault BYOK'],
 ];
 
 const failed = requirements.filter(([ok]) => !ok).map(([, message]) => message);

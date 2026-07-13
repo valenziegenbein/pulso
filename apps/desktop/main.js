@@ -3,7 +3,7 @@
 // - Widget flotante: /captura (captura personal, local-first, always-on-top).
 // - Empaquetado: levanta el server Next standalone embebido (SQLite) y apunta a él.
 // - En dev: apunta a PULSO_URL.
-const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, screen, shell, dialog, desktopCapturer, session } = require('electron');
+const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, screen, shell, dialog, desktopCapturer, session, safeStorage } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { spawn } = require('node:child_process');
 const crypto = require('node:crypto');
@@ -164,6 +164,46 @@ function writeTeamsUrl(url) {
   }
   TEAMS_URL = clean;
   return TEAMS_URL;
+}
+
+// --- Secretos BYOK de Personal (DPAPI/Keychain/Secret Service) ---
+const PERSONAL_AI_SECRET_PROVIDERS = new Set(['openai', 'anthropic']);
+function personalAiSecretsPath() {
+  return path.join(app.getPath('userData'), 'personal-ai-secrets.json');
+}
+function readPersonalAiSecrets() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(personalAiSecretsPath(), 'utf8'));
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+function storePersonalAiSecret(provider, apiKey) {
+  if (!PERSONAL_AI_SECRET_PROVIDERS.has(provider) || typeof apiKey !== 'string' || apiKey.trim().length < 8) return false;
+  if (!safeStorage.isEncryptionAvailable()) return false;
+  const secrets = readPersonalAiSecrets();
+  secrets[provider] = safeStorage.encryptString(apiKey.trim()).toString('base64');
+  fs.writeFileSync(personalAiSecretsPath(), JSON.stringify(secrets), { mode: 0o600 });
+  return true;
+}
+function loadPersonalAiSecret(provider) {
+  if (!PERSONAL_AI_SECRET_PROVIDERS.has(provider) || !safeStorage.isEncryptionAvailable()) return null;
+  const encoded = readPersonalAiSecrets()[provider];
+  if (typeof encoded !== 'string' || !/^[A-Za-z0-9+/=]+$/.test(encoded)) return null;
+  try {
+    return safeStorage.decryptString(Buffer.from(encoded, 'base64'));
+  } catch {
+    return null;
+  }
+}
+function deletePersonalAiSecret(provider) {
+  if (!PERSONAL_AI_SECRET_PROVIDERS.has(provider)) return false;
+  const secrets = readPersonalAiSecrets();
+  if (!(provider in secrets)) return true;
+  delete secrets[provider];
+  fs.writeFileSync(personalAiSecretsPath(), JSON.stringify(secrets), { mode: 0o600 });
+  return true;
 }
 
 // --- Export a carpeta Markdown (modo Personal) ---
@@ -967,6 +1007,18 @@ ipcMain.handle('pulso:account-ai-request', (e, payload) => {
     return { ok: false, status: 400, error: 'invalid_input' };
   }
   return accountAiFetch('POST', payload);
+});
+ipcMain.handle('pulso:personal-ai-key-store', (e, provider, apiKey) => {
+  requireLocalRenderer(e);
+  try { return storePersonalAiSecret(provider, apiKey); } catch { return false; }
+});
+ipcMain.handle('pulso:personal-ai-key-load', (e, provider) => {
+  requireLocalRenderer(e);
+  return loadPersonalAiSecret(provider);
+});
+ipcMain.handle('pulso:personal-ai-key-delete', (e, provider) => {
+  requireLocalRenderer(e);
+  try { return deletePersonalAiSecret(provider); } catch { return false; }
 });
 ipcMain.on('pulso:set-teams-url', (e, url) => {
   if (!isLocalRenderer(e)) return;

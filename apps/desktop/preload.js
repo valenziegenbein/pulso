@@ -39,6 +39,9 @@ contextBridge.exposeInMainWorld('pulso', {
   connectAccount: () => ipcRenderer.invoke('pulso:connect-account'),
   accountAiStatus: () => ipcRenderer.invoke('pulso:account-ai-status'),
   accountAiRequest: (payload) => ipcRenderer.invoke('pulso:account-ai-request', payload),
+  storePersonalAiKey: (provider, apiKey) => ipcRenderer.invoke('pulso:personal-ai-key-store', provider, apiKey),
+  loadPersonalAiKey: (provider) => ipcRenderer.invoke('pulso:personal-ai-key-load', provider),
+  deletePersonalAiKey: (provider) => ipcRenderer.invoke('pulso:personal-ai-key-delete', provider),
   // "Ir a Personal": cierra la ventana Teams y vuelve al espacio Personal.
   backToPersonal: () => ipcRenderer.send('pulso:back-to-personal'),
   // Carpeta Markdown (Personal): elegir carpeta destino y agregar entradas .md.
