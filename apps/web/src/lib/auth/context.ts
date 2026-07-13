@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { prisma } from '@pulso/database';
 import { ALL_PERMISSIONS, type Permission } from '@pulso/domain';
 import type { RoleKey } from '@pulso/shared';
@@ -12,6 +12,7 @@ export interface AuthContext {
   organizationName: string;
   role: RoleKey;
   permissions: Permission[];
+  isSuperAdmin: boolean;
 }
 
 export async function getSessionIdentity(): Promise<VerifiedSession | null> {
@@ -45,6 +46,7 @@ export async function getAuthContext(): Promise<AuthContext | null> {
     organizationName: membership.organization.name,
     role: membership.role.key as RoleKey,
     permissions,
+    isSuperAdmin: membership.user.isSuperAdmin,
   };
 }
 
@@ -54,6 +56,12 @@ export async function requireAuth(): Promise<AuthContext> {
   const session = await getSessionIdentity();
   if (session && !session.activeOrganizationId) redirect('/select-organization');
   redirect('/login');
+}
+
+export async function requireSuperAdmin(): Promise<AuthContext> {
+  const ctx = await requireAuth();
+  if (!ctx.isSuperAdmin) notFound();
+  return ctx;
 }
 
 export function hasPermission(ctx: AuthContext, permission: Permission): boolean {

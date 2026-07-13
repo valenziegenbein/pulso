@@ -1,0 +1,78 @@
+# Operación de acceso anticipado Personal
+
+## Alcance
+
+`/internal/early-access` es una bandeja global, separada del panel de cada
+organización. La ruta, la navegación y todas sus Server Actions exigen que la
+identidad persistida tenga `User.isSuperAdmin=true`. Un `ORG_ADMIN` común no
+puede listar solicitudes ni ejecutar decisiones.
+
+El flujo es:
+
+1. Marketing envía una consulta `personal-ai` a `/api/contact`.
+2. El backend persiste o actualiza la solicitud, registra un evento y encola:
+   la notificación interna y un acuse automático al solicitante.
+3. Un superadmin aprueba o rechaza desde la bandeja.
+4. La decisión encola una respuesta automática.
+5. Si el email aprobado no tenía cuenta, recibe un enlace de alta de un solo
+   uso, válido siete días. El enlace crea una identidad verificada y un
+   workspace Personal mínimo; `/register` continúa cerrado.
+6. La autorización de Personal AI consulta el estado `APPROVED` en PostgreSQL.
+   Revocar el acceso tiene efecto en la siguiente solicitud sin editar `.env`.
+
+La API key de Gemini nunca se guarda en estas tablas ni llega al panel. Sigue
+siendo un secreto server-side en `PULSO_PERSONAL_ACCOUNT_AI_GEMINI_API_KEY`.
+
+## Bootstrap del primer superadmin
+
+El comando es deliberadamente genérico y sólo promueve una cuenta ya existente,
+activa, verificada y con al menos una membresía:
+
+```powershell
+$env:DATABASE_URL='<destino explícito>'
+pnpm --filter @pulso/database exec tsx --tsconfig ../../apps/web/tsconfig.json ../../scripts/manage-early-access.ts `
+  promote-superadmin --email admin@example.com --ack promote-existing-user
+```
+
+No hardcodear emails en migraciones ni seeds y no ejecutar el seed en
+producción.
+
+## Importar una solicitud histórica confirmada
+
+Las consultas recibidas antes de esta migración sólo existían cifradas en la
+outbox. Se pueden importar de forma explícita sin leer ni descifrar el histórico:
+
+```powershell
+$env:DATABASE_URL='<destino explícito>'
+$env:WORKLOG_ENCRYPTION_KEY='<secret store>'
+pnpm --filter @pulso/database exec tsx --tsconfig ../../apps/web/tsconfig.json ../../scripts/manage-early-access.ts `
+  import-request --email person@example.com --name 'Persona' --product PERSONAL_AI --ack import-confirmed-request
+```
+
+El import genera un nuevo evento `REQUESTED` y un acuse automático mediante la
+outbox. Es idempotente respecto de email y producto: una repetición aumenta el
+contador, no crea otra identidad de solicitud.
+
+## Apertura de Personal AI
+
+Además de una aprobación en DB, el proveedor global debe estar listo:
+
+```dotenv
+PULSO_PERSONAL_ACCOUNT_AI_ENABLED=true
+PULSO_PERSONAL_ACCOUNT_AI_GEMINI_API_KEY=<secret>
+PULSO_PERSONAL_ACCOUNT_AI_DATA_TERMS_ACK=paid-service-no-training
+PULSO_PERSONAL_ACCOUNT_AI_MODEL=gemini-3.1-flash-lite
+```
+
+`PULSO_PERSONAL_ACCOUNT_AI_ALLOWED_EMAILS` queda como bypass de emergencia y
+compatibilidad; la operación normal debe hacerse desde el panel.
+
+Después de migrar y recrear la aplicación:
+
+1. probar que una identidad no superadmin obtiene 404 en el panel;
+2. aprobar una solicitud de prueba;
+3. procesar la outbox y completar el enlace de alta;
+4. conectar Desktop y verificar una generación administrada;
+5. probar una cuenta pendiente (403) y luego revocar la aprobada;
+6. verificar que la revocación impide nuevas generaciones sin borrar datos
+   locales del equipo.

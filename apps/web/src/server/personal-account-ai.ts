@@ -2,6 +2,7 @@ import { prisma } from '@pulso/database';
 import { createLLMProvider, type LLMProvider } from '@pulso/llm';
 import { getSessionIdentity } from '@/lib/auth/context';
 import { fetchWithTimeout } from '@/lib/personal/ai-endpoint';
+import { hasApprovedPersonalAiAccess } from '@/server/early-access';
 
 const GEMINI_OPENAI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
 const DEFAULT_GEMINI_MODEL = 'gemini-3.1-flash-lite';
@@ -45,7 +46,9 @@ export async function getPersonalAccountAiAccess(): Promise<PersonalAccountAiAcc
   if (!user || user.status !== 'ACTIVE') {
     return { authenticated: false, enabled: false, reason: 'authentication_required' };
   }
-  if (!isPersonalAccountAiEmailAllowed(user.normalizedEmail)) {
+  const allowed = isPersonalAccountAiEmailAllowed(user.normalizedEmail)
+    || await hasApprovedPersonalAiAccess(user.normalizedEmail);
+  if (!allowed) {
     return { authenticated: true, enabled: false, reason: 'not_allowlisted', userId: user.id };
   }
   if (!process.env.PULSO_PERSONAL_ACCOUNT_AI_GEMINI_API_KEY?.trim() || !hasPersonalAccountAiPaidDataTermsAck()) {

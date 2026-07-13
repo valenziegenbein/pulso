@@ -26,4 +26,18 @@ describe('templates transaccionales', () => {
     expect(email.html).not.toContain('<script>');
     expect(email.text).toContain('ada@example.com');
   });
+
+  it('responde una solicitud y una aprobación de acceso anticipado sin filtrar HTML', () => {
+    const received = renderEmail('EARLY_ACCESS_RECEIVED', 'person@integration.invalid', {
+      name: '<Ada>', product: 'Pulso Personal AI',
+    });
+    expect(received.subject).toContain('solicitud');
+    expect(received.html).toContain('&lt;Ada&gt;');
+
+    const approved = renderEmail('EARLY_ACCESS_APPROVED', 'person@integration.invalid', {
+      name: 'Ada', product: 'Pulso Personal AI', actionUrl: 'https://pulso.invalid/early-access/claim?token=synthetic',
+    });
+    expect(approved.subject).toContain('aprobado');
+    expect(approved.text).toContain('https://pulso.invalid/early-access/claim?token=synthetic');
+  });
 });

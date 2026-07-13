@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { prisma } from '@pulso/database';
 import { enqueueEmail } from './email/outbox';
+import { recordEarlyAccessRequest } from './early-access';
 
 const TOPICS = new Set(['teams', 'business', 'personal-ai', 'support', 'press', 'other']);
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -38,18 +40,23 @@ export function parseContactRequest(value: unknown): ContactRequest | null {
 export async function enqueueContactRequest(input: ContactRequest): Promise<void> {
   const recipient = (process.env.PULSO_CONTACT_RECIPIENT ?? process.env.GOOGLE_GMAIL_SENDER)?.trim().toLowerCase();
   if (!recipient || !EMAIL_PATTERN.test(recipient)) throw new Error('Falta PULSO_CONTACT_RECIPIENT.');
-  await enqueueEmail({
-    idempotencyKey: `contact:${randomUUID()}`,
-    recipient,
-    template: 'CONTACT_REQUEST',
-    payload: {
-      topic: input.topic,
-      name: input.name,
-      senderEmail: input.email,
-      company: input.company,
-      teamSize: input.teamSize,
-      message: input.message,
-    },
+  await prisma.$transaction(async (tx) => {
+    await enqueueEmail({
+      idempotencyKey: `contact:${randomUUID()}`,
+      recipient,
+      template: 'CONTACT_REQUEST',
+      payload: {
+        topic: input.topic,
+        name: input.name,
+        senderEmail: input.email,
+        company: input.company,
+        teamSize: input.teamSize,
+        message: input.message,
+      },
+    }, tx);
+    if (input.topic === 'personal-ai') {
+      await recordEarlyAccessRequest({ name: input.name, email: input.email, message: input.message }, tx);
+    }
   });
 }
 

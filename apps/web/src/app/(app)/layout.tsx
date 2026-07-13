@@ -12,21 +12,25 @@ const display = Fraunces({ subsets: ['latin'], variable: '--font-display', displ
 const body = Hanken_Grotesk({ subsets: ['latin'], variable: '--font-body', display: 'swap' });
 const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' });
 
-const NAV: Array<[string, string, 'all' | 'admin' | 'owner']> = [
+const NAV: Array<[string, string, 'all' | 'admin' | 'owner' | 'superadmin']> = [
   ['/', 'Resumen', 'all'],
   ['/tasks', 'Tareas', 'all'],
   ['/teams', 'Equipos', 'all'],
   ['/members', 'Miembros', 'admin'],
   ['/admin', 'Admin', 'admin'],
   ['/billing', 'Facturación', 'owner'],
+  ['/internal/early-access', 'Acceso anticipado', 'superadmin'],
 ];
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const ctx = await requireAuth();
-  const isAdmin = ctx.role === 'ORG_ADMIN' || ctx.role === 'SUPER_ADMIN';
+  const isAdmin = ctx.isSuperAdmin || ctx.role === 'ORG_ADMIN' || ctx.role === 'SUPER_ADMIN';
   const isOwner = await canManageBilling(ctx);
   const items = NAV
-    .filter(([, , scope]) => scope === 'all' || (scope === 'admin' && isAdmin) || (scope === 'owner' && isOwner))
+    .filter(([, , scope]) => scope === 'all'
+      || (scope === 'admin' && isAdmin)
+      || (scope === 'owner' && isOwner)
+      || (scope === 'superadmin' && ctx.isSuperAdmin))
     .map(([href, label]) => ({ href, label }));
   const initials = ctx.user.name
     .split(' ')

@@ -24,8 +24,9 @@ crear el entitlement comercial por usuario.
 - El renderer Personal invoca un IPC mínimo. El proceso main usa
   `Session.fetch()` contra la ruta fija `/api/desktop/personal-ai` del origen
   configurado; no acepta una URL remota desde el renderer.
-- El endpoint remoto deriva el usuario de la sesión y exige coincidencia exacta
-  contra `PULSO_PERSONAL_ACCOUNT_AI_ALLOWED_EMAILS`.
+- El endpoint remoto deriva el usuario de la sesión y exige una solicitud
+  `PERSONAL_AI` aprobada en PostgreSQL. La allowlist por entorno queda sólo como
+  bypass de emergencia y compatibilidad.
 - Host, modelo y API key de Gemini se resuelven en el servidor. Ninguno vuelve
   al Desktop ni puede ser reemplazado por el cliente.
 - `/api/personal/*` permanece bloqueado en producción; el endpoint autenticado
@@ -50,13 +51,17 @@ PULSO_PERSONAL_ACCOUNT_AI_RATE_WINDOW_MS=60000
 
 Reglas:
 
-- habilitar la feature sólo después de cargar una allowlist no vacía y la key;
+- habilitar la feature sólo después de cargar la key y tener al menos una cuenta
+  aprobada en la bandeja interna;
 - verificar en AI Studio que el proyecto de la key figura como `Paid`. En Free
   Tier Google puede usar prompts, respuestas e imágenes para mejorar productos
   y advierte que no se envíe información sensible o confidencial. El backend
   exige el ACK literal `paid-service-no-training` para impedir que una key free
   se habilite por accidente;
-- agregar emails normalizados, separados por coma; no usar dominios comodín;
+- aprobar cuentas desde `/internal/early-access`; el panel es global y exige
+  `User.isSuperAdmin=true`;
+- si se usa el bypass de emergencia, agregar emails normalizados, separados por
+  coma y nunca usar dominios comodín;
 - custodiar la key sólo en el secret store o `.env` ignorado del servidor;
 - mantener un límite de ráfaga compatible con la cuota real de Gemini;
 - no copiar la key a `pulso.defaults.json`, al instalador o al renderer.
@@ -78,12 +83,12 @@ pnpm personal-ai:smoke
 2. Instalar un build Desktop de prueba cuyo default sea
    `https://pulsoapp.syswarm.com`.
 3. En onboarding o Ajustes, elegir `Con mi cuenta Pulso`.
-4. Autorizar el dispositivo desde el navegador con una cuenta allowlisted.
+4. Autorizar el dispositivo desde el navegador con una cuenta aprobada.
 5. Confirmar `Cuenta conectada · acceso Personal AI habilitado`.
 6. Generar un borrador desde texto y otro desde una captura manual.
 7. Editar y aprobar uno; descartar el otro. Verificar que nada se publique solo.
 8. Crear una tarea asistida.
-9. Probar una cuenta autenticada fuera de la lista: debe ver que espera acceso y
+9. Probar una cuenta autenticada sin aprobación: debe ver que espera acceso y
    recibir 403 al intentar generar.
 10. Superar deliberadamente el límite sólo en un entorno controlado: debe
     responder 429 sin filtrar credenciales ni contenido.
@@ -115,9 +120,10 @@ allowlist explícita y un smoke del build firmado o de prueba autorizado.
 - `/api/personal/*` y `/register` continúan devolviendo 404.
 - El proyecto Gemini `Tier 1 · Prepay` respondió correctamente a una generación
   sintética con `gemini-3.1-flash-lite`; la credencial no fue copiada al VPS.
-- Para abrir la primera cohorte faltan únicamente una allowlist inicial
-  explícita, cargar la key en el entorno server-side y ejecutar el smoke de una
-  cuenta incluida y otra excluida.
+- La siguiente versión agrega una bandeja superadmin persistida para aprobar y
+  revocar accesos sin editar el entorno. Para abrir la primera cohorte todavía
+  falta desplegar su migración, cargar la key en el entorno server-side y
+  ejecutar el smoke de una cuenta aprobada y otra pendiente.
 - El candidato NSIS 0.1.24 fue empaquetado localmente y no publicado. Antes de
   distribuirlo requiere icono de marca, firma Authenticode y smoke en un perfil
   Windows limpio; ver `docs/operations/DESKTOP_RELEASE.md`.

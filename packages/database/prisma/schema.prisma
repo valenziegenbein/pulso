@@ -46,6 +46,7 @@ model Organization {
   aiUsageEvents  AIUsageEvent[]
   billingEvents  BillingWebhookEvent[]
   billingCheckoutAttempts BillingCheckoutAttempt[]
+  personalEarlyAccessRequests EarlyAccessRequest[]       @relation("EarlyAccessPersonalOrganization")
 }
 
 model User {
@@ -84,6 +85,9 @@ model User {
   invitesSent         OrganizationInvite[]       @relation("InviteSender")
   invitesAccepted     OrganizationInvite[]       @relation("InviteAcceptor")
   desktopCodes        DesktopAuthorizationCode[]
+  earlyAccessRequests     EarlyAccessRequest[]       @relation("EarlyAccessUser")
+  earlyAccessDecisions    EarlyAccessRequest[]       @relation("EarlyAccessDecisionBy")
+  earlyAccessEvents       EarlyAccessEvent[]         @relation("EarlyAccessEventActor")
 }
 
 model Role {
@@ -608,6 +612,54 @@ model EmailOutbox {
 
   @@index([status, nextAttemptAt])
   @@index([recipient, createdAt])
+}
+
+model EarlyAccessRequest {
+  id                     String    @id @default(cuid())
+  normalizedEmail        String
+  name                   String
+  product                String
+  status                 String    @default("PENDING")
+  source                 String    @default("MARKETING_CONTACT")
+  message                String
+  consentAt              DateTime
+  requestCount           Int       @default(1)
+  lastRequestedAt        DateTime  @default(now())
+  decisionAt             DateTime?
+  decisionNote           String?
+  decisionById           String?
+  userId                 String?
+  personalOrganizationId String?
+  claimTokenHash         String?   @unique
+  claimExpiresAt         DateTime?
+  claimedAt              DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  decisionBy           User?              @relation("EarlyAccessDecisionBy", fields: [decisionById], references: [id], onDelete: SetNull)
+  user                 User?              @relation("EarlyAccessUser", fields: [userId], references: [id], onDelete: SetNull)
+  personalOrganization Organization?      @relation("EarlyAccessPersonalOrganization", fields: [personalOrganizationId], references: [id], onDelete: SetNull)
+  events               EarlyAccessEvent[]
+
+  @@unique([normalizedEmail, product])
+  @@index([status, lastRequestedAt])
+  @@index([userId])
+  @@index([personalOrganizationId])
+}
+
+model EarlyAccessEvent {
+  id        String   @id @default(cuid())
+  requestId String
+  actorId   String?
+  type      String
+  metadata  String?
+  createdAt DateTime @default(now())
+
+  request EarlyAccessRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  actor   User?              @relation("EarlyAccessEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([requestId, createdAt])
+  @@index([actorId, createdAt])
 }
 
 model UsageLedger {

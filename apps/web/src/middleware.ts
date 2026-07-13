@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 import { SESSION_COOKIE } from '@/lib/auth/constants';
 
 const MAX_API_BODY_BYTES = 8 * 1024 * 1024;
-const PUBLIC_PATHS = ['/login', '/register', '/signup', '/forgot-password', '/reset-password', '/invite', '/select-organization', '/widget', '/welcome', '/personal', '/captura'];
+const PUBLIC_PATHS = ['/login', '/register', '/signup', '/forgot-password', '/reset-password', '/invite', '/early-access', '/select-organization', '/widget', '/welcome', '/personal', '/captura'];
 
 function requestId(req: NextRequest): string {
   const incoming = req.headers.get('x-request-id');

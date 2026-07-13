@@ -10,9 +10,9 @@ const display = Fraunces({ subsets: ['latin'], variable: '--font-display', displ
 const body = Hanken_Grotesk({ subsets: ['latin'], variable: '--font-body', display: 'swap' });
 const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' });
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ returnTo?: string }> }) {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ returnTo?: string; earlyAccess?: string }> }) {
   if (await getAuthContext()) redirect('/');
-  const { returnTo = '' } = await searchParams;
+  const { returnTo = '', earlyAccess = '' } = await searchParams;
 
   return (
     <div className={`${display.variable} ${body.variable} ${mono.variable} theme-teams relative min-h-screen overflow-hidden`}>
@@ -27,6 +27,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             <p className="font-meta mt-2 text-[11px] uppercase tracking-[0.22em] text-muted">Organizador interno</p>
           </div>
           <div className="rounded-2xl border border-border bg-surface/70 p-6 backdrop-blur-sm">
+            {earlyAccess === 'ready' && (
+              <p className="mb-4 rounded-xl border border-[var(--ok)]/40 bg-[var(--ok)]/5 px-3 py-2 text-xs text-[var(--ok)]">
+                Cuenta creada. Iniciá sesión y después conectala desde Pulso Desktop.
+              </p>
+            )}
             <LoginForm returnTo={returnTo} />
             <DesktopTeamsAuthButton />
           </div>

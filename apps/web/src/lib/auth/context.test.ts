@@ -34,7 +34,7 @@ describe('active organization context', () => {
       role: { key: 'MEMBER', permissions: JSON.stringify(DEFAULT_ROLE_PERMISSIONS.MEMBER) },
     });
 
-    await expect(getAuthContext()).resolves.toMatchObject({ organizationId: 'org-b', user: { id: 'user-a' } });
+    await expect(getAuthContext()).resolves.toMatchObject({ organizationId: 'org-b', user: { id: 'user-a' }, isSuperAdmin: false });
     expect(prisma.orgMembership.findUnique).toHaveBeenCalledWith(expect.objectContaining({
       where: { organizationId_userId: { organizationId: 'org-b', userId: 'user-a' } },
     }));

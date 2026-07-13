@@ -46,6 +46,7 @@ function context(role: AuthContext['role'], userId: string, organizationId = 'or
     organizationName: organizationId,
     role,
     permissions: DEFAULT_ROLE_PERMISSIONS[role],
+    isSuperAdmin: role === 'SUPER_ADMIN',
   };
 }
 
