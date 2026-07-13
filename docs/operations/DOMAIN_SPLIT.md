@@ -9,9 +9,10 @@ Estado promovido el 2026-07-13:
 
 ## Artefactos activos
 
-- SaaS: `docker.io/valenziegenbein/pulso-app@sha256:2c0069b86e873f0c5ac48ca0bee1c7a123154d018cf7f5258640acf49febb6d9`
+- SaaS: `docker.io/valenziegenbein/pulso-app@sha256:a4806315b1cd89439b105575b2757ebdd559c3a0541b0f5f7d835756ef9459db`
 - Marketing: `docker.io/valenziegenbein/pulso-marketing@sha256:838a049fcbb18d02a0c0f3e2b5eca0961ab1b2c2a3ce63defe3b886f1dd54e82`
-- Backup post-migración: `pulso-20260712T231709Z` (cifrado con age y verificado en `F:`).
+- Backup previo a Personal-ready: `pulso-20260713T173548Z` (cifrado con age,
+  checksum verificado y restaurado en PostgreSQL 16 desde la copia de `F:`).
 
 ## Verificación
 
@@ -26,4 +27,4 @@ Checkout de Mercado Pago permanece desactivado. El comprador sandbox debe ser un
 
 ## Rollback
 
-Si falla marketing, fijar nuevamente `docker.io/valenziegenbein/pulso-marketing@sha256:4778f4e0188bba1dd722cdd1b3200b2d09a5d97777522f1fe806a34f6d079948` en `/opt/pulso-marketing/docker-compose.yml` y recrear únicamente `pulso-marketing`. Si falla el routing, restaurar el Caddyfile `pre-pulsoapp` y recrear `account-edge-1`. Para rollback del SaaS, restaurar el compose `pre-p7` y la imagen anterior `sha256:87e22dd3eb21bb529d8774b409af4d0ca3bd2eb944fbfed68c21f6c5d779238a`. La migración 8 es aditiva y no debe revertirse destructivamente.
+Si falla marketing, fijar nuevamente `docker.io/valenziegenbein/pulso-marketing@sha256:4778f4e0188bba1dd722cdd1b3200b2d09a5d97777522f1fe806a34f6d079948` en `/opt/pulso-marketing/docker-compose.yml` y recrear únicamente `pulso-marketing`. Si falla el routing, restaurar el Caddyfile `pre-pulsoapp` y recrear `account-edge-1`. Para rollback del SaaS, restaurar `docker-compose.before.yml` y `DEPLOYED_COMMIT.before` desde `/var/backups/pulso/deploy-20260713T175049Z-personal-ready`, y recrear sólo app y worker. La imagen anterior es `docker.io/valenziegenbein/pulso-app@sha256:2c0069b86e873f0c5ac48ca0bee1c7a123154d018cf7f5258640acf49febb6d9`; no hay cambio de schema que revertir.

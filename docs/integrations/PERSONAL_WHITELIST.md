@@ -106,3 +106,18 @@ pnpm personal-ai:smoke
 
 No publicar el instalador ni habilitar esta feature en producción sin una
 allowlist explícita y un smoke del build firmado o de prueba autorizado.
+
+## Estado desplegado — 2026-07-13
+
+- El backend que contiene `/api/desktop/personal-ai` está desplegado por digest
+  y saludable en `pulsoapp.syswarm.com`.
+- La ruta devuelve 404 porque `PULSO_PERSONAL_ACCOUNT_AI_ENABLED=false`.
+- `/api/personal/*` y `/register` continúan devolviendo 404.
+- El proyecto Gemini `Tier 1 · Prepay` respondió correctamente a una generación
+  sintética con `gemini-3.1-flash-lite`; la credencial no fue copiada al VPS.
+- Para abrir la primera cohorte faltan únicamente una allowlist inicial
+  explícita, cargar la key en el entorno server-side y ejecutar el smoke de una
+  cuenta incluida y otra excluida.
+- El candidato NSIS 0.1.24 fue empaquetado localmente y no publicado. Antes de
+  distribuirlo requiere icono de marca, firma Authenticode y smoke en un perfil
+  Windows limpio; ver `docs/operations/DESKTOP_RELEASE.md`.
