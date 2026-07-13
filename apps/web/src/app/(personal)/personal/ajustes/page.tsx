@@ -32,6 +32,7 @@ export default function AjustesPage() {
       <Section title="Dónde guardar" hint="Pulso captura. Tu sistema favorito guarda.">
         <Choice<StorageTarget>
           value={storage}
+          columns={2}
           onChange={(v) => {
             setStorage(v);
             if (v === 'markdown' && isDesktop && !storageDir) void pickFolder();
@@ -39,7 +40,6 @@ export default function AjustesPage() {
           options={[
           ['pulso', 'En Pulso', 'Base local simple.'],
           ['markdown', 'Carpeta Markdown', 'Obsidian, Logseq, Git.'],
-          ['notion', 'Notion', 'A una base de Notion.'],
         ]} />
         {storage === 'markdown' && (
           <p className="mt-3 text-sm text-muted">

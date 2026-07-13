@@ -31,6 +31,10 @@ crear el entitlement comercial por usuario.
 - `/api/personal/*` permanece bloqueado en producción; el endpoint autenticado
   Desktop no depende de esa superficie pública.
 - Los borradores generados nunca se publican automáticamente.
+- Las API keys BYOK se cifran con `safeStorage` (DPAPI en Windows) y se guardan
+  fuera de `localStorage`. El renderer local sólo las solicita al generar; el
+  preload remoto no tiene acceso al vault. Las instalaciones antiguas migran la
+  key en claro al vault al primer arranque y la eliminan del estado persistido.
 
 ## Configuración
 
@@ -83,6 +87,9 @@ pnpm personal-ai:smoke
    recibir 403 al intentar generar.
 10. Superar deliberadamente el límite sólo en un entorno controlado: debe
     responder 429 sin filtrar credenciales ni contenido.
+11. Configurar y quitar una key BYOK; comprobar que
+    `%APPDATA%\Pulso\personal-ai-secrets.json` no contiene la key en claro y que
+    la generación deja de funcionar después de quitarla.
 
 ## Pendientes antes de cobrar Personal AI
 

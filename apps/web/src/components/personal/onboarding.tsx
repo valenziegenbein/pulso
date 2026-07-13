@@ -242,10 +242,9 @@ export function Onboarding() {
           <div>
             <h1 className="font-display text-4xl sm:text-5xl">¿Dónde guardás tus avances?</h1>
             <p className="mt-3 text-muted">Pulso captura. Tu sistema favorito guarda.</p>
-            <div className="mt-8 grid gap-3 sm:grid-cols-3">
+            <div className="mt-8 grid gap-3 sm:grid-cols-2">
               <OptionCard small title="En Pulso" desc="Base local simple." selected={storage === 'pulso'} onClick={() => setStorageLocal('pulso')} />
               <OptionCard small title="Carpeta Markdown" desc="Obsidian, Logseq, Git." selected={storage === 'markdown'} onClick={chooseMarkdown} />
-              <OptionCard small title="Notion" desc="A una base de Notion." selected={storage === 'notion'} onClick={() => setStorageLocal('notion')} />
             </div>
             {storage === 'markdown' && (
               <p className="pulso-reveal mt-4 text-sm text-muted">

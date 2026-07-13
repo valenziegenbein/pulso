@@ -86,6 +86,7 @@ type AccountAiResult<T> = { ok: true; data: T } | { ok: false; status?: number; 
 type PersonalAccountBridge = {
   isDesktop?: boolean;
   accountAiRequest?: (payload: Record<string, unknown>) => Promise<AccountAiResult<unknown>>;
+  loadPersonalAiKey?: (provider: CloudProvider) => Promise<string | null>;
 };
 
 function personalAccountBridge(): PersonalAccountBridge | undefined {
@@ -111,11 +112,18 @@ async function requestAccountAi<T>(payload: Record<string, unknown>): Promise<T>
   return result.data as T;
 }
 
+async function apiKeyFor(config: AiConfig): Promise<string | undefined> {
+  if (!isCloudProvider(config.provider)) return undefined;
+  const key = await personalAccountBridge()?.loadPersonalAiKey?.(config.provider);
+  if (!key) throw new AiError('unauthorized');
+  return key;
+}
+
 /** ¿La config alcanza para generar? (cloud necesita además la API key). */
 export function aiReady(ai: AiMode, config: AiConfig | null): boolean {
   if (ai === 'account') return Boolean(personalAccountBridge()?.accountAiRequest);
   if (ai === 'none' || !config?.baseUrl || !config?.model) return false;
-  if (isCloudProvider(config.provider) && !config.apiKey) return false;
+  if (isCloudProvider(config.provider) && !config.hasApiKey) return false;
   return true;
 }
 
@@ -146,10 +154,11 @@ export async function embedTexts(texts: string[], config: AiConfig): Promise<num
   if (!model || texts.length === 0) return [];
   let res: Response;
   try {
+    const apiKey = await apiKeyFor(config);
     res = await fetch('/api/personal/embeddings', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ texts, provider: config.provider, baseUrl: config.baseUrl, model, apiKey: config.apiKey }),
+      body: JSON.stringify({ texts, provider: config.provider, baseUrl: config.baseUrl, model, apiKey }),
     });
   } catch {
     throw new AiError('network');
@@ -321,6 +330,7 @@ export async function generateDraft(params: {
     };
   }
   if (aiReady(ai, config) && config) {
+    const apiKey = await apiKeyFor(config);
     const body = {
       note,
       task,
@@ -331,7 +341,7 @@ export async function generateDraft(params: {
       provider: config.provider,
       baseUrl: config.baseUrl,
       model: config.model,
-      apiKey: config.apiKey,
+      apiKey,
     };
     if (onDelta) {
       try {
@@ -382,6 +392,7 @@ export async function generatePersonalTask(params: {
 
   let res: Response;
   try {
+    const apiKey = await apiKeyFor(config);
     res = await fetch('/api/personal/tasks/suggest', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -392,7 +403,7 @@ export async function generatePersonalTask(params: {
         provider: config.provider,
         baseUrl: config.baseUrl,
         model: config.model,
-        apiKey: config.apiKey,
+        apiKey,
       }),
     });
   } catch {

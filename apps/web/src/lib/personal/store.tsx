@@ -19,8 +19,8 @@ export interface AiConfig {
   /** Base del proveedor. Local: http://localhost:1234/v1 · Cloud: la fuerza el server. */
   baseUrl: string;
   model: string;
-  /** Solo cloud (BYOK). Vive solo en este equipo; nunca vuelve del server. */
-  apiKey?: string;
+  /** Sólo indica que Electron tiene una key cifrada; nunca contiene el secreto. */
+  hasApiKey?: boolean;
   /** Solo local: modelo de embeddings (distinto al de chat), para búsqueda
    *  semántica en la bóveda. OpenAI usa un modelo fijo; Anthropic no ofrece. */
   embeddingsModel?: string;
@@ -126,6 +126,7 @@ function newId(): string {
 type ShellBridge = {
   isDesktop?: boolean;
   exportMarkdown?: (payload: { dir: string; subdir?: string; fileName: string; text: string; header?: string }) => Promise<boolean>;
+  storePersonalAiKey?: (provider: string, apiKey: string) => Promise<boolean>;
 };
 function shellBridge(): ShellBridge | undefined {
   return typeof window !== 'undefined' ? (window as unknown as { pulso?: ShellBridge }).pulso : undefined;
@@ -176,7 +177,23 @@ export function PersonalProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setState({ ...DEFAULT_STATE, ...(JSON.parse(raw) as Partial<PersonalState>) });
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<PersonalState> & { aiConfig?: (AiConfig & { apiKey?: string }) | null };
+        const legacyKey = parsed.aiConfig?.apiKey;
+        const config = parsed.aiConfig ? { ...parsed.aiConfig } : null;
+        if (config && 'apiKey' in config) delete (config as AiConfig & { apiKey?: string }).apiKey;
+        const next = { ...DEFAULT_STATE, ...parsed, aiConfig: config } as PersonalState;
+        if (legacyKey && config && (config.provider === 'openai' || config.provider === 'anthropic')) {
+          void shellBridge()?.storePersonalAiKey?.(config.provider, legacyKey).then((stored) => {
+            setState((current) => ({
+              ...current,
+              aiConfig: current.aiConfig ? { ...current.aiConfig, hasApiKey: stored } : null,
+            }));
+          });
+          next.aiConfig = { ...config, hasApiKey: false };
+        }
+        setState(next);
+      }
     } catch {
       /* primer uso */
     }

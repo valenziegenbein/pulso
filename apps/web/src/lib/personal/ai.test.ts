@@ -46,3 +46,27 @@ describe('Personal AI con cuenta Pulso', () => {
     });
   });
 });
+
+describe('Personal BYOK seguro', () => {
+  it('carga la key desde Electron sólo al generar y no desde la configuración persistida', async () => {
+    const loadKey = vi.fn().mockResolvedValue('synthetic-runtime-key');
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      suggestion: { type: 'NOTE', title: 'Seguro', content: 'Generado con BYOK.' },
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+    vi.stubGlobal('window', { pulso: { isDesktop: true, loadPersonalAiKey: loadKey } });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const config = { provider: 'openai' as const, baseUrl: 'https://api.openai.com/v1', model: 'gpt-test', hasApiKey: true };
+    expect(aiReady('byok', config)).toBe(true);
+    await expect(generateDraft({ note: 'avance', ai: 'byok', config })).resolves.toMatchObject({ title: 'Seguro' });
+    expect(loadKey).toHaveBeenCalledWith('openai');
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(JSON.parse(String(request.body))).toMatchObject({ apiKey: 'synthetic-runtime-key', provider: 'openai' });
+    expect(config).not.toHaveProperty('apiKey');
+  });
+
+  it('no considera listo un proveedor cloud sin referencia al vault', () => {
+    vi.stubGlobal('window', { pulso: { isDesktop: true } });
+    expect(aiReady('byok', { provider: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-test' })).toBe(false);
+  });
+});
