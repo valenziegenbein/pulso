@@ -252,3 +252,15 @@ titular volvió a loguearse con su cuenta real después de este paso.
   ni provider live en producción.
 - El resultado confirma que el HTTP 500 anterior estaba asociado al escenario
   de cuentas de prueba previo, no al contrato create/get/cancel del SDK.
+
+## Actualización — 2026-07-13: Gemini prepago habilitado
+
+- El proyecto de Google AI usado por Pulso figura como `Tier 1 · Prepay`; no se
+  registraron ni versionaron la API key ni datos de facturación.
+- Se ejecutó una única generación sintética con
+  `gemini-3.1-flash-lite`, el reconocimiento explícito
+  `paid-service-no-training` y sin datos de usuarios.
+- El smoke respondió con contenido no vacío en 900 ms.
+- La habilitación productiva de Personal AI sigue cerrada por feature flag,
+  allowlist de emails y configuración server-side; este smoke no abrió acceso
+  público ni activó cobros.
