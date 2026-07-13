@@ -52,6 +52,12 @@ if (!caddy.includes('@blocked_register') || !caddy.includes('@blocked_personal_a
   failures.push('Caddyfile: faltan bloqueos defensivos de registro o Personal API');
 }
 
+const mercadoPagoSmoke = await readFile(new URL('../scripts/smoke-mercado-pago-sandbox.ts', import.meta.url), 'utf8');
+if (!mercadoPagoSmoke.includes('process.env.MERCADO_PAGO_TEST_SELLER_ACCESS_TOKEN')
+  || mercadoPagoSmoke.includes('const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN')) {
+  failures.push('smoke Mercado Pago: debe usar exclusivamente el token del vendedor sintético');
+}
+
 if (failures.length > 0) {
   console.error(failures.map((failure) => `- ${failure}`).join('\n'));
   process.exit(1);

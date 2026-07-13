@@ -9,13 +9,20 @@ async function main(): Promise<void> {
   if (process.env.PULSO_MERCADO_PAGO_SANDBOX_SMOKE_ACK !== ACK) {
     throw new Error(`Smoke bloqueado: PULSO_MERCADO_PAGO_SANDBOX_SMOKE_ACK debe ser ${ACK}.`);
   }
-  const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN ?? '';
-  if (!accessToken.startsWith('TEST-')) throw new Error('Smoke bloqueado: la credencial debe comenzar con TEST-.');
+  const accessToken = process.env.MERCADO_PAGO_TEST_SELLER_ACCESS_TOKEN ?? '';
+  if (!accessToken.startsWith('APP_USR-')) {
+    throw new Error('Smoke bloqueado: MERCADO_PAGO_TEST_SELLER_ACCESS_TOKEN debe comenzar con APP_USR-.');
+  }
+  const realAccountToken = process.env.MERCADO_PAGO_ACCESS_TOKEN?.trim();
+  if (realAccountToken && accessToken === realAccountToken) {
+    throw new Error('Smoke bloqueado: el vendedor sintético no puede usar la credencial de la cuenta real.');
+  }
   const payerEmail = (process.env.MERCADO_PAGO_TEST_PAYER_EMAIL ?? '').trim().toLowerCase();
   if (!payerEmail.endsWith('@testuser.com')) throw new Error('Smoke bloqueado: falta un comprador @testuser.com de Mercado Pago.');
   const backUrl = new URL(process.env.MERCADO_PAGO_TEST_BACK_URL ?? '');
   if (backUrl.protocol !== 'https:') throw new Error('Smoke bloqueado: MERCADO_PAGO_TEST_BACK_URL debe usar HTTPS.');
 
+  await assertSyntheticSeller(accessToken);
   const client = new PreApproval(new MercadoPagoConfig({ accessToken, options: { timeout: 8_000 } }));
   let subscriptionId: string | undefined;
   try {
@@ -46,6 +53,28 @@ async function main(): Promise<void> {
     }
     const cleaned = await cleanupOrphanedSmokeSubscriptions(client, payerEmail);
     console.log(`Mercado Pago TEST orphan cleanup: OK (${cleaned} cancelled)`);
+  }
+}
+
+async function assertSyntheticSeller(accessToken: string): Promise<void> {
+  const response = await fetch('https://api.mercadopago.com/users/me', {
+    headers: { authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (!response.ok) throw new Error(`No se pudo verificar el vendedor sintético (HTTP ${response.status}).`);
+  const account = await response.json() as {
+    site_id?: unknown;
+    country_id?: unknown;
+    status?: { site_status?: unknown; billing?: { allow?: unknown }; sell?: { allow?: unknown } };
+  };
+  if (
+    account.site_id !== 'MLA'
+    || account.country_id !== 'AR'
+    || account.status?.site_status !== 'active'
+    || account.status.billing?.allow !== true
+    || account.status.sell?.allow !== true
+  ) {
+    throw new Error('El vendedor de prueba debe estar activo y habilitado para billing/sell en Argentina (MLA/AR).');
   }
 }
 
