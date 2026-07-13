@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Pulso — Organizador interno',
+  title: 'Pulso',
   description: 'Hacer visible el trabajo invisible sin invadir al trabajador.',
 };
 

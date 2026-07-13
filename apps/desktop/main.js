@@ -13,6 +13,9 @@ const path = require('node:path');
 
 app.setName('Pulso'); // userData limpio: %APPDATA%\Pulso
 
+const APP_ICON_PATH = path.join(__dirname, 'build', 'icon.png');
+const APP_ICON = fs.existsSync(APP_ICON_PATH) ? nativeImage.createFromPath(APP_ICON_PATH) : undefined;
+
 const SERVER_PORT = 41789;
 const WIDGET_FULL = { width: 384, height: 520 };
 const WIDGET_PILL = { width: 188, height: 64 };
@@ -551,6 +554,7 @@ function openTeams() {
     title: 'Pulso Teams',
     backgroundColor: '#15110c',
     autoHideMenuBar: true,
+    icon: APP_ICON,
     webPreferences: {
       preload: path.join(__dirname, 'preload-teams.js'),
       partition: TEAMS_PARTITION,
@@ -630,6 +634,7 @@ function createMainWindow() {
     title: 'Pulso',
     backgroundColor: '#15110c',
     autoHideMenuBar: true,
+    icon: APP_ICON,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       additionalArguments: [`--pulso-version=${app.getVersion()}`],
@@ -886,6 +891,9 @@ function openWidgetCollapsed(mode = widgetMode) {
 }
 
 function trayIcon() {
+  if (APP_ICON && !APP_ICON.isEmpty()) {
+    return APP_ICON.resize({ width: 16, height: 16, quality: 'best' });
+  }
   const size = 16;
   const buffer = Buffer.alloc(size * size * 4);
   for (let i = 0; i < size * size; i++) {
