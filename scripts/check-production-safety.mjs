@@ -38,6 +38,11 @@ if (!compose.includes('PULSO_BILLING_PROVIDER: ${PULSO_BILLING_PROVIDER:-MERCADO
   || !compose.includes('PULSO_MERCADO_PAGO_CHECKOUT_ENABLED: ${PULSO_MERCADO_PAGO_CHECKOUT_ENABLED:-false}')) {
   failures.push('docker-compose.yml: billing no falla cerrado en mock/live=false');
 }
+if (!compose.includes('PULSO_PERSONAL_API_ENABLED: \'false\'')
+  || !compose.includes('PULSO_PERSONAL_ACCOUNT_AI_ENABLED: ${PULSO_PERSONAL_ACCOUNT_AI_ENABLED:-false}')
+  || !compose.includes('PULSO_PERSONAL_ACCOUNT_AI_DATA_TERMS_ACK: ${PULSO_PERSONAL_ACCOUNT_AI_DATA_TERMS_ACK:-}')) {
+  failures.push('docker-compose.yml: Personal público o Personal AI no fallan cerrados');
+}
 if (!/postgres:16@sha256:[0-9a-f]{64}/.test(compose) || !/caddy:2@sha256:[0-9a-f]{64}/.test(compose)) {
   failures.push('docker-compose.yml: las imágenes base no están fijadas por digest');
 }

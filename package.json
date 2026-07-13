@@ -18,6 +18,7 @@
     "email:oauth:configure": "pnpm --filter @pulso/database exec tsx ../../scripts/configure-gmail-oauth.ts",
     "email:smoke:outbox": "pnpm --filter @pulso/database exec tsx --tsconfig ../../apps/web/tsconfig.json ../../scripts/smoke-gmail-outbox.ts",
     "billing:smoke:sandbox": "pnpm --filter web exec tsx ../../scripts/smoke-mercado-pago-sandbox.ts",
+    "personal-ai:smoke": "pnpm --filter web exec tsx --tsconfig tsconfig.json ../../scripts/smoke-personal-account-ai.ts",
     "test:watch": "vitest",
     "check:production-safety": "node scripts/check-production-safety.mjs",
     "green": "pnpm typecheck && pnpm test && pnpm test:db && pnpm lint && pnpm build && pnpm --filter @pulso/desktop security:check && pnpm check:production-safety && git diff --check",
