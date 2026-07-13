@@ -213,3 +213,42 @@ create → get → cancel → get debería completarse sin tocar KYC/fiscal real
   debe usar un Comprador AR recién creado desde el mismo contexto de cuentas de
   prueba del nuevo escenario vendedor.
 - Checkout, provider live y credenciales reales permanecen fuera del smoke.
+
+## Actualización — 2026-07-13 15:27 UTC: comprador de prueba nuevo del mismo escenario
+
+Se creó el Comprador AR solicitado, desde el mismo contexto (app real "Pulso
+Suscripciones" → Cuentas de prueba, junto al vendedor sintético):
+
+- Cuenta de prueba: "Pulso comprador vendedor" (rol Comprador), User ID
+  `3540407110`, Argentina.
+- Email de la cuenta (dato público de la propia consola, no secreto):
+  `test_user_9135926678895695499@testuser.com`. Confirmado dos veces —
+  primero derivado del patrón `TESTUSER<n>` → `test_user_<n>@testuser.com`
+  (ya observado con el vendedor sintético) y después verificado directamente
+  en "Tu perfil" tras iniciar sesión como esa identidad.
+- `.env` actualizado: `MERCADO_PAGO_TEST_PAYER_EMAIL` (no es secreto; valor
+  público de una identidad 100% sintética, pero igual no se commitea).
+- El comprador anterior (`comprador suscriptor`, usado en smokes previos)
+  sigue existiendo y sigue siendo válido; este nuevo comprador es
+  específicamente el pedido para descartar una incompatibilidad no
+  documentada entre el vendedor sintético nuevo y el comprador viejo.
+
+**Pendiente para GPT Sol**: reintentar el flujo `create → get → cancel → get`
+con `MERCADO_PAGO_TEST_SELLER_ACCESS_TOKEN` + el nuevo
+`MERCADO_PAGO_TEST_PAYER_EMAIL`.
+
+Nota operativa: iniciar sesión como una cuenta de prueba reemplaza la sesión
+de Mercado Pago en todas las pestañas del navegador (cookies por dominio); el
+titular volvió a loguearse con su cuenta real después de este paso.
+
+### Resultado del smoke con el comprador nuevo
+
+- El flujo reversible `create → get → cancel → get` completó correctamente
+  usando exclusivamente `MERCADO_PAGO_TEST_SELLER_ACCESS_TOKEN` y el nuevo
+  `MERCADO_PAGO_TEST_PAYER_EMAIL`.
+- La verificación final de limpieza encontró cero suscripciones smoke activas
+  o huérfanas.
+- No se usó la cuenta real, no se generó un cobro y no se habilitaron checkout
+  ni provider live en producción.
+- El resultado confirma que el HTTP 500 anterior estaba asociado al escenario
+  de cuentas de prueba previo, no al contrato create/get/cancel del SDK.
