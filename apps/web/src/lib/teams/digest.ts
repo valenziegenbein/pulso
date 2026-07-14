@@ -44,12 +44,12 @@ export interface TeamPulse {
 }
 
 const VERB: Record<string, string> = {
-  PROGRESS: 'avanzo en',
-  DELIVERY: 'entrego',
-  RESEARCH: 'investigo',
-  DECISION: 'definio',
-  NOTE: 'anoto',
-  BLOCKER: 'reporto un bloqueo en',
+  PROGRESS: 'avanzó en',
+  DELIVERY: 'entregó',
+  RESEARCH: 'investigó',
+  DECISION: 'definió',
+  NOTE: 'anotó',
+  BLOCKER: 'reportó un bloqueo en',
 };
 
 function teamOf(w: WorklogLike): string {
@@ -74,23 +74,23 @@ export function heuristicPulse(input: PulseInput): string {
 
   if (recentWorklog.length > 0) {
     const highlights = recentWorklog.slice(0, 2).map((w) => `${teamOf(w)} ${VERB[w.type] ?? 'trabajo en'} ${lowerFirst(w.title)}`);
-    parts.push(`Lo ultimo que se movio: ${joinNatural(highlights)}.`);
+    parts.push(`Lo último que se movió: ${joinNatural(highlights)}.`);
   }
   if (decisions.length > 0) {
     const d = decisions[0]!;
-    parts.push(`Te ${decisions.length === 1 ? 'espera' : 'esperan'} ${plural(decisions.length, 'decision', 'decisiones')}: la primera, "${d.title}" en ${d.team.name}.`);
+    parts.push(`Te ${decisions.length === 1 ? 'espera' : 'esperan'} ${plural(decisions.length, 'decisión', 'decisiones')}: la primera, "${d.title}" en ${d.team.name}.`);
   }
   if (openBlockers.length > 0) {
     const b = openBlockers[0]!;
     const bteam = b.task?.team?.name ?? b.team?.name;
-    parts.push(`Hay ${plural(openBlockers.length, 'bloqueo abierto', 'bloqueos abiertos')}${bteam ? `, el mas fresco en ${bteam}` : ''}: ${lowerFirst(b.title)}.`);
+    parts.push(`Hay ${plural(openBlockers.length, 'bloqueo abierto', 'bloqueos abiertos')}${bteam ? `, el más fresco en ${bteam}` : ''}: ${lowerFirst(b.title)}.`);
   }
   const watch = peopleToWatch(input.perPerson);
   if (watch.length > 0) {
     parts.push(`${watch[0]!.user.name} viene con varias tareas activas (${watch[0]!.active}); conviene cuidar su semana.`);
   }
 
-  if (parts.length === 0) return 'Semana tranquila: todavia no hay avances publicados ni pendientes que necesiten tu atencion.';
+  if (parts.length === 0) return 'Semana tranquila: todavía no hay avances publicados ni pendientes que necesiten tu atención.';
   return parts.join(' ');
 }
 

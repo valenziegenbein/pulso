@@ -6,6 +6,7 @@ import { heuristicPulse, peopleToWatch } from '@/lib/teams/digest';
 import { QuickWorklogWidget } from '@/components/quick-worklog-widget';
 import { OpenWidgetButton } from '@/components/open-widget-button';
 import { TaskSuggestionPanel } from '@/components/teams/task-suggestion-panel';
+import { PulseText } from '@/components/teams/pulse-text';
 import { Card, EmptyState, PageHeader, PriorityBadge, StatusBadge, btnGhost, btnPrimary } from '@/components/teams/ui';
 import { formatDate } from '@/lib/labels';
 
@@ -35,18 +36,20 @@ async function AdminDashboard(ctx: Auth) {
       <PageHeader
         kicker="Resumen"
         title={`Hola, ${firstName}`}
-        subtitle="Que esta avanzando, que esta bloqueado, que necesita decision."
+        subtitle="Qué está avanzando, qué está bloqueado, qué necesita decisión."
         actions={
           <>
             <a href="#asignar" className={btnPrimary}>Asignar tarea</a>
-            <Link href="/teams" className={btnGhost}>Anadir equipo</Link>
+            <Link href="/teams" className={btnGhost}>Añadir equipo</Link>
           </>
         }
       />
 
       <section className="rounded-2xl border border-accent/25 bg-surface/60 p-6 sm:p-8">
-        <p className="font-meta mb-3 text-[11px] uppercase tracking-[0.22em] text-accent">Pulso de la organizacion</p>
-        <p className="max-w-3xl text-lg leading-relaxed text-fg/90">{pulseText}</p>
+        <p className="font-meta mb-3 text-[11px] uppercase tracking-[0.22em] text-accent">Pulso de la organización</p>
+        <div className="max-w-3xl">
+          <PulseText initial={pulseText} />
+        </div>
       </section>
 
       <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -58,7 +61,7 @@ async function AdminDashboard(ctx: Auth) {
 
       {(data.openBlockers.length > 0 || data.decisions.length > 0 || watch.length > 0) && (
         <section className="mt-6">
-          <h2 className="font-meta mb-4 text-[11px] uppercase tracking-[0.2em] text-muted">Necesita tu atencion</h2>
+          <h2 className="font-meta mb-4 text-[11px] uppercase tracking-[0.2em] text-muted">Necesita tu atención</h2>
           <div className="grid gap-4 md:grid-cols-3">
             <DecisionInbox decisions={data.decisions} />
             <AttentionCol
@@ -84,7 +87,7 @@ async function AdminDashboard(ctx: Auth) {
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card title="Equipos" className="lg:col-span-2" action={<Link href="/teams" className="text-xs text-muted transition hover:text-fg">Ver todos</Link>}>
           {data.teams.length === 0 ? (
-            <EmptyState>Todavia no hay equipos.</EmptyState>
+            <EmptyState>Todavía no hay equipos.</EmptyState>
           ) : (
             <ul className="divide-y divide-border/60">
               {data.teams.map((team) => {
