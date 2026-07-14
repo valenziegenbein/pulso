@@ -177,3 +177,16 @@ estado running y repetir `ops/smoke.sh`. No recrear `pulso-db`.
 - Smoke posterior: health/readiness/login 200, registro y Personal público 404,
   endpoint Desktop administrado 401 sin sesión, panel interno 307 a login;
   app healthy, worker running y cero reinicios.
+
+## Checkpoint productivo Static Assets — 2026-07-14
+
+- Commit: `9ebc4ca71b46a7e03a3f5b089567ee3f7c51bfd1`.
+- Imagen activa:
+  `docker.io/valenziegenbein/pulso-app@sha256:23230fcfcbf773e65321bc8ad68a2d3b99771119b161e06c692b7be0a42f6ff6`.
+- Checkpoint root-only:
+  `/var/backups/pulso/deploy-20260714T011709Z-static-assets`.
+- Rollback: restaurar `docker-compose.before.yml`, `env.before` y
+  `DEPLOYED_COMMIT.before`; recrear únicamente `app` y `email-worker`. No hay
+  cambio de esquema que revertir.
+- El smoke de promoción exige desde este checkpoint que al menos una hoja CSS
+  referenciada por `/login` responda correctamente.

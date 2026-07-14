@@ -505,3 +505,17 @@ Total de tests ejecutados por el gate: 67.
   login.
 - Checkpoint remoto:
   `/var/backups/pulso/deploy-20260714T000534Z-early-access`.
+
+## Assets web standalone — 2026-07-14
+
+- Incidente: el HTML de login, tareas y panel interno cargaba, pero las hojas
+  `/_next/static/css/*` respondían 404. El build conservaba 82 assets en
+  `apps/web/.next/static` y no los copiaba al directorio servido por standalone.
+- Fix: commit `9ebc4ca71b46a7e03a3f5b089567ee3f7c51bfd1`; copia verificable de
+  `.next/static`, smoke HTTP de una hoja real y guardrail de production safety.
+- Imagen publicada y re-descargada:
+  `docker.io/valenziegenbein/pulso-app@sha256:23230fcfcbf773e65321bc8ad68a2d3b99771119b161e06c692b7be0a42f6ff6`.
+- Smoke productivo: ambos CSS del login 200 `text/css`; health/readiness 200;
+  navegador con fondo `rgb(14, 15, 18)`, tipografía del sistema y controles con
+  estilos aplicados. App healthy y worker running.
+- No hubo migraciones ni cambios de datos.
