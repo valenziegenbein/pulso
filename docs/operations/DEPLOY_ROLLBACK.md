@@ -157,3 +157,23 @@ estado running y repetir `ops/smoke.sh`. No recrear `pulso-db`.
   porque Compose consumió el resto del runbook recibido por stdin. No hubo
   migraciones pendientes ni cambio de datos. La promoción final ejecutó el
   runbook desde archivo temporal y cerró stdin del job de migración.
+
+## Checkpoint productivo Early Access Personal — 2026-07-14
+
+- Commit desplegado: `8178f1a93fcf881496dc88a88212022f2ffd0179`.
+- Digest de registry e image ID ejecutado por app/worker:
+  `docker.io/valenziegenbein/pulso-app@sha256:3f760a61c77ddabe116d657080cf8850cacc7bdb19f6e7150b82d7bf3fdc3a07`.
+- Backup cifrado y restore-tested: `pulso-20260713T232738Z`, con copia externa
+  verificada en `F:\Pulso-backups\verified\pulso-20260713T232738Z`.
+- Checkpoint root-only:
+  `/var/backups/pulso/deploy-20260714T000534Z-early-access`.
+- Rollback de aplicación: restaurar `docker-compose.before.yml`, `env.before`
+  y `DEPLOYED_COMMIT.before` desde ese checkpoint; recrear únicamente `app` y
+  `email-worker`. La imagen anterior está etiquetada como
+  `pulso-rollback:early-access-20260714T000534Z`.
+- La migración `20260713223000_personal_early_access` es aditiva. El rollback
+  de aplicación no elimina sus tablas; una reversión de datos requiere una
+  decisión explícita y, si fuera necesaria, restore del backup verificado.
+- Smoke posterior: health/readiness/login 200, registro y Personal público 404,
+  endpoint Desktop administrado 401 sin sesión, panel interno 307 a login;
+  app healthy, worker running y cero reinicios.

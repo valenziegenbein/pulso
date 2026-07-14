@@ -473,3 +473,35 @@ Total de tests ejecutados por el gate: 67.
 - Incidente del harness: la primera corrida abortó porque PowerShell elevó el
   primer `curl` sin respuesta durante el arranque; el `finally` limpió todo y la
   repetición desde cero quedó verde. No fue un fallo de la candidata.
+
+## Control de acceso anticipado Personal — 2026-07-14
+
+- Commits funcionales: `e042e706e83e38705afae16fd667701677df21c9`,
+  `ab09f59e74e27d97e06146c43c3039d7752f36b1` y fix operativo
+  `8178f1a93fcf881496dc88a88212022f2ffd0179`.
+- Green gate final: 94 unitarios, 38 PostgreSQL DB-backed y 3 de upgrade;
+  typecheck, lint, build de 41 rutas, Electron security, production safety y
+  `git diff --check` verdes. Nueve migraciones desde cero, status al día y sin
+  drift.
+- Imagen final publicada y re-descargada por digest:
+  `docker.io/valenziegenbein/pulso-app@sha256:3f760a61c77ddabe116d657080cf8850cacc7bdb19f6e7150b82d7bf3fdc3a07`.
+  Label OCI `org.opencontainers.image.revision` verificado contra `8178f1a...`.
+- Backup previo `pulso-20260713T232738Z`: cifrado, checksums verificados y
+  restore aislado PostgreSQL 16 desde
+  `F:\Pulso-backups\verified\pulso-20260713T232738Z`.
+- Migración aditiva `20260713223000_personal_early_access` aplicada con
+  `prisma migrate deploy`; segunda verificación sin pendientes.
+- `valenziegenbein@gmail.com`: identidad superadmin activa/verificada con
+  workspace operativo y reset de contraseña de un solo uso enviado. No se
+  generó ni expuso una contraseña temporal.
+- `snopsds@gmail.com`: solicitud histórica importada como `PENDING`, sin grant
+  de Personal AI. El acuse automático quedó `SENT`; la aprobación permanece
+  deliberadamente reservada al panel interno.
+- Gemini administrado activado sin imprimir la clave. Smoke de una generación:
+  modelo `gemini-3.1-flash-lite`, respuesta no vacía, 660 ms.
+- Producción: app healthy y worker running, cero reinicios; health/readiness y
+  login 200; registro y `/api/personal/*` 404 por defensa en profundidad;
+  `/api/desktop/personal-ai` devuelve 401 sin sesión; panel interno redirige a
+  login.
+- Checkpoint remoto:
+  `/var/backups/pulso/deploy-20260714T000534Z-early-access`.
