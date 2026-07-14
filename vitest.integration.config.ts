@@ -18,6 +18,7 @@ export default defineConfig({
       'tests/integration/postgres-billing.test.ts',
       'tests/integration/postgres-email.test.ts',
       'tests/integration/postgres-early-access.test.ts',
+      'tests/integration/postgres-knowledge.test.ts',
     ],
     setupFiles: ['tests/integration/test-database-guard.ts'],
     environment: 'node',

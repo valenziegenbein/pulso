@@ -4,13 +4,20 @@ const mocks = vi.hoisted(() => ({
   enabled: vi.fn(),
   access: vi.fn(),
   complete: vi.fn(),
+  auth: vi.fn(),
+  retrieve: vi.fn(),
 }));
 
 vi.mock('@/server/personal-account-ai', () => ({
   isPersonalAccountAiEnabled: mocks.enabled,
   getPersonalAccountAiAccess: mocks.access,
   createPersonalAccountAiProvider: () => ({ id: 'managed-test', complete: mocks.complete }),
+  personalAccountAiEmbeddingModel: () => 'gemini-embedding-test',
+  embedPersonalAccountTexts: vi.fn(),
 }));
+
+vi.mock('@/lib/auth/context', () => ({ getAuthContext: mocks.auth }));
+vi.mock('@/server/knowledge', () => ({ retrieveCloudKnowledge: mocks.retrieve }));
 
 import { GET, POST } from './route';
 
@@ -22,6 +29,11 @@ afterEach(() => {
     model: 'gemini-test',
     text: JSON.stringify({ type: 'PROGRESS', title: 'Avance seguro', content: 'Completé el flujo de prueba.' }),
   });
+  mocks.auth.mockResolvedValue({
+    user: { id: 'user-allowed', name: 'Allowed', email: 'allowed@example.invalid' },
+    organizationId: 'org-test', organizationName: 'Org', role: 'MEMBER', permissions: [], isSuperAdmin: false,
+  });
+  mocks.retrieve.mockResolvedValue(null);
 });
 
 describe('/api/desktop/personal-ai', () => {
@@ -46,7 +58,7 @@ describe('/api/desktop/personal-ai', () => {
     const response = await GET();
     expect(response.status).toBe(200);
     const data = await response.json();
-    expect(data).toEqual({ authenticated: true, enabled: true, model: 'gemini-test' });
+    expect(data).toEqual({ authenticated: true, enabled: true, model: 'gemini-test', embeddingsModel: 'gemini-embedding-test' });
     expect(JSON.stringify(data)).not.toMatch(/token|key|email|allowlist/i);
   });
 

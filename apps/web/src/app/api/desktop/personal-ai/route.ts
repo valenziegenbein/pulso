@@ -8,7 +8,9 @@ import {
   type TaskSuggestionInput,
 } from '@pulso/llm';
 import { rateLimit } from '@/lib/rate-limit';
+import { getAuthContext, type AuthContext } from '@/lib/auth/context';
 import { PayloadTooLargeError, readJsonBody } from '@/server/http';
+import { retrieveCloudKnowledge } from '@/server/knowledge';
 import {
   createPersonalAccountAiProvider,
   embedPersonalAccountTexts,
@@ -27,6 +29,7 @@ interface Body {
   note?: unknown;
   task?: { title?: unknown };
   projectContext?: unknown;
+  projectId?: unknown;
   notesContext?: unknown;
   attachmentsHint?: unknown;
   images?: unknown;
@@ -59,6 +62,8 @@ export async function POST(req: Request): Promise<NextResponse> {
   const access = await getPersonalAccountAiAccess();
   if (!access.authenticated) return NextResponse.json({ error: 'authentication_required' }, { status: 401 });
   if (!access.enabled) return NextResponse.json({ error: access.reason }, { status: access.reason === 'not_allowlisted' ? 403 : 503 });
+  const ctx = await getAuthContext();
+  if (!ctx) return NextResponse.json({ error: 'authentication_required' }, { status: 401 });
 
   const limit = rateLimit(`personal-account-ai:${access.userId}`, {
     limit: Number(process.env.PULSO_PERSONAL_ACCOUNT_AI_RATE_LIMIT ?? 20),
@@ -81,8 +86,8 @@ export async function POST(req: Request): Promise<NextResponse> {
   if (!body) return NextResponse.json({ error: 'invalid_input' }, { status: 400 });
 
   try {
-    if (body.operation === 'draft') return await suggestDraft(body);
-    if (body.operation === 'task') return await suggestTask(body);
+    if (body.operation === 'draft') return await suggestDraft(body, ctx);
+    if (body.operation === 'task') return await suggestTask(body, ctx);
     if (body.operation === 'embed') return await embed(body);
     return NextResponse.json({ error: 'invalid_input' }, { status: 400 });
   } catch (error) {
@@ -106,15 +111,30 @@ async function embed(body: Body): Promise<NextResponse> {
   return NextResponse.json({ vectors, model: personalAccountAiEmbeddingModel() });
 }
 
-async function suggestDraft(body: Body): Promise<NextResponse> {
+async function suggestDraft(body: Body, ctx: AuthContext): Promise<NextResponse> {
   const note = typeof body.note === 'string' ? body.note.trim() : '';
   const images = parseImages(body.images);
   if ((!note && images.length === 0) || note.length > 500) throw new InvalidInputError();
+  const clientProjectId = typeof body.projectId === 'string' ? body.projectId.slice(0, 100) : undefined;
+  const localNotes = typeof body.notesContext === 'string' ? body.notesContext.slice(0, 8_000) : undefined;
+  let cloudNotes: string | null = null;
+  if (clientProjectId && note) {
+    try {
+      cloudNotes = await retrieveCloudKnowledge(ctx, {
+        scope: 'PERSONAL',
+        clientProjectId,
+        query: note,
+        maxChars: 4_000,
+      });
+    } catch {
+      // El índice cloud es una mejora: una falla nunca bloquea el borrador.
+    }
+  }
   const suggestion = await new WorklogSuggestionService(createPersonalAccountAiProvider()).suggest({
     note,
     task: typeof body.task?.title === 'string' ? { title: body.task.title.slice(0, 200) } : undefined,
     projectContext: typeof body.projectContext === 'string' ? body.projectContext.slice(0, 4000) : undefined,
-    notesContext: typeof body.notesContext === 'string' ? body.notesContext.slice(0, 8000) : undefined,
+    notesContext: mergeNotesContext(localNotes, cloudNotes),
     attachmentsHint: Array.isArray(body.attachmentsHint)
       ? body.attachmentsHint.filter((item): item is string => typeof item === 'string').slice(0, 5)
       : undefined,
@@ -123,17 +143,31 @@ async function suggestDraft(body: Body): Promise<NextResponse> {
   return NextResponse.json({ status: 'DRAFT', suggestion, requestId: randomUUID() });
 }
 
-async function suggestTask(body: Body): Promise<NextResponse> {
+async function suggestTask(body: Body, ctx: AuthContext): Promise<NextResponse> {
   const instruction = typeof body.instruction === 'string' ? body.instruction.trim() : '';
   const projectName = typeof body.project?.name === 'string' ? body.project.name.trim() : '';
   if (instruction.length < 3 || instruction.length > 1000 || !projectName) throw new InvalidInputError();
+  const clientProjectId = typeof body.projectId === 'string' ? body.projectId.slice(0, 100) : undefined;
+  let cloudNotes: string | null = null;
+  if (clientProjectId) {
+    try {
+      cloudNotes = await retrieveCloudKnowledge(ctx, {
+        scope: 'PERSONAL', clientProjectId, query: instruction, maxChars: 2_000,
+      });
+    } catch {
+      // Degrada al contexto local del proyecto.
+    }
+  }
   const input: TaskSuggestionInput = {
     instruction,
     organizationName: 'Pulso Personal',
     team: {
       id: 'personal',
       name: projectName.slice(0, 200),
-      description: typeof body.project?.context === 'string' ? body.project.context.slice(0, 4000) : undefined,
+      description: mergeNotesContext(
+        typeof body.project?.context === 'string' ? body.project.context.slice(0, 2_000) : undefined,
+        cloudNotes,
+      ),
     },
     activeTasks: Array.isArray(body.activeTasks)
       ? body.activeTasks
@@ -182,3 +216,8 @@ function parseImages(input: unknown): SuggestImage[] {
 }
 
 class InvalidInputError extends Error {}
+
+function mergeNotesContext(local: string | undefined, cloud: string | null): string | undefined {
+  const parts = [local?.trim(), cloud?.trim()].filter((value): value is string => Boolean(value));
+  return parts.length ? parts.join('\n\n').slice(0, 8_000) : undefined;
+}

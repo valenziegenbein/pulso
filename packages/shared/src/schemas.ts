@@ -98,6 +98,8 @@ export const taskContextSchema = z.object({
 export const worklogSuggestRequestSchema = z.object({
   note: z.string().min(1).max(500),
   task: taskContextSchema.optional(),
+  taskId: cuid.optional(),
+  teamId: cuid.optional(),
   /** Links o referencias que la persona adjuntó manualmente (no captura automática). */
   attachmentsHint: z.array(z.string().max(500)).max(5).optional(),
   images: z.array(z.object({

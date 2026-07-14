@@ -5,6 +5,8 @@ import { getAuthContext } from '@/lib/auth/context';
 import { getWorklogSuggestionService } from '@/lib/llm';
 import { rateLimit } from '@/lib/rate-limit';
 import { PayloadTooLargeError, readJsonBody } from '@/server/http';
+import { assertTaskAccess, assertTeamAccess, isAuthorizationError } from '@/server/authz';
+import { retrieveCloudKnowledge } from '@/server/knowledge';
 
 const LIMIT = Number(process.env.WORKLOG_RATE_LIMIT ?? 10);
 const WINDOW_MS = Number(process.env.WORKLOG_RATE_WINDOW_MS ?? 60_000);
@@ -34,10 +36,28 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   try {
+    let teamId = parsed.data.teamId;
+    if (parsed.data.taskId) {
+      const task = await assertTaskAccess(ctx, parsed.data.taskId);
+      teamId = task.teamId;
+    } else if (teamId) {
+      await assertTeamAccess(ctx, teamId);
+    }
+    let notesContext: string | undefined;
+    if (teamId) {
+      try {
+        notesContext = (await retrieveCloudKnowledge(ctx, {
+          scope: 'TEAM', teamId, query: parsed.data.note, maxChars: 3_000,
+        })) ?? undefined;
+      } catch {
+        // El índice documental es una mejora; no bloquea la captura cotidiana.
+      }
+    }
     const service = await getWorklogSuggestionService(ctx.organizationId);
-    const suggestion = await service.suggest(parsed.data);
+    const suggestion = await service.suggest({ ...parsed.data, notesContext });
     return NextResponse.json({ status: 'DRAFT', suggestion });
-  } catch {
+  } catch (error) {
+    if (isAuthorizationError(error)) return NextResponse.json({ error: 'not_found' }, { status: 404 });
     return NextResponse.json({ error: 'llm_unavailable' }, { status: 502 });
   }
 }

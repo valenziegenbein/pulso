@@ -47,6 +47,7 @@ model Organization {
   billingEvents  BillingWebhookEvent[]
   billingCheckoutAttempts BillingCheckoutAttempt[]
   personalEarlyAccessRequests EarlyAccessRequest[]       @relation("EarlyAccessPersonalOrganization")
+  knowledgeSources            KnowledgeSource[]
 }
 
 model User {
@@ -88,6 +89,7 @@ model User {
   earlyAccessRequests     EarlyAccessRequest[]       @relation("EarlyAccessUser")
   earlyAccessDecisions    EarlyAccessRequest[]       @relation("EarlyAccessDecisionBy")
   earlyAccessEvents       EarlyAccessEvent[]         @relation("EarlyAccessEventActor")
+  knowledgeSources        KnowledgeSource[]
 }
 
 model Role {
@@ -147,6 +149,7 @@ model Team {
   decisions           DecisionRequest[]
   worklogEntries      WorklogEntry[]
   organizationInvites OrganizationInvite[]
+  knowledgeSources     KnowledgeSource[]
 
   @@unique([id, organizationId])
   @@index([organizationId])
@@ -365,6 +368,56 @@ model Attachment {
 
   @@index([taskId])
   @@index([worklogEntryId])
+}
+
+model KnowledgeSource {
+  id                String    @id @default(cuid())
+  organizationId    String
+  ownerId           String
+  teamId            String?
+  scope             String
+  clientProjectId   String?
+  clientSourceId    String
+  name              String
+  consentAt         DateTime
+  lastSyncId        String?
+  lastSyncedAt      DateTime?
+  fileCount         Int       @default(0)
+  chunkCount        Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner        User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  team         Team?           @relation(fields: [teamId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  chunks       KnowledgeChunk[]
+
+  @@unique([organizationId, ownerId, clientSourceId])
+  @@unique([id, organizationId])
+  @@index([organizationId, scope, clientProjectId])
+  @@index([teamId])
+  @@index([ownerId])
+}
+
+model KnowledgeChunk {
+  id               String   @id @default(cuid())
+  organizationId   String
+  sourceId         String
+  relativePath     String
+  ordinal          Int
+  heading          String
+  contentEncrypted String
+  contentHash      String
+  embeddingModel   String
+  embeddingJson    String
+  syncId           String
+  updatedAt        DateTime @updatedAt
+
+  source KnowledgeSource @relation(fields: [sourceId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@unique([sourceId, relativePath, ordinal])
+  @@index([organizationId, sourceId])
+  @@index([sourceId, syncId])
 }
 
 model LLMProviderConfig {
