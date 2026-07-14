@@ -233,9 +233,9 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
     if (focusProject.useNotesContext && notesDir && streamable) {
       let queryVector: number[] | undefined;
       const noteQuery = note.trim();
-      if (noteQuery && embeddingsEnabled && aiConfig && embeddingsReady(ai, aiConfig)) {
+      if (noteQuery && embeddingsEnabled && embeddingsReady(ai, aiConfig)) {
         try {
-          const [vec] = await embedTexts([noteQuery], aiConfig);
+          const [vec] = await embedTexts([noteQuery], ai, aiConfig, 'RETRIEVAL_QUERY');
           queryVector = vec;
         } catch {
           /* sin vector: el híbrido degrada solo a BM25 */

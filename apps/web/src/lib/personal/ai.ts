@@ -129,6 +129,8 @@ export function aiReady(ai: AiMode, config: AiConfig | null): boolean {
 
 /** OpenAI: modelo de embeddings fijo (no hace falta elegirlo, es el estándar). */
 export const OPENAI_EMBEDDINGS_MODEL = 'text-embedding-3-small';
+export const MANAGED_EMBEDDINGS_CACHE_KEY = 'pulso-managed-gemini-embedding-001-v1';
+export type EmbeddingTaskType = 'RETRIEVAL_DOCUMENT' | 'RETRIEVAL_QUERY';
 
 /**
  * ¿Hay proveedor+modelo para embeddings? Anthropic no ofrece embeddings — el
@@ -136,6 +138,7 @@ export const OPENAI_EMBEDDINGS_MODEL = 'text-embedding-3-small';
  * siempre puede (modelo fijo); local necesita que el usuario haya elegido uno.
  */
 export function embeddingsReady(ai: AiMode, config: AiConfig | null): boolean {
+  if (ai === 'account') return aiReady(ai, config);
   if (!aiReady(ai, config) || !config) return false;
   if (config.provider === 'anthropic') return false;
   if (config.provider === 'openai') return true;
@@ -143,15 +146,27 @@ export function embeddingsReady(ai: AiMode, config: AiConfig | null): boolean {
 }
 
 /** El modelo de embeddings efectivo según el proveedor (fijo en OpenAI). */
-export function embeddingsModelFor(config: AiConfig): string | undefined {
+export function embeddingsModelFor(ai: AiMode, config: AiConfig | null): string | undefined {
+  if (ai === 'account') return MANAGED_EMBEDDINGS_CACHE_KEY;
+  if (!config) return undefined;
   return config.provider === 'openai' ? OPENAI_EMBEDDINGS_MODEL : config.embeddingsModel;
 }
 
 /** Vectoriza textos vía el proxy server-side (mismo modelo de confianza que
  *  generateDraft: la config viaja del cliente, el server nunca la persiste). */
-export async function embedTexts(texts: string[], config: AiConfig): Promise<number[][]> {
-  const model = embeddingsModelFor(config);
+export async function embedTexts(
+  texts: string[],
+  ai: AiMode,
+  config: AiConfig | null,
+  taskType: EmbeddingTaskType = 'RETRIEVAL_DOCUMENT',
+): Promise<number[][]> {
+  const model = embeddingsModelFor(ai, config);
   if (!model || texts.length === 0) return [];
+  if (ai === 'account') {
+    const result = await requestAccountAi<{ vectors?: number[][] }>({ operation: 'embed', texts, taskType });
+    return result.vectors ?? [];
+  }
+  if (!config) return [];
   let res: Response;
   try {
     const apiKey = await apiKeyFor(config);

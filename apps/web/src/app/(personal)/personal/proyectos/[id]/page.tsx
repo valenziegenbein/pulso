@@ -292,10 +292,9 @@ export default function ProjectDetailPage() {
               {isDesktop &&
                 project.useNotesContext &&
                 embeddingsEnabled &&
-                aiConfig &&
                 embeddingsReady(ai, aiConfig) &&
                 (project.markdownDir ?? (storage === 'markdown' ? storageDir : null)) && (
-                  <NotesIndexPanel dir={(project.markdownDir ?? storageDir)!} aiConfig={aiConfig} />
+                  <NotesIndexPanel dir={(project.markdownDir ?? storageDir)!} ai={ai} aiConfig={aiConfig} />
                 )}
             </section>
             <section className="rounded-2xl border border-border bg-surface/50 p-5">

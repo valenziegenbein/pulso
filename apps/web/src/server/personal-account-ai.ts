@@ -1,11 +1,13 @@
 import { prisma } from '@pulso/database';
-import { createLLMProvider, type LLMProvider } from '@pulso/llm';
+import { createLLMProvider, LLMRequestError, type LLMProvider } from '@pulso/llm';
 import { getSessionIdentity } from '@/lib/auth/context';
 import { fetchWithTimeout } from '@/lib/personal/ai-endpoint';
 import { hasApprovedPersonalAiAccess } from '@/server/early-access';
 
 const GEMINI_OPENAI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
+const GEMINI_NATIVE_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 const DEFAULT_GEMINI_MODEL = 'gemini-3.1-flash-lite';
+const DEFAULT_GEMINI_EMBEDDING_MODEL = 'gemini-embedding-001';
 const PAID_DATA_TERMS_ACK = 'paid-service-no-training';
 
 export type PersonalAccountAiAccess =
@@ -19,6 +21,12 @@ export function isPersonalAccountAiEnabled(): boolean {
 
 export function personalAccountAiModel(): string {
   return process.env.PULSO_PERSONAL_ACCOUNT_AI_MODEL?.trim() || DEFAULT_GEMINI_MODEL;
+}
+
+export function personalAccountAiEmbeddingModel(): string {
+  const model = process.env.PULSO_PERSONAL_ACCOUNT_AI_EMBEDDING_MODEL?.trim() || DEFAULT_GEMINI_EMBEDDING_MODEL;
+  if (!/^[a-z0-9._-]+$/i.test(model)) throw new Error('Modelo de embeddings administrado inválido.');
+  return model;
 }
 
 export function hasPersonalAccountAiPaidDataTermsAck(): boolean {
@@ -68,4 +76,44 @@ export function createPersonalAccountAiProvider(): LLMProvider {
     apiKey,
     fetchImpl: fetchWithTimeout(30_000),
   });
+}
+
+export type ManagedEmbeddingTask = 'RETRIEVAL_DOCUMENT' | 'RETRIEVAL_QUERY';
+
+/** Embeddings administrados por Pulso mediante el endpoint nativo y tipado de
+ * Gemini. La API key, el host y el modelo permanecen exclusivamente server-side. */
+export async function embedPersonalAccountTexts(
+  texts: string[],
+  taskType: ManagedEmbeddingTask,
+  fetchImpl: typeof fetch = fetchWithTimeout(30_000),
+): Promise<number[][]> {
+  const apiKey = process.env.PULSO_PERSONAL_ACCOUNT_AI_GEMINI_API_KEY?.trim();
+  if (!apiKey || !hasPersonalAccountAiPaidDataTermsAck()) {
+    throw new Error('Proveedor Personal AI no configurado para Paid Services.');
+  }
+  if (texts.length === 0 || texts.length > 32 || texts.some((text) => !text.trim() || text.length > 4_000)) {
+    throw new Error('Entrada de embeddings inválida.');
+  }
+  const model = personalAccountAiEmbeddingModel();
+  const modelPath = `models/${model}`;
+  const response = await fetchImpl(`${GEMINI_NATIVE_BASE_URL}/${modelPath}:batchEmbedContents`, {
+    method: 'POST',
+    redirect: 'error',
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
+    body: JSON.stringify({
+      requests: texts.map((text) => ({
+        model: modelPath,
+        content: { parts: [{ text }] },
+        taskType,
+        outputDimensionality: 768,
+      })),
+    }),
+  });
+  if (!response.ok) throw new LLMRequestError(`Gemini embeddings respondió ${response.status}`, response.status, 'gemini');
+  const payload = await response.json() as { embeddings?: Array<{ values?: number[] }> };
+  const vectors = payload.embeddings?.map((embedding) => embedding.values ?? []) ?? [];
+  if (vectors.length !== texts.length || vectors.some((vector) => vector.length === 0 || vector.some((value) => !Number.isFinite(value)))) {
+    throw new LLMRequestError('Gemini devolvió embeddings inválidos.', 502, 'gemini');
+  }
+  return vectors;
 }

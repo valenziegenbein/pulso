@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { embeddingsModelFor, embedTexts } from '@/lib/personal/ai';
-import type { AiConfig } from '@/lib/personal/store';
+import type { AiConfig, AiMode } from '@/lib/personal/store';
 
 type Chunk = { id: string; file: string; heading: string; text: string };
 type Bridge = {
@@ -21,8 +21,8 @@ const BATCH_SIZE = 16;
  * indexar a pedido. Acción explícita (no automática en segundo plano): el
  * costo/demora de indexar debe ser visible, no una sorpresa.
  */
-export function NotesIndexPanel({ dir, aiConfig }: { dir: string; aiConfig: AiConfig }) {
-  const model = embeddingsModelFor(aiConfig);
+export function NotesIndexPanel({ dir, ai, aiConfig }: { dir: string; ai: AiMode; aiConfig: AiConfig | null }) {
+  const model = embeddingsModelFor(ai, aiConfig);
   const [status, setStatus] = useState<{ total: number; indexed: number } | null>(null);
   const [indexing, setIndexing] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -47,7 +47,9 @@ export function NotesIndexPanel({ dir, aiConfig }: { dir: string; aiConfig: AiCo
         const batch = pending.slice(i, i + BATCH_SIZE);
         const vectors = await embedTexts(
           batch.map((c) => `${c.heading}\n${c.text}`),
+          ai,
           aiConfig,
+          'RETRIEVAL_DOCUMENT',
         );
         const entries = batch.map((c, idx) => ({ id: c.id, vector: vectors[idx] })).filter((e): e is { id: string; vector: number[] } => !!e.vector);
         await bridge()?.embeddingsSave?.({ dir, model, entries });

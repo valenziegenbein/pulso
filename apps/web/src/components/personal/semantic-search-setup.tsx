@@ -22,13 +22,14 @@ export function SemanticSearchSetup() {
   const [confirming, setConfirming] = useState(false);
   const [modelDraft, setModelDraft] = useState(aiConfig?.embeddingsModel ?? '');
 
-  if (ai !== 'local' && ai !== 'byok') return null;
-  if (!aiConfig) return null;
+  if (ai !== 'account' && ai !== 'local' && ai !== 'byok') return null;
+  if (ai !== 'account' && !aiConfig) return null;
 
-  const isAnthropic = aiConfig.provider === 'anthropic';
-  const isCloud = aiConfig.provider === 'openai' || isAnthropic;
+  const isManaged = ai === 'account';
+  const isAnthropic = aiConfig?.provider === 'anthropic';
+  const isCloud = isManaged || aiConfig?.provider === 'openai' || isAnthropic;
   const isLocal = !isCloud;
-  const hasEmbeddingsModel = isLocal ? Boolean(aiConfig.embeddingsModel?.trim()) : true;
+  const hasEmbeddingsModel = isLocal ? Boolean(aiConfig?.embeddingsModel?.trim()) : true;
 
   function enableCloud() {
     setEmbeddingsEnabled(true);
@@ -77,7 +78,7 @@ export function SemanticSearchSetup() {
 
       {isAnthropic && (
         <p className="mt-3 text-sm text-[#d98a5e]">
-          Tu proveedor actual (Anthropic) no ofrece embeddings. Cambiá a OpenAI o a un servidor local (LM Studio/Ollama)
+          Tu proveedor actual (Anthropic) no ofrece embeddings. Cambiá a IA administrada por Pulso, OpenAI o a un servidor local (LM Studio/Ollama)
           para activar esta función — mientras tanto, el asistente sigue buscando por palabra clave.
         </p>
       )}
@@ -102,7 +103,7 @@ export function SemanticSearchSetup() {
             </button>
           </div>
           <p className="mt-2 text-xs text-muted/80">
-            Cargalo en {aiConfig.provider === 'ollama' ? 'Ollama' : 'LM Studio'} por separado de tu modelo de chat (p. ej.
+            Cargalo en {aiConfig?.provider === 'ollama' ? 'Ollama' : 'LM Studio'} por separado de tu modelo de chat (p. ej.
             nomic-embed-text o bge-small). Todo esto queda en tu máquina — nada viaja afuera.
           </p>
         </div>
@@ -113,7 +114,7 @@ export function SemanticSearchSetup() {
         <div className="pulso-reveal mt-4 rounded-xl border border-[#d98a5e]/40 bg-bg/40 p-4">
           <p className="text-sm text-fg">
             Al activar esto, el <strong>contenido de tus notas</strong> (no solo un extracto chico como en el borrador) se
-            envía a OpenAI para generar los vectores de búsqueda.
+            envía {isManaged ? 'a Pulso Cloud y al proveedor administrado' : 'a OpenAI'} para generar los vectores de búsqueda.
           </p>
           <div className="mt-3 flex gap-2">
             <button onClick={enableCloud} className="rounded-full bg-accent px-4 py-1.5 text-sm font-medium text-bg">

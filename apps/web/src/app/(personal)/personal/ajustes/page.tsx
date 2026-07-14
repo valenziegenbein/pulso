@@ -88,7 +88,7 @@ export default function AjustesPage() {
             <CloudAiSetup />
           </div>
         )}
-        {(ai === 'local' || ai === 'byok') && <SemanticSearchSetup />}
+        {(ai === 'account' || ai === 'local' || ai === 'byok') && <SemanticSearchSetup />}
       </Section>
 
       <TeamsConnect />

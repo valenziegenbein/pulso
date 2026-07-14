@@ -1011,7 +1011,7 @@ ipcMain.handle('pulso:account-ai-status', (e) => {
 });
 ipcMain.handle('pulso:account-ai-request', (e, payload) => {
   requireLocalRenderer(e);
-  if (!payload || typeof payload !== 'object' || !['draft', 'task'].includes(payload.operation)) {
+  if (!payload || typeof payload !== 'object' || !['draft', 'task', 'embed'].includes(payload.operation)) {
     return { ok: false, status: 400, error: 'invalid_input' };
   }
   return accountAiFetch('POST', payload);

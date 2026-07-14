@@ -11,8 +11,10 @@ import { rateLimit } from '@/lib/rate-limit';
 import { PayloadTooLargeError, readJsonBody } from '@/server/http';
 import {
   createPersonalAccountAiProvider,
+  embedPersonalAccountTexts,
   getPersonalAccountAiAccess,
   isPersonalAccountAiEnabled,
+  personalAccountAiEmbeddingModel,
 } from '@/server/personal-account-ai';
 
 const MAX_BODY_BYTES = 7_000_000;
@@ -31,6 +33,8 @@ interface Body {
   instruction?: unknown;
   project?: { name?: unknown; context?: unknown };
   activeTasks?: unknown;
+  texts?: unknown;
+  taskType?: unknown;
 }
 
 interface SuggestImage {
@@ -46,6 +50,7 @@ export async function GET(): Promise<NextResponse> {
     enabled: access.enabled,
     reason: access.enabled ? undefined : access.reason,
     model: access.enabled ? access.model : undefined,
+    embeddingsModel: access.enabled ? personalAccountAiEmbeddingModel() : undefined,
   }, { headers: { 'cache-control': 'no-store' } });
 }
 
@@ -78,6 +83,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   try {
     if (body.operation === 'draft') return await suggestDraft(body);
     if (body.operation === 'task') return await suggestTask(body);
+    if (body.operation === 'embed') return await embed(body);
     return NextResponse.json({ error: 'invalid_input' }, { status: 400 });
   } catch (error) {
     if (error instanceof InvalidInputError) return NextResponse.json({ error: 'invalid_input' }, { status: 400 });
@@ -86,6 +92,18 @@ export async function POST(req: Request): Promise<NextResponse> {
     }
     return NextResponse.json({ error: 'llm_unavailable' }, { status: 502 });
   }
+}
+
+async function embed(body: Body): Promise<NextResponse> {
+  const texts = Array.isArray(body.texts)
+    ? body.texts.filter((value): value is string => typeof value === 'string')
+    : [];
+  const taskType = body.taskType === 'RETRIEVAL_QUERY' ? 'RETRIEVAL_QUERY' : 'RETRIEVAL_DOCUMENT';
+  if (texts.length === 0 || texts.length > 32 || texts.some((text) => !text.trim() || text.length > 4_000)) {
+    throw new InvalidInputError();
+  }
+  const vectors = await embedPersonalAccountTexts(texts, taskType);
+  return NextResponse.json({ vectors, model: personalAccountAiEmbeddingModel() });
 }
 
 async function suggestDraft(body: Body): Promise<NextResponse> {

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { aiReady, generateDraft, generatePersonalTask } from './ai';
+import { aiReady, embedTexts, embeddingsReady, generateDraft, generatePersonalTask } from './ai';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -35,6 +35,14 @@ describe('Personal AI con cuenta Pulso', () => {
       config: null,
     })).resolves.toMatchObject({ type: 'TASK', title: 'Probar', priority: 'high' });
     expect(request).toHaveBeenCalledWith(expect.objectContaining({ operation: 'task' }));
+  });
+
+  it('genera embeddings administrados sin exigir una configuración BYOK', async () => {
+    const request = vi.fn().mockResolvedValue({ ok: true, data: { vectors: [[0.1, 0.2]] } });
+    vi.stubGlobal('window', { pulso: { isDesktop: true, accountAiRequest: request } });
+    expect(embeddingsReady('account', null)).toBe(true);
+    await expect(embedTexts(['documento'], 'account', null, 'RETRIEVAL_DOCUMENT')).resolves.toEqual([[0.1, 0.2]]);
+    expect(request).toHaveBeenCalledWith({ operation: 'embed', texts: ['documento'], taskType: 'RETRIEVAL_DOCUMENT' });
   });
 
   it('mapea una cuenta no autorizada sin exponer el error remoto', async () => {
