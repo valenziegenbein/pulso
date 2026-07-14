@@ -1,18 +1,25 @@
 import process from 'node:process';
-import { prisma } from '@pulso/database';
+import { prisma } from '../packages/database/src/index';
 import { normalizeEmail } from '../apps/web/src/lib/auth/session';
 import { bootstrapSuperAdminAccount, recordEarlyAccessRequest } from '../apps/web/src/server/early-access';
 
 const command = process.argv[2];
 const args = parseArgs(process.argv.slice(3));
 
-try {
-  if (command === 'promote-superadmin') await promoteSuperAdmin(args);
-  else if (command === 'import-request') await importRequest(args);
-  else throw new Error('Uso: promote-superadmin | import-request.');
-} finally {
-  await prisma.$disconnect();
+async function main(): Promise<void> {
+  try {
+    if (command === 'promote-superadmin') await promoteSuperAdmin(args);
+    else if (command === 'import-request') await importRequest(args);
+    else throw new Error('Uso: promote-superadmin | import-request.');
+  } finally {
+    await prisma.$disconnect();
+  }
 }
+
+void main().catch((error: unknown) => {
+  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+  process.exitCode = 1;
+});
 
 async function promoteSuperAdmin(args: Map<string, string>): Promise<void> {
   const email = requiredEmail(args);
