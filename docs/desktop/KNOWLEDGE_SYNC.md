@@ -53,3 +53,13 @@ La migración `20260714040000_knowledge_sources` es aditiva. El orden obligatori
 7. rollback de imagen; restaurar DB sólo ante una falla de datos confirmada.
 
 No usar `prisma db push` ni reseedear producción.
+
+## Estado operativo
+
+Promovido el 2026-07-14 con commit
+`b7056c14e358900413bcdb129b2c89382dcf2c7d` y digest
+`docker.io/valenziegenbein/pulso-app@sha256:6452aef06ec2edcbaffc16b0c6eb514102ce78b804c5b1354f522b9d854325ae`.
+La migración quedó aplicada y sin pendientes. El primer smoke con una identidad
+real debe usar documentación no sensible o sintética y confirmar desde Desktop
+que sincronizar, recuperar contexto y revocar la copia funcionan de extremo a
+extremo.

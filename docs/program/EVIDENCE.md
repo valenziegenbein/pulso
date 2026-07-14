@@ -519,3 +519,45 @@ Total de tests ejecutados por el gate: 67.
   navegador con fondo `rgb(14, 15, 18)`, tipografía del sistema y controles con
   estilos aplicados. App healthy y worker running.
 - No hubo migraciones ni cambios de datos.
+
+## Recuperación Desktop y conocimiento local-first — 2026-07-14
+
+- Se recuperaron los cambios posteriores de Personal: selector de proyecto
+  funcional, importación Markdown/Obsidian, widget estilizado, paginación y
+  aviso de bitácora lista. La instalación que mostraba la regresión era 0.1.26
+  y antecedía el empaquetado corregido de assets.
+- Desktop 0.1.28 fue construido e instalado localmente sin firma ni publicación.
+  Antes se preservaron 200 archivos / 19.983.773 bytes en
+  `F:\Pulso-backups\desktop-userdata-20260714-002724\Pulso`. Smoke instalado:
+  Personal/widget 200 y ambos CSS 200; health/readiness local 200.
+- Gemini `batchEmbedContents` se verificó contra el proveedor real con una
+  respuesta de 768 dimensiones, sin copiar ni imprimir la API key. La IA
+  administrada ahora separa chat de embeddings y usa
+  `RETRIEVAL_DOCUMENT`/`RETRIEVAL_QUERY`.
+- La sincronización documental conserva la carpeta Markdown como fuente de
+  verdad, exige selección nativa y consentimiento, cifra los chunks con
+  AES-256-GCM y deriva tenant/usuario de la sesión. Personal se aísla por owner
+  y proyecto; Teams por organización y equipo.
+- Green gate final: 100 unitarios, 40 PostgreSQL DB-backed y 3 de upgrade;
+  typecheck, lint, build de 44 rutas, Electron security, production safety y
+  `git diff --check` verdes. Diez migraciones desde cero, status al día y drift
+  cero.
+- Imagen construida desde worktree detached limpio y publicada sin `latest`:
+  `docker.io/valenziegenbein/pulso-app@sha256:6452aef06ec2edcbaffc16b0c6eb514102ce78b804c5b1354f522b9d854325ae`.
+  El label OCI coincide con `b7056c14e358900413bcdb129b2c89382dcf2c7d` y
+  fue reverificado después de eliminar el tag local y descargar por digest.
+- Staging efímero por digest: PostgreSQL 16 tmpfs, 10 migraciones, health,
+  readiness y CSS 200; registro y Personal público 404. El primer intento del
+  harness abortó antes de migrar por una interpolación PowerShell de la URL; el
+  entorno se eliminó y la repetición desde cero quedó verde.
+- Backup productivo `pulso-20260714T040008Z`: age + SHA-256 verificado en VPS y
+  en `F:\Pulso-backups\verified`. Restore por streaming a PostgreSQL 16 tmpfs,
+  sin dump plano: 3 organizaciones, 7 usuarios y 7 membresías preservados;
+  migraciones 9→10 y dos tablas de conocimiento creadas.
+- Producción promueve app/worker por el ID inmutable equivalente al digest.
+  Checkpoint root-only:
+  `/var/backups/pulso/deploy-20260714T041038Z-knowledge`; rollback inmediato
+  `pulso-rollback:knowledge-20260714T041038Z`.
+- Observación posterior: app healthy, worker running, cero reinicios, segunda
+  migración sin pendientes, health/readiness/login/CSS 200, registro y
+  `/api/personal/*` 404, knowledge sin sesión 401 y cero errores recientes.

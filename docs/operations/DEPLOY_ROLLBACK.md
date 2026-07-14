@@ -190,3 +190,23 @@ estado running y repetir `ops/smoke.sh`. No recrear `pulso-db`.
   cambio de esquema que revertir.
 - El smoke de promoción exige desde este checkpoint que al menos una hoja CSS
   referenciada por `/login` responda correctamente.
+
+## Checkpoint productivo Knowledge Sync — 2026-07-14
+
+- Commit desplegado: `b7056c14e358900413bcdb129b2c89382dcf2c7d`.
+- Digest de registry e image ID ejecutado por app/worker:
+  `docker.io/valenziegenbein/pulso-app@sha256:6452aef06ec2edcbaffc16b0c6eb514102ce78b804c5b1354f522b9d854325ae`.
+- Backup cifrado y restore-tested: `pulso-20260714T040008Z`, con copia
+  verificada en `F:\Pulso-backups\verified\pulso-20260714T040008Z`.
+- Checkpoint root-only:
+  `/var/backups/pulso/deploy-20260714T041038Z-knowledge`.
+- Rollback de aplicación: restaurar `docker-compose.before.yml` y
+  `DEPLOYED_COMMIT.before` desde el checkpoint; recrear sólo `app` y
+  `email-worker`. La imagen anterior está etiquetada como
+  `pulso-rollback:knowledge-20260714T041038Z`.
+- La migración `20260714040000_knowledge_sources` es aditiva. El rollback de
+  aplicación deja sus tablas disponibles y vacías; no ejecutar un down manual.
+  Restaurar el backup en un volumen/base nuevos sólo ante corrupción confirmada.
+- Post-deploy: segunda ejecución de `migrate deploy` sin pendientes; app y
+  worker con cero reinicios; health/readiness/login/CSS 200; registro y
+  Personal público 404; API de knowledge 401 sin sesión.
