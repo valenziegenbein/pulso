@@ -5,6 +5,16 @@ import { getRequestId, logServer } from '@/server/logging';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request): Promise<NextResponse> {
+  // El runtime Personal embebido no depende de PostgreSQL: persiste sus datos
+  // localmente y usa el servidor Next sólo para servir la UI. Producción no
+  // define esta marca y mantiene el chequeo estricto de la base de datos.
+  if (process.env.PULSO_RUNTIME === 'desktop-local') {
+    return NextResponse.json(
+      { status: 'ready', runtime: 'desktop-local' },
+      { headers: { 'cache-control': 'no-store' } },
+    );
+  }
+
   const requestId = getRequestId(request);
   try {
     await Promise.race([

@@ -361,6 +361,7 @@ function startEmbeddedServer() {
       LLM_BASE_URL: cfg.LLM_BASE_URL || '',
       LLM_MODEL: cfg.LLM_MODEL || '',
       LLM_API_KEY: cfg.LLM_API_KEY || '',
+      PULSO_RUNTIME: 'desktop-local',
       PULSO_PERSONAL_API_ENABLED: 'true',
       PULSO_PUBLIC_REGISTRATION_ENABLED: 'false',
     },
