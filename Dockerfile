@@ -26,6 +26,14 @@ RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @pulso/database exec prisma generate \
   && pnpm --filter web build
 
+# Next no copia `public` ni `.next/static` al output standalone. El server
+# generado resuelve ambos desde su propio directorio; sin esta copia el HTML
+# carga, pero todos los estilos y assets responden 404.
+RUN mkdir -p apps/web/.next/standalone/apps/web/.next \
+  && cp -R apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static \
+  && if [ -d apps/web/public ]; then cp -R apps/web/public apps/web/.next/standalone/apps/web/public; fi \
+  && test -n "$(find apps/web/.next/standalone/apps/web/.next/static -type f -print -quit)"
+
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV PULSO_IMAGE_REVISION=$PULSO_GIT_SHA

@@ -52,6 +52,16 @@ if (!/node:22-bookworm-slim@sha256:[0-9a-f]{64}/.test(dockerfile)) {
   failures.push('Dockerfile: la imagen Node no está fijada por digest');
 }
 
+if (!dockerfile.includes('apps/web/.next/standalone/apps/web/.next/static')
+  || !dockerfile.includes('cp -R apps/web/.next/static')) {
+  failures.push('Dockerfile: el server standalone no incluye los assets estaticos de Next');
+}
+
+const deploySmoke = await readFile(new URL('../ops/smoke.sh', import.meta.url), 'utf8');
+if (!deploySmoke.includes('/_next/static/css/') || !deploySmoke.includes('$SMOKE_BASE_URL$stylesheet')) {
+  failures.push('ops/smoke.sh: falta validar una hoja de estilos real');
+}
+
 const caddy = await readFile(new URL('../Caddyfile', import.meta.url), 'utf8');
 if (!caddy.includes('@blocked_register') || !caddy.includes('@blocked_personal_api')) {
   failures.push('Caddyfile: faltan bloqueos defensivos de registro o Personal API');

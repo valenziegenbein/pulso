@@ -17,6 +17,15 @@ curl $curl_flags --fail "$SMOKE_BASE_URL/api/health" >/dev/null
 # shellcheck disable=SC2086
 curl $curl_flags --fail -D "$tmp_headers" "$SMOKE_BASE_URL/api/readiness" >/dev/null
 
+# Un server standalone puede devolver HTML sano aunque no haya empaquetado
+# `.next/static`. Validar una hoja real evita promover una UI sin estilos.
+# shellcheck disable=SC2086
+login_html=$(curl $curl_flags --fail "$SMOKE_BASE_URL/login")
+stylesheet=$(printf '%s' "$login_html" | grep -o '/_next/static/css/[^"? ]*\.css' | head -n 1)
+[ -n "$stylesheet" ] || { echo "El login no referencia una hoja de estilos" >&2; exit 1; }
+# shellcheck disable=SC2086
+curl $curl_flags --fail "$SMOKE_BASE_URL$stylesheet" >/dev/null
+
 grep -qi '^x-request-id:' "$tmp_headers" || { echo "Falta x-request-id" >&2; exit 1; }
 grep -qi '^x-content-type-options: nosniff' "$tmp_headers" || { echo "Falta nosniff" >&2; exit 1; }
 grep -qi '^content-security-policy:' "$tmp_headers" || { echo "Falta CSP" >&2; exit 1; }
