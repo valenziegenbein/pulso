@@ -36,6 +36,7 @@ let programmaticMove = false;
 let widgetOpened = false;
 let widgetMode = 'personal';
 let widgetView = 'full';
+const grantedPersonalDirectories = new Set();
 // URL del server de Pulso Teams (web). Personal es local; Teams vive en el server.
 let TEAMS_URL = null;
 let teamsAuthInProgress = false;
@@ -219,13 +220,23 @@ async function chooseFolder(win) {
     properties: ['openDirectory', 'createDirectory'],
   });
   if (res.canceled || res.filePaths.length === 0) return null;
-  return res.filePaths[0];
+  const selected = path.resolve(res.filePaths[0]);
+  grantedPersonalDirectories.add(process.platform === 'win32' ? selected.toLowerCase() : selected);
+  return selected;
+}
+
+function requireGrantedPersonalDirectory(dir) {
+  if (typeof dir !== 'string' || !dir.trim()) throw new Error('Carpeta inválida.');
+  const resolved = path.resolve(dir);
+  const key = process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  if (!grantedPersonalDirectories.has(key)) throw new Error('La carpeta debe elegirse explícitamente en esta sesión.');
+  return resolved;
 }
 
 // Escritura del diario .md y retrieval de notas como contexto: ver markdown.js
 // y notes-index.js (módulos sin Electron, verificables con node puro).
 const { exportMarkdown, importFromFolder } = require('./markdown');
-const { retrieveNotesContext } = require('./notes-index');
+const { retrieveNotesContext, getChunks } = require('./notes-index');
 const embeddingsIndex = require('./embeddings-index');
 
 // Cache de vectores del asistente de notas: SIEMPRE en userData, nunca en la
@@ -493,9 +504,9 @@ async function authenticateTeams() {
   return authenticatePulsoAccount(true);
 }
 
-async function accountAiFetch(method, payload) {
+async function accountApiFetch(pathname, method, payload, maxBodyBytes = 7_000_000) {
   if (!TEAMS_URL) return { ok: false, status: 0, error: 'server_not_configured' };
-  const target = new URL('/api/desktop/personal-ai', TEAMS_URL);
+  const target = new URL(pathname, TEAMS_URL);
   let body;
   if (payload !== undefined) {
     try {
@@ -503,7 +514,7 @@ async function accountAiFetch(method, payload) {
     } catch {
       return { ok: false, status: 400, error: 'invalid_input' };
     }
-    if (body.length > 7_000_000) return { ok: false, status: 413, error: 'payload_too_large' };
+    if (body.length > maxBodyBytes) return { ok: false, status: 413, error: 'payload_too_large' };
   }
   try {
     const response = await session.fromPartition(TEAMS_PARTITION).fetch(target.toString(), {
@@ -531,6 +542,54 @@ async function accountAiFetch(method, payload) {
   } catch {
     return { ok: false, status: 0, error: 'network' };
   }
+}
+
+function accountAiFetch(method, payload) {
+  return accountApiFetch('/api/desktop/personal-ai', method, payload);
+}
+
+async function syncKnowledgeFolder(payload) {
+  const dir = requireGrantedPersonalDirectory(payload?.dir);
+  const scope = payload?.scope === 'TEAM' ? 'TEAM' : 'PERSONAL';
+  const targetId = scope === 'TEAM' ? payload?.teamId : payload?.projectId;
+  if (typeof targetId !== 'string' || !targetId.trim()) return { ok: false, status: 400, error: 'invalid_target' };
+  const allChunks = getChunks(dir);
+  if (allChunks.length > 20_000) return { ok: false, status: 413, error: 'too_many_chunks' };
+  const syncId = crypto.randomBytes(24).toString('base64url');
+  const clientSourceId = crypto
+    .createHash('sha256')
+    .update(`${process.platform === 'win32' ? dir.toLowerCase() : dir}\0${scope}\0${targetId}`)
+    .digest('hex');
+  const base = {
+    scope,
+    clientProjectId: scope === 'PERSONAL' ? targetId : undefined,
+    teamId: scope === 'TEAM' ? targetId : undefined,
+    clientSourceId,
+    sourceName: typeof payload?.sourceName === 'string' && payload.sourceName.trim()
+      ? payload.sourceName.trim().slice(0, 120)
+      : path.basename(dir).slice(0, 120),
+    syncId,
+    consentAt: new Date().toISOString(),
+  };
+  const ordinalByFile = new Map();
+  const normalized = allChunks.map((chunk) => {
+    const ordinal = ordinalByFile.get(chunk.file) ?? 0;
+    ordinalByFile.set(chunk.file, ordinal + 1);
+    return { relativePath: chunk.file, ordinal, heading: chunk.heading || '', text: chunk.text };
+  });
+  for (let index = 0; index < normalized.length; index += 20) {
+    const result = await accountApiFetch('/api/desktop/knowledge/sync', 'POST', {
+      ...base,
+      chunks: normalized.slice(index, index + 20),
+      complete: false,
+    }, 256 * 1024);
+    if (!result.ok) return result;
+  }
+  return accountApiFetch('/api/desktop/knowledge/sync', 'POST', {
+    ...base,
+    chunks: [],
+    complete: true,
+  }, 256 * 1024);
 }
 
 /** Ventana de Pulso Teams: carga el server web remoto (mismo dato que la web, en
@@ -1015,6 +1074,24 @@ ipcMain.handle('pulso:account-ai-request', (e, payload) => {
     return { ok: false, status: 400, error: 'invalid_input' };
   }
   return accountAiFetch('POST', payload);
+});
+ipcMain.handle('pulso:knowledge-targets', (e) => {
+  requireLocalRenderer(e);
+  return accountApiFetch('/api/desktop/knowledge/targets', 'GET');
+});
+ipcMain.handle('pulso:knowledge-source-delete', (e, sourceId) => {
+  requireLocalRenderer(e);
+  if (typeof sourceId !== 'string') return { ok: false, status: 400, error: 'invalid_input' };
+  return accountApiFetch('/api/desktop/knowledge/sources', 'DELETE', { sourceId }, 4_096);
+});
+ipcMain.handle('pulso:knowledge-sync-folder', (e, payload) => {
+  requireLocalRenderer(e);
+  if (!payload || typeof payload !== 'object') return { ok: false, status: 400, error: 'invalid_input' };
+  return syncKnowledgeFolder(payload).catch((error) => ({
+    ok: false,
+    status: 400,
+    error: error instanceof Error ? error.message : 'sync_failed',
+  }));
 });
 ipcMain.handle('pulso:personal-ai-key-store', (e, provider, apiKey) => {
   requireLocalRenderer(e);

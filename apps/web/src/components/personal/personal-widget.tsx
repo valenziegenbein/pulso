@@ -201,7 +201,7 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
       try {
         const suggestion = await generatePersonalTask({
           instruction: note,
-          project: { name: focusProject.name, context: focusProject.context },
+          project: { id: focusProject.id, name: focusProject.name, context: focusProject.context },
           activeTasks: pending.map((task) => ({ title: task.title, priority: task.priority })),
           ai,
           config: aiConfig,
@@ -252,6 +252,7 @@ export function PersonalWidget({ embedded = false }: { embedded?: boolean } = {}
     try {
       const s = await generateDraft({
         note,
+        projectId: focusProject.id,
         task: { title: focusProject.name },
         projectContext: focusProject.context,
         notesContext,

@@ -160,6 +160,8 @@ export function PulsoWidget({ focus }: { focus: FocusItem[] }) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           note,
+          taskId: selected?.id,
+          teamId: selected?.teamId,
           task: selected ? { title: selected.title, teamName: selected.teamName } : undefined,
           attachmentsHint: link ? [link] : undefined,
           images: image ? [{ dataUrl: image, mediaType: 'image/jpeg' }] : undefined,

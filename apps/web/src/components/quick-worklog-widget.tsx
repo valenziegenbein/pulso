@@ -62,6 +62,7 @@ export function QuickWorklogWidget({ task, taskId }: { task?: TaskContext; taskI
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           note,
+          taskId,
           task,
           attachmentsHint: link ? [link] : undefined,
           images: image ? [{ dataUrl: image, mediaType: 'image/jpeg' }] : undefined,

@@ -8,6 +8,7 @@ import { CloudAiSetup } from '@/components/personal/cloud-ai-setup';
 import { SemanticSearchSetup } from '@/components/personal/semantic-search-setup';
 import { TeamsConnect } from '@/components/personal/teams-connect';
 import { AccountAiSetup } from '@/components/personal/account-ai-setup';
+import { TeamKnowledgeSync } from '@/components/personal/team-knowledge-sync';
 
 type ShellBridge = { isDesktop?: boolean; chooseFolder?: () => Promise<string | null> };
 function shell(): ShellBridge | undefined {
@@ -92,6 +93,7 @@ export default function AjustesPage() {
       </Section>
 
       <TeamsConnect />
+      {ai === 'account' && <TeamKnowledgeSync />}
 
       <Section title="Datos" hint="Todo se guarda localmente en este equipo.">
         <button

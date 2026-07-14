@@ -16,6 +16,12 @@ type ShellBridge = {
   isDesktop?: boolean;
   chooseFolder?: () => Promise<string | null>;
   importMarkdown?: (payload: { dir: string }) => Promise<{ dailyEntries: ImportedDaily[]; genericNotes: ImportedGeneric[] }>;
+  syncKnowledgeFolder?: (payload: {
+    dir: string;
+    scope: 'PERSONAL';
+    projectId: string;
+    sourceName: string;
+  }) => Promise<{ ok: boolean; data?: { fileCount?: number; chunkCount?: number }; error?: string }>;
 };
 function shell(): ShellBridge | undefined {
   return typeof window !== 'undefined' ? (window as unknown as { pulso?: ShellBridge }).pulso : undefined;
@@ -50,6 +56,9 @@ export default function ProjectDetailPage() {
   const [isDesktop, setIsDesktop] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ added: number; skipped: number } | null>(null);
+  const [cloudConsent, setCloudConsent] = useState(false);
+  const [cloudSyncing, setCloudSyncing] = useState(false);
+  const [cloudResult, setCloudResult] = useState<string | null>(null);
   useEffect(() => setIsDesktop(Boolean(shell()?.isDesktop)), []);
 
   async function pickProjectFolder() {
@@ -62,6 +71,8 @@ export default function ProjectDetailPage() {
     if (!project) return;
     const dir = await shell()?.chooseFolder?.();
     if (!dir) return;
+    setProjectMarkdownDir(project.id, dir);
+    setProjectNotesContext(project.id, true);
     setImporting(true);
     setImportResult(null);
     try {
@@ -86,6 +97,32 @@ export default function ProjectDetailPage() {
       setImportResult({ added, skipped: inputs.length - added });
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function syncCloud() {
+    if (!project || !cloudConsent) return;
+    const bridge = shell();
+    const dir = await bridge?.chooseFolder?.();
+    if (!dir || !bridge?.syncKnowledgeFolder) return;
+    setProjectMarkdownDir(project.id, dir);
+    setProjectNotesContext(project.id, true);
+    setCloudSyncing(true);
+    setCloudResult(null);
+    try {
+      const result = await bridge.syncKnowledgeFolder({
+        dir,
+        scope: 'PERSONAL',
+        projectId: project.id,
+        sourceName: project.name,
+      });
+      setCloudResult(result.ok
+        ? `Sincronización completa · ${result.data?.fileCount ?? 0} archivos · ${result.data?.chunkCount ?? 0} fragmentos.`
+        : `No se pudo sincronizar (${result.error ?? 'error de red'}).`);
+    } catch {
+      setCloudResult('No se pudo sincronizar.');
+    } finally {
+      setCloudSyncing(false);
     }
   }
 
@@ -329,6 +366,32 @@ export default function ProjectDetailPage() {
                     : 'No había nada nuevo para agregar.'}
                   {importResult.skipped > 0 ? ` (${importResult.skipped} ya estaban importadas.)` : ''}
                 </p>
+              )}
+              {isDesktop && ai === 'account' && (
+                <div className="mt-5 border-t border-border/60 pt-5">
+                  <h3 className="font-display text-lg">Mantener carpeta local + indexar en Pulso Cloud</h3>
+                  <p className="mt-1 text-sm text-muted">
+                    La carpeta sigue siendo la fuente de verdad. Pulso carga fragmentos Markdown cifrados y sus vectores
+                    al espacio de tu cuenta para recuperar contexto en la IA administrada. No se suben binarios ni carpetas ocultas.
+                  </p>
+                  <label className="mt-3 flex items-start gap-2 text-sm text-muted">
+                    <input
+                      type="checkbox"
+                      checked={cloudConsent}
+                      onChange={(event) => setCloudConsent(event.target.checked)}
+                      className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
+                    />
+                    <span>Confirmo que puedo cargar esta documentación al espacio Pulso seleccionado.</span>
+                  </label>
+                  <button
+                    onClick={() => void syncCloud()}
+                    disabled={!cloudConsent || cloudSyncing}
+                    className="mt-3 rounded-full bg-accent px-5 py-2 text-sm font-medium text-bg transition hover:brightness-110 disabled:opacity-40"
+                  >
+                    {cloudSyncing ? 'Sincronizando…' : 'Elegir carpeta y sincronizar con Pulso Cloud'}
+                  </button>
+                  {cloudResult && <p className="mt-3 text-sm text-muted">{cloudResult}</p>}
+                </div>
               )}
               <p className="mt-4 text-xs text-muted/70">Notion y GitHub: próximamente.</p>
             </section>

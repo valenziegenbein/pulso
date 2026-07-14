@@ -314,6 +314,7 @@ async function streamSuggest(url: string, body: Record<string, unknown>, onDelta
  */
 export async function generateDraft(params: {
   note: string;
+  projectId?: string;
   task?: { title?: string };
   projectContext?: string;
   /** Extractos de las notas recientes del proyecto (bóveda, opt-in, solo desktop). */
@@ -325,12 +326,13 @@ export async function generateDraft(params: {
   /** Si se pasa y el proveedor lo soporta, el contenido llega en vivo (streaming). */
   onDelta?: (text: string) => void;
 }): Promise<DraftSuggestion> {
-  const { note, task, projectContext, notesContext, attachmentsHint, images, ai, config, onDelta } = params;
+  const { note, projectId, task, projectContext, notesContext, attachmentsHint, images, ai, config, onDelta } = params;
   if (ai === 'none') return manualDraft(note);
   if (ai === 'account') {
     const data = await requestAccountAi<{ suggestion?: DraftSuggestion }>({
       operation: 'draft',
       note,
+      projectId,
       task,
       projectContext,
       notesContext,
@@ -388,7 +390,7 @@ function fallbackPersonalTask(instruction: string): PersonalTaskSuggestion {
 /** Convierte una instrucción breve del widget en una tarea personal estructurada. */
 export async function generatePersonalTask(params: {
   instruction: string;
-  project: { name: string; context?: string };
+  project: { id?: string; name: string; context?: string };
   activeTasks: Array<{ title: string; priority: TaskPriority }>;
   ai: AiMode;
   config: AiConfig | null;
@@ -398,6 +400,7 @@ export async function generatePersonalTask(params: {
     const data = await requestAccountAi<{ suggestion?: PersonalTaskSuggestion }>({
       operation: 'task',
       instruction,
+      projectId: project.id,
       project,
       activeTasks,
     });
