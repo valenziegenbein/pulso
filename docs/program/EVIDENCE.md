@@ -561,3 +561,32 @@ Total de tests ejecutados por el gate: 67.
 - Observación posterior: app healthy, worker running, cero reinicios, segunda
   migración sin pendientes, health/readiness/login/CSS 200, registro y
   `/api/personal/*` 404, knowledge sin sesión 401 y cero errores recientes.
+
+## Demo real de Pulso Teams y pulso con IA — 2026-07-14
+
+- Commits `25ee81b` y `0c3363e`: la portada administrativa usa el componente
+  asíncrono de pulso con IA y existe un seed demo idempotente, bloqueado por
+  opt-in, con identidades `.invalid` y sin destinatarios de correo reales.
+- Dataset verificado dos veces contra PostgreSQL 16 efímero: 1 organización,
+  5 usuarios, 4 equipos, 12 tareas, 6 avances publicados, 2 bloqueos y 2
+  decisiones, sin duplicados.
+- Green gate: 100 unitarios, suite PostgreSQL real, 10 migraciones desde cero,
+  status y drift verdes, upgrade sintético, lint, build, Electron security,
+  production safety y `git diff --check`.
+- Imagen construida desde worktree detached limpio, publicada, descargada e
+  inspeccionada por digest:
+  `docker.io/valenziegenbein/pulso-app@sha256:c9413903c2788e2be32390785e1c28784fc557739e5732fec734122c32d5ea61`.
+  La label OCI coincide con `0c3363ea70b1fd40068559b0233df965e36030e8`.
+- Backup previo `pulso-20260714T214122Z` cifrado con age, checksum verificado y
+  copia externa en `F:\Pulso-backups\verified\pulso-20260714T214122Z`.
+  Checkpoint remoto:
+  `/var/backups/pulso/deploy-20260714T214441Z-teams-demo`.
+- Migración previa sin pendientes; app y worker promovidos por image ID.
+  Readiness y smoke público verdes, incluyendo CSS y bloqueos de registro y
+  Personal. Allowlist LLM limitada a `generativelanguage.googleapis.com`.
+- El navegador autenticado mostró el resumen de Gemini con fuente
+  `traducido por IA`, métricas, decisiones, bloqueos y carga a cuidar. La
+  credencial demo se rotó al finalizar y permanece fuera de Git con ACL
+  restringida.
+- Captura de marketing:
+  `F:\pulso-página web\public\demos\pulso-teams-admin-real.png`.
