@@ -1,4 +1,4 @@
-# Operación de acceso anticipado Personal
+# Operación de acceso anticipado Personal y Teams
 
 ## Alcance
 
@@ -7,7 +7,12 @@ organización. La ruta, la navegación y todas sus Server Actions exigen que la
 identidad persistida tenga `User.isSuperAdmin=true`. Un `ORG_ADMIN` común no
 puede listar solicitudes ni ejecutar decisiones.
 
-El flujo es:
+El panel recibe tres tipos de consultas de marketing:
+
+- `personal-ai` crea una solicitud de Personal AI;
+- `teams` y `business` crean una solicitud de piloto Pulso Teams.
+
+El flujo de Personal es:
 
 1. Marketing envía una consulta `personal-ai` a `/api/contact`.
 2. El backend persiste o actualiza la solicitud, registra un evento y encola:
@@ -19,6 +24,11 @@ El flujo es:
    workspace Personal mínimo; `/register` continúa cerrado.
 6. La autorización de Personal AI consulta el estado `APPROVED` en PostgreSQL.
    Revocar el acceso tiene efecto en la siguiente solicitud sin editar `.env`.
+
+El flujo Teams usa la misma bandeja y auditoría, pero una aprobación sólo
+acepta el piloto y encola una respuesta específica. No crea usuarios,
+organizaciones, membresías, workspaces Personal ni grants de IA: el alta de la
+organización se coordina después de forma explícita.
 
 La API key de Gemini nunca se guarda en estas tablas ni llega al panel. Sigue
 siendo un secreto server-side en `PULSO_PERSONAL_ACCOUNT_AI_GEMINI_API_KEY`.
@@ -66,6 +76,25 @@ El import genera un nuevo evento `REQUESTED` y un acuse automático mediante la
 outbox. Es idempotente respecto de email y producto: una repetición aumenta el
 contador, no crea otra identidad de solicitud.
 
+## Recuperar consultas Teams anteriores
+
+Antes de que `teams` y `business` alimentaran la bandeja, esas consultas
+quedaban únicamente como mensajes `CONTACT_REQUEST` cifrados en la outbox. El
+backfill las descifra dentro del proceso autorizado, importa sólo solicitudes
+Teams faltantes y no imprime nombres, emails ni mensajes:
+
+```powershell
+$env:DATABASE_URL='<destino explícito>'
+$env:WORKLOG_ENCRYPTION_KEY='<secret store>'
+pnpm --filter @pulso/database exec tsx --tsconfig ../../apps/web/tsconfig.json ../../scripts/backfill-team-early-access.ts `
+  --ack backfill-team-contacts
+```
+
+El proceso es idempotente por email normalizado y producto. Informa únicamente
+los conteos inspeccionados, importados, ya existentes e inválidos. Cada alta
+recuperada registra `source=CONTACT_OUTBOX_BACKFILL` y encola el acuse de recibo
+que el flujo antiguo no enviaba al solicitante.
+
 ## Apertura de Personal AI
 
 Además de una aprobación en DB, el proveedor global debe estar listo:
@@ -89,3 +118,5 @@ Después de migrar y recrear la aplicación:
 5. probar una cuenta pendiente (403) y luego revocar la aprobada;
 6. verificar que la revocación impide nuevas generaciones sin borrar datos
    locales del equipo.
+7. enviar consultas `teams` y `business`, verificar que aparecen como
+   `Pulso Teams` y que aprobarlas no crea identidades ni organizaciones.
