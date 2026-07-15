@@ -590,3 +590,39 @@ Total de tests ejecutados por el gate: 67.
   restringida.
 - Captura de marketing:
   `F:\pulso-página web\public\demos\pulso-teams-admin-real.png`.
+
+## Bandeja de acceso anticipado Teams — 2026-07-15
+
+- Causa corregida: marketing aceptaba `teams` y `business`, pero sólo
+  `personal-ai` se persistía en `EarlyAccessRequest`; por eso la consulta Teams
+  existía cifrada en la outbox de contacto y no aparecía en el panel interno.
+- Commits atómicos: `77536a8` agrega el producto `TEAMS`, UI, respuestas y la
+  migración aditiva; `3ca2772` agrega el backfill idempotente y su runbook.
+  Aprobar Teams acepta el piloto y responde, pero no crea usuarios,
+  organizaciones, membresías, workspaces Personal ni grants de IA.
+- Green gate completo: 102 tests unitarios, 41 PostgreSQL DB-backed y 3 de
+  upgrade; 11 migraciones desde cero, status y drift verdes; typecheck, lint,
+  build de 44 rutas, Electron security, production safety y `git diff --check`.
+- Imagen construida desde el worktree detached limpio de
+  `3ca2772f90b95ab0095cb63ccf42e7211e7d1e98`, publicada y revalidada:
+  `docker.io/valenziegenbein/pulso-app@sha256:cef4f56d39acabefca3187276863787a79340a0cd44f599cb5c44954222add83`.
+  El archive portable tuvo SHA-256
+  `a08101026d9a68e73dfbadaec28d7dd2d94f1981d56918f3072a9389f5c3d9ba`.
+- Staging efímero por digest: 11 migraciones, health/readiness/login/CSS 200,
+  POST Teams 202 y una solicitud `TEAMS/PENDING`; entorno destruido al cerrar.
+- Backup previo cifrado y verificado: `pulso-20260715T173624Z`, copiado a
+  `F:\Pulso-backups\verified`. Restore PostgreSQL 16 tmpfs confirmado con 10
+  migraciones, 4 organizaciones, 12 usuarios y 12 membresías.
+- Checkpoint root-only:
+  `/var/backups/pulso/deploy-20260715T174637Z-teams-inbox`. Rollback inmediato:
+  `pulso-rollback:teams-inbox-20260715T174637Z`, restaurando también
+  `docker-compose.before.yml` y `DEPLOYED_COMMIT.before`.
+- La migración `20260715150000_teams_early_access` se aplicó una vez y una
+  segunda ejecución confirmó que no había pendientes. App y worker quedaron en
+  el nuevo image ID, healthy/running, cero reinicios y sin líneas error/fatal.
+- El backfill productivo importó una solicitud histórica y la segunda ejecución
+  importó cero/omitió una. Evidencia sin PII: 1 superadmin activo, 1 Teams
+  pendiente, 1 evento `REQUESTED` y 1 acuse `SENT`.
+- Smoke posterior: health/readiness/login/CSS 200; registro y Personal público
+  404; panel sin sesión 307. La sesión visible de navegador era `ORG_ADMIN` y
+  recibió el 404 esperado del panel global; no se alteraron roles para eludirlo.
