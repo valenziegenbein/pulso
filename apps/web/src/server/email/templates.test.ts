@@ -40,4 +40,14 @@ describe('templates transaccionales', () => {
     expect(approved.subject).toContain('aprobado');
     expect(approved.text).toContain('https://pulso.invalid/early-access/claim?token=synthetic');
   });
+
+  it('acepta un piloto Teams sin inventar un alta Personal ni requerir URL pública', () => {
+    const approved = renderEmail('EARLY_ACCESS_TEAMS_APPROVED', 'team@integration.invalid', {
+      name: 'Equipo Ada', product: 'Pulso Teams',
+    });
+    expect(approved.subject).toContain('Teams');
+    expect(approved.text).toContain('configurar la organización');
+    expect(approved.text).not.toContain('/early-access/claim');
+    expect(approved.text).toContain('ningún pago');
+  });
 });

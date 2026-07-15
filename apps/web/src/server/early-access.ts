@@ -9,6 +9,7 @@ import { requestPasswordReset } from '@/server/auth-service';
 export const EARLY_ACCESS_PRODUCT = {
   PERSONAL_AI: 'PERSONAL_AI',
   PERSONAL_LOCAL: 'PERSONAL_LOCAL',
+  TEAMS: 'TEAMS',
 } as const;
 
 export const EARLY_ACCESS_STATUS = {
@@ -31,6 +32,8 @@ export interface EarlyAccessContactInput {
   name: string;
   email: string;
   message: string;
+  topic?: string;
+  source?: 'MARKETING_CONTACT' | 'CONTACT_OUTBOX_BACKFILL';
 }
 
 export function productFromContactMessage(message: string): EarlyAccessProduct {
@@ -39,12 +42,19 @@ export function productFromContactMessage(message: string): EarlyAccessProduct {
     : EARLY_ACCESS_PRODUCT.PERSONAL_AI;
 }
 
+export function productFromContact(topic: string | undefined, message: string): EarlyAccessProduct {
+  return topic === 'teams' || topic === 'business'
+    ? EARLY_ACCESS_PRODUCT.TEAMS
+    : productFromContactMessage(message);
+}
+
 export async function recordEarlyAccessRequest(
   input: EarlyAccessContactInput,
   client: EarlyAccessClient = prisma,
 ) {
   const normalizedEmail = normalizeEmail(input.email);
-  const product = productFromContactMessage(input.message);
+  const product = productFromContact(input.topic, input.message);
+  const source = input.source ?? 'MARKETING_CONTACT';
   const now = new Date();
   let request = await client.earlyAccessRequest.upsert({
     where: { normalizedEmail_product: { normalizedEmail, product } },
@@ -58,6 +68,7 @@ export async function recordEarlyAccessRequest(
       normalizedEmail,
       name: input.name.trim().slice(0, 120),
       product,
+      source,
       message: input.message.trim().slice(0, 4_000),
       consentAt: now,
       lastRequestedAt: now,
@@ -75,7 +86,7 @@ export async function recordEarlyAccessRequest(
     });
   }
   const event = await client.earlyAccessEvent.create({
-    data: { requestId: request.id, type: 'REQUESTED', metadata: JSON.stringify({ source: 'MARKETING_CONTACT' }) },
+    data: { requestId: request.id, type: 'REQUESTED', metadata: JSON.stringify({ source }) },
   });
   await enqueueEmail({
     idempotencyKey: `early-access:received:${event.id}`,
@@ -163,6 +174,30 @@ export async function approveEarlyAccessRequest(requestId: string, actorId: stri
     await assertSuperAdmin(tx, actorId);
     const request = await tx.earlyAccessRequest.findUnique({ where: { id: requestId } });
     if (!request) throw new Error('Solicitud no disponible.');
+
+    if (request.product === EARLY_ACCESS_PRODUCT.TEAMS) {
+      const updated = await tx.earlyAccessRequest.update({
+        where: { id: request.id },
+        data: {
+          status: EARLY_ACCESS_STATUS.APPROVED,
+          decisionAt: new Date(),
+          decisionById: actorId,
+          decisionNote: cleanNote(decisionNote),
+          claimTokenHash: null,
+          claimExpiresAt: null,
+        },
+      });
+      const event = await tx.earlyAccessEvent.create({
+        data: { requestId: request.id, actorId, type: 'APPROVED_TEAMS_PILOT' },
+      });
+      await enqueueEmail({
+        idempotencyKey: `early-access:teams-approved:${event.id}`,
+        recipient: request.normalizedEmail,
+        template: 'EARLY_ACCESS_TEAMS_APPROVED',
+        payload: { name: request.name, product: productLabel(request.product) },
+      }, tx);
+      return updated;
+    }
 
     const user = await tx.user.findUnique({ where: { normalizedEmail: request.normalizedEmail } });
     let organizationId = request.personalOrganizationId;
@@ -338,6 +373,7 @@ function appUrl(path: string): string {
 }
 
 function productLabel(product: string): string {
+  if (product === EARLY_ACCESS_PRODUCT.TEAMS) return 'Pulso Teams';
   return product === EARLY_ACCESS_PRODUCT.PERSONAL_LOCAL ? 'Pulso Personal Local / BYOK' : 'Pulso Personal AI';
 }
 

@@ -4,6 +4,7 @@ import { enqueueEmail } from './email/outbox';
 import { recordEarlyAccessRequest } from './early-access';
 
 const TOPICS = new Set(['teams', 'business', 'personal-ai', 'support', 'press', 'other']);
+const EARLY_ACCESS_TOPICS = new Set(['teams', 'business', 'personal-ai']);
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export type ContactRequest = {
@@ -54,8 +55,13 @@ export async function enqueueContactRequest(input: ContactRequest): Promise<void
         message: input.message,
       },
     }, tx);
-    if (input.topic === 'personal-ai') {
-      await recordEarlyAccessRequest({ name: input.name, email: input.email, message: input.message }, tx);
+    if (EARLY_ACCESS_TOPICS.has(input.topic)) {
+      await recordEarlyAccessRequest({
+        name: input.name,
+        email: input.email,
+        message: input.message,
+        topic: input.topic,
+      }, tx);
     }
   });
 }

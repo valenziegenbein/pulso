@@ -81,6 +81,7 @@ describe('upgrade sintético equivalente a producción', () => {
       '20260712230000_billing_checkout_attempts',
       '20260713223000_personal_early_access',
       '20260714040000_knowledge_sources',
+      '20260715150000_teams_early_access',
     ]);
   });
 });

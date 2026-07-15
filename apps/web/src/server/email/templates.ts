@@ -5,6 +5,7 @@ export type EmailTemplate =
   | 'CONTACT_REQUEST'
   | 'EARLY_ACCESS_RECEIVED'
   | 'EARLY_ACCESS_APPROVED'
+  | 'EARLY_ACCESS_TEAMS_APPROVED'
   | 'EARLY_ACCESS_REJECTED'
   | 'EARLY_ACCESS_REVOKED';
 type EarlyAccessEmailTemplate = Extract<EmailTemplate, `EARLY_ACCESS_${string}`>;
@@ -38,6 +39,14 @@ function renderEarlyAccessEmail(
   const name = optionalText(payload.name, 120);
   const greeting = name ? `Hola, ${name}.` : 'Hola.';
   const product = optionalText(payload.product, 80) ?? 'Pulso Personal AI';
+  if (template === 'EARLY_ACCESS_TEAMS_APPROVED') {
+    return {
+      to: recipient,
+      subject: 'Tu piloto de Pulso Teams fue aceptado',
+      text: `${greeting}\n\nAceptamos tu solicitud para el piloto de ${product}. Te vamos a contactar por este email para configurar la organización, las personas del primer equipo y el acceso inicial.\n\nNo necesitás realizar ningún pago ni crear una cuenta pública por tu cuenta.`,
+      html: `<p>${escapeHtml(greeting)}</p><p>Aceptamos tu solicitud para el piloto de ${escapeHtml(product)}.</p><p>Te vamos a contactar por este email para configurar la organización, las personas del primer equipo y el acceso inicial.</p><p>No necesitás realizar ningún pago ni crear una cuenta pública por tu cuenta.</p>`,
+    };
+  }
   if (template === 'EARLY_ACCESS_APPROVED') {
     const actionUrl = requireHttpsUrl(payload.actionUrl, production);
     return {
@@ -51,7 +60,9 @@ function renderEarlyAccessEmail(
     ? { subject: 'Recibimos tu solicitud de acceso anticipado', body: `Recibimos tu solicitud para ${product}. La revisión es manual y te avisaremos por este email antes de habilitar cualquier acceso o cobro.` }
     : template === 'EARLY_ACCESS_REJECTED'
       ? { subject: 'Actualización sobre tu solicitud de Pulso', body: `Por ahora no habilitaremos tu solicitud para ${product}. Podés responder este email si querés aportar más contexto.` }
-      : { subject: 'Tu acceso anticipado a Pulso fue revocado', body: `El acceso anticipado a ${product} fue revocado. Tus datos locales permanecen en tu equipo; la IA administrada deja de estar disponible.` };
+      : product === 'Pulso Teams'
+        ? { subject: 'Tu acceso anticipado a Pulso fue revocado', body: `El acceso al piloto de ${product} fue revocado. Te contactaremos si se abre una nueva cohorte compatible con tu equipo.` }
+        : { subject: 'Tu acceso anticipado a Pulso fue revocado', body: `El acceso anticipado a ${product} fue revocado. Tus datos locales permanecen en tu equipo; la IA administrada deja de estar disponible.` };
   return {
     to: recipient,
     subject: copy.subject,
@@ -63,6 +74,7 @@ function renderEarlyAccessEmail(
 function isEarlyAccessTemplate(template: EmailTemplate): template is EarlyAccessEmailTemplate {
   return template === 'EARLY_ACCESS_RECEIVED'
     || template === 'EARLY_ACCESS_APPROVED'
+    || template === 'EARLY_ACCESS_TEAMS_APPROVED'
     || template === 'EARLY_ACCESS_REJECTED'
     || template === 'EARLY_ACCESS_REVOKED';
 }

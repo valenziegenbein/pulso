@@ -123,4 +123,41 @@ describe('PostgreSQL real: panel de acceso anticipado Personal', () => {
     expect(stored).toMatchObject({ status: EARLY_ACCESS_STATUS.REJECTED, decisionById: ids.superAdmin });
     await expect(prisma.earlyAccessEvent.count({ where: { requestId: request.id } })).resolves.toBe(2);
   });
+
+  it('muestra y responde solicitudes Teams sin crear grants ni workspaces Personal', async () => {
+    const organizationCountBefore = await prisma.organization.count();
+    await enqueueContactRequest({
+      topic: 'teams',
+      name: 'Equipo Piloto',
+      email: 'teams-pilot@integration.invalid',
+      company: 'Synthetic Co',
+      teamSize: '6-10',
+      message: 'Queremos coordinar avances y bloqueos con Pulso Teams.',
+      consent: true,
+    });
+
+    const request = await prisma.earlyAccessRequest.findUniqueOrThrow({
+      where: { normalizedEmail_product: { normalizedEmail: 'teams-pilot@integration.invalid', product: 'TEAMS' } },
+    });
+    expect(request).toMatchObject({ status: EARLY_ACCESS_STATUS.PENDING, source: 'MARKETING_CONTACT' });
+    await expect(hasApprovedPersonalAiAccess(request.normalizedEmail)).resolves.toBe(false);
+
+    await approveEarlyAccessRequest(request.id, ids.superAdmin, 'Piloto acompañado');
+    const approved = await prisma.earlyAccessRequest.findUniqueOrThrow({ where: { id: request.id } });
+    expect(approved).toMatchObject({
+      status: EARLY_ACCESS_STATUS.APPROVED,
+      userId: null,
+      personalOrganizationId: null,
+      claimTokenHash: null,
+      claimExpiresAt: null,
+    });
+    await expect(prisma.organization.count()).resolves.toBe(organizationCountBefore);
+    await expect(hasApprovedPersonalAiAccess(request.normalizedEmail)).resolves.toBe(false);
+
+    const approvedEmail = await prisma.emailOutbox.findFirstOrThrow({
+      where: { recipient: request.normalizedEmail, template: 'EARLY_ACCESS_TEAMS_APPROVED' },
+    });
+    expect(JSON.parse(decryptSecret(approvedEmail.payloadEncrypted))).toMatchObject({ product: 'Pulso Teams' });
+    await expect(prisma.earlyAccessEvent.count({ where: { requestId: request.id } })).resolves.toBe(2);
+  });
 });

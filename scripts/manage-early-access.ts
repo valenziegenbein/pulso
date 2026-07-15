@@ -41,10 +41,16 @@ async function importRequest(args: Map<string, string>): Promise<void> {
   requireAck(args, 'import-confirmed-request');
   const email = requiredEmail(args);
   const name = required(args, 'name').slice(0, 120);
-  const product = args.get('product') === 'PERSONAL_LOCAL' ? 'Personal Local / BYOK' : 'Personal AI';
+  const requestedProduct = args.get('product');
+  const product = requestedProduct === 'TEAMS'
+    ? 'Pulso Teams'
+    : requestedProduct === 'PERSONAL_LOCAL'
+      ? 'Personal Local / BYOK'
+      : 'Personal AI';
   const request = await recordEarlyAccessRequest({
     email,
     name,
+    topic: requestedProduct === 'TEAMS' ? 'teams' : 'personal-ai',
     message: `Producto solicitado: ${product}\nSolicitud histórica confirmada e importada por operación interna.`,
   });
   process.stdout.write(`Solicitud disponible en el panel: ${request.normalizedEmail} (${request.product})\n`);

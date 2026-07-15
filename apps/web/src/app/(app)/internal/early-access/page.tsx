@@ -17,7 +17,7 @@ export default async function EarlyAccessAdminPage() {
       <PageHeader
         kicker="Operación interna"
         title="Acceso anticipado"
-        subtitle="Aprobaciones globales de Personal AI. Sólo las identidades isSuperAdmin pueden ver o ejecutar acciones en esta pantalla."
+        subtitle="Solicitudes globales de Personal y Teams. Sólo las identidades isSuperAdmin pueden ver o ejecutar acciones en esta pantalla."
       />
 
       <section className="mb-6 grid gap-3 sm:grid-cols-4">
@@ -30,7 +30,7 @@ export default async function EarlyAccessAdminPage() {
       </section>
 
       <div className="space-y-5">
-        {requests.length === 0 && <Card title="Sin solicitudes"><p className="text-sm text-muted">Las solicitudes de Personal enviadas desde marketing aparecerán acá.</p></Card>}
+        {requests.length === 0 && <Card title="Sin solicitudes"><p className="text-sm text-muted">Las solicitudes de Personal y Teams enviadas desde marketing aparecerán acá.</p></Card>}
         {requests.map((request) => (
           <Card key={request.id} title={request.name} className="overflow-hidden">
             <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
@@ -52,14 +52,14 @@ export default async function EarlyAccessAdminPage() {
 
               <div className="w-full shrink-0 space-y-2 lg:w-72">
                 {(request.status === EARLY_ACCESS_STATUS.PENDING || request.status === EARLY_ACCESS_STATUS.REJECTED || request.status === EARLY_ACCESS_STATUS.REVOKED) && (
-                  <DecisionForm requestId={request.id} action={approveEarlyAccessAction} label="Aprobar y responder" tone="primary" />
+                  <DecisionForm requestId={request.id} action={approveEarlyAccessAction} label={request.product === 'TEAMS' ? 'Aceptar piloto y responder' : 'Aprobar y responder'} tone="primary" />
                 )}
                 {request.status === EARLY_ACCESS_STATUS.PENDING && (
                   <DecisionForm requestId={request.id} action={rejectEarlyAccessAction} label="Rechazar y responder" tone="danger" />
                 )}
                 {request.status === EARLY_ACCESS_STATUS.APPROVED && (
                   <>
-                    <DecisionForm requestId={request.id} action={approveEarlyAccessAction} label={request.claimedAt ? 'Reenviar confirmación' : 'Reemitir enlace de alta'} tone="ghost" />
+                    <DecisionForm requestId={request.id} action={approveEarlyAccessAction} label={request.product === 'TEAMS' ? 'Reenviar aceptación' : request.claimedAt ? 'Reenviar confirmación' : 'Reemitir enlace de alta'} tone="ghost" />
                     <DecisionForm requestId={request.id} action={revokeEarlyAccessAction} label="Revocar acceso" tone="danger" />
                   </>
                 )}
@@ -113,6 +113,7 @@ function statusLabel(status: string): string {
 }
 
 function productLabel(product: string): string {
+  if (product === 'TEAMS') return 'Pulso Teams';
   return product === 'PERSONAL_LOCAL' ? 'Personal Local / BYOK' : 'Personal AI';
 }
 
