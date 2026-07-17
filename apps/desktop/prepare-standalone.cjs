@@ -69,16 +69,4 @@ for (const [src, dst] of copies) {
   }
 }
 
-// DB SQLite semilla (migrada + seedeada) que la app copia a %APPDATA% en el
-// primer arranque. Se genera con: pnpm db:migrate && pnpm db:seed
-const devDb = path.join(root, 'packages', 'database', 'prisma', 'dev.db');
-const templateDb = path.join(__dirname, 'db-template', 'pulso.db');
-if (!fs.existsSync(devDb)) {
-  console.error('No existe dev.db. Corré:  pnpm db:migrate && pnpm db:seed');
-  process.exit(1);
-}
-fs.mkdirSync(path.dirname(templateDb), { recursive: true });
-fs.copyFileSync(devDb, templateDb);
-console.log('DB semilla copiada a db-template/pulso.db');
-
 console.log('standalone listo para empaquetar.');

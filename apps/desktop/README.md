@@ -52,16 +52,15 @@ pnpm --filter @pulso/desktop dist
 #    (o sin instalador, carpeta ejecutable:  pnpm --filter @pulso/desktop dist:dir)
 ```
 
-El instalador embebe el server Next standalone (con el motor de Prisma) en
-`resources/server` y una **DB SQLite semilla** en `resources/db-template/pulso.db`.
-Al ejecutarse, la app (empaquetada) **levanta ese server** en `127.0.0.1:41789`,
-copia la DB semilla a `%APPDATA%\Pulso\pulso.db` (primer arranque) y abre las
-ventanas. **100% autónomo: no necesita Docker ni Postgres.**
+El instalador embebe el server Next standalone en `resources/server`.
+Al ejecutarse, la app (empaquetada) **levanta ese server** en `127.0.0.1:41789`
+y abre las ventanas. Personal usa almacenamiento local del renderer y carpetas
+Markdown elegidas por el usuario; no requiere una DB semilla. **100% autónomo:
+no necesita Docker ni Postgres.**
 
 ### Configuración del usuario
 
 En el primer arranque la app crea:
-- `%APPDATA%\Pulso\pulso.db` — copia de la DB semilla (datos demo). Editable/persistente.
 - `%APPDATA%\Pulso\pulso.config.json` — `AUTH_SECRET`, `WORKLOG_ENCRYPTION_KEY`,
   `LLM_PROVIDER` (los secretos se generan solos). Opcional: agregá `DATABASE_URL`
   para apuntar a otra base; si no, usa el SQLite local.
@@ -119,21 +118,8 @@ Nunca reutilizar `GH_TOKEN`, el `.pfx` o su contraseña como secretos de la app.
   Por eso `win.signAndEditExecutable: false` (no firmamos ni editamos el exe).
   Con certificado de firma, esto se reactiva.
 
-### Actualizar la DB embebida (cuando cambia el schema)
-
-La DB semilla se regenera desde el dev:
-
-```bash
-pnpm db:migrate && pnpm db:seed   # actualiza packages/database/prisma/dev.db
-pnpm --filter @pulso/desktop dist # prepare-standalone.cjs la copia a db-template/
-```
-
-Para usuarios ya instalados con datos propios, una versión futura debería migrar
-el `%APPDATA%\Pulso\pulso.db` existente (hoy solo se copia si no existe).
-
 ## Próximos pasos (no MVP)
 
-- Migración del `pulso.db` del usuario al actualizar (hoy: copia solo si falta).
 - Icono propio de la app (hoy usa el de Electron por defecto).
 - Auto-update (`electron-updater`) y firma de código.
 - Migración opcional a Tauri para binarios más chicos.
