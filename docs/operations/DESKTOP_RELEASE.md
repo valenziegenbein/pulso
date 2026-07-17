@@ -1,5 +1,44 @@
 # Release de Pulso Desktop
 
+## Release pública 0.1.29 — 2026-07-17
+
+Personal Local y BYOK quedaron disponibles gratis para Windows x64, sin
+cuenta, tarjeta ni suscripción. Personal AI administrada y Teams continúan
+controlados por acceso anticipado.
+
+- fuente: commit `475e581d30246dfd9006ff63729fa4f8af150979`;
+- release: `https://github.com/valenziegenbein/pulso/releases/tag/v0.1.29`;
+- instalador: `Pulso-Setup-0.1.29.exe`;
+- tamaño: `103277699` bytes;
+- SHA-256:
+  `97f7c8a793847fc7cb90faee67f1ac572f507db64ab0f4c1a38a967252556b6a`;
+- versión de producto: `0.1.29.0`;
+- firma Authenticode: `NotSigned`;
+- assets publicados: `latest.yml`, instalador y blockmap.
+
+El green gate se ejecutó desde un worktree limpio e incluyó typecheck, 102
+tests unitarios, 41 tests PostgreSQL reales, 3 tests de upgrade, migraciones
+desde cero y drift, lint, build, seguridad Electron, production safety y diff
+check. El cliente Prisma debió generarse explícitamente después de `pnpm
+install --frozen-lockfile`, que es un prerrequisito del repositorio limpio.
+
+Smoke del artefacto exacto:
+
+- instalación silenciosa aislada: exit `0`;
+- health, `/welcome`, `/personal` y `/widget`: HTTP `200`;
+- `/register`: HTTP `404` bajo runtime Desktop;
+- dos hojas CSS servidas y utilidades `flex`, `grid` y `rounded-2xl` presentes;
+- bundles instalados con IA local recomendada, BYOK y aviso de costos del
+  proveedor;
+- descarga posterior desde GitHub: tamaño y SHA-256 idénticos;
+- SmartScreen/editor desconocido: limitación visible en release y landing.
+
+Durante la preparación se eliminó la dependencia de build de una base SQLite
+demo obsoleta. Personal ya no la usa: el server embebido sirve el modo
+local-first sin DB y el contenido se guarda en el almacenamiento local y las
+carpetas Markdown elegidas por el usuario. El paquete 0.1.29 se construye desde
+Git limpio sin copiar un `dev.db` ignorado y antiguo.
+
 ## Candidato local 0.1.26 — 2026-07-13
 
 Este artefacto corrige la Web embebida sin publicar una release:
