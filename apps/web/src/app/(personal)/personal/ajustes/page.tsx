@@ -69,9 +69,9 @@ export default function AjustesPage() {
 
       <Section title="Inteligencia artificial" hint="La IA propone la bitácora. Vos siempre aprobás.">
         <Choice<AiMode> value={ai} onChange={setAi} columns={2} options={[
-          ['account', 'Con mi cuenta Pulso', 'IA administrada. Prueba cerrada.'],
-          ['byok', 'API key propia', 'OpenAI, Anthropic, etc.'],
-          ['local', 'IA local', 'Ollama, LM Studio, vLLM.'],
+          ['local', 'IA local', 'Gratis y privada. Ollama, LM Studio o vLLM.'],
+          ['byok', 'API key propia', 'Pulso gratis; tu proveedor puede cobrar el uso.'],
+          ['account', 'Con mi cuenta Pulso', 'IA administrada. Acceso anticipado cerrado.'],
           ['none', 'Sin IA', 'Bitácora manual.'],
         ]} />
         {ai === 'account' && (

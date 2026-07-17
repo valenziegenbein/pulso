@@ -138,6 +138,9 @@ export function CloudAiSetup() {
           conseguí una key
         </a>
       </p>
+      <p className="mt-2 text-xs text-muted">
+        Pulso no cobra por usar BYOK. El proveedor que elijas puede cobrar tokens o llamadas según sus propias tarifas.
+      </p>
 
       {/* Resultado */}
       {status === 'verified' && models.length > 0 && (

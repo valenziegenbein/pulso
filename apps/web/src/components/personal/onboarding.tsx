@@ -151,7 +151,7 @@ export function Onboarding() {
               </div>
             ) : (
               <div className="mt-8 grid gap-4 sm:grid-cols-2">
-                <OptionCard title="Para mí" desc="Notas, proyectos propios, bitácora. Local, sin cuenta. Tus datos son tuyos." badge="Personal" onClick={() => go(1)} />
+                <OptionCard title="Para mí" desc="Local o BYOK gratis, sin cuenta ni suscripción. Tus datos son tuyos." badge="Personal" onClick={() => go(1)} />
                 <OptionCard title="Con mi equipo" desc="Equipos, personas, tareas y resultados. Tu cuenta del server." badge="Teams" onClick={chooseTeams} />
               </div>
             )}
@@ -273,9 +273,9 @@ export function Onboarding() {
             <h1 className="font-display text-4xl sm:text-5xl">¿Cómo querés usar la IA?</h1>
             <p className="mt-3 text-muted">La IA propone la bitácora. Vos siempre aprobás.</p>
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
-              <OptionCard small title="Con mi cuenta Pulso" desc="IA administrada. Acceso de prueba cerrado." badge="Personal AI" selected={ai === 'account'} onClick={() => setAiLocal('account')} />
-              <OptionCard small title="API key propia" desc="OpenAI, Anthropic, etc." selected={ai === 'byok'} onClick={() => setAiLocal('byok')} />
-              <OptionCard small title="IA local" desc="Ollama, LM Studio, vLLM." selected={ai === 'local'} onClick={() => setAiLocal('local')} />
+              <OptionCard small title="IA local" desc="Gratis y privada. Ollama, LM Studio o vLLM." badge="Recomendado" selected={ai === 'local'} onClick={() => setAiLocal('local')} />
+              <OptionCard small title="API key propia" desc="Pulso gratis; tu proveedor puede cobrar el uso." badge="BYOK" selected={ai === 'byok'} onClick={() => setAiLocal('byok')} />
+              <OptionCard small title="Con mi cuenta Pulso" desc="IA administrada. Acceso anticipado cerrado." badge="Personal AI" selected={ai === 'account'} onClick={() => setAiLocal('account')} />
               <OptionCard small title="Sin IA por ahora" desc="Bitácora manual." selected={ai === 'none'} onClick={() => setAiLocal('none')} />
             </div>
             {ai === 'account' && (
